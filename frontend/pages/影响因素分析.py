@@ -194,7 +194,9 @@ def display_workflow():
             col1, col2 = st.columns([1, 1])
 
             with col1:
-                image = Image.open("frontend/assets/feature_importance_evaluator_workflow.png")
+                image = Image.open(
+                    "frontend/assets/feature_importance_evaluator_workflow.png"
+                )
                 st.image(image, caption="影响因素分析流程图", use_column_width=True)
 
             with col2:
@@ -739,7 +741,7 @@ def display_shap_analysis():
     """
     显示SHAP值分析结果。
     """
-    if not st.session_state.get('use_shap', False) or st.session_state.model is None:
+    if not st.session_state.get("use_shap", False) or st.session_state.model is None:
         return
 
     st.markdown('<h2 class="section-title">SHAP值分析</h2>', unsafe_allow_html=True)
@@ -748,9 +750,12 @@ def display_shap_analysis():
             with st.spinner("正在计算SHAP值..."):
                 X = st.session_state.filtered_df[st.session_state.selected_columns[1:]]
                 st.session_state.shap_values = shap_analysis(st.session_state.model, X)
-        
+
         if st.session_state.shap_values is not None:
-            plot_impact(st.session_state.shap_values, f"各因素对 {st.session_state.selected_columns[0]} 的SHAP值")
+            plot_impact(
+                st.session_state.shap_values,
+                f"各因素对 {st.session_state.selected_columns[0]} 的SHAP值",
+            )
             display_shap_dependence()
         else:
             st.error("无法计算SHAP值。请确保模型和数据已正确加载。")
@@ -762,47 +767,76 @@ def display_shap_dependence():
     """
     show_shap_dependence = st.checkbox("展示SHAP依赖图")
     if show_shap_dependence:
-        st.markdown(
-            '<h3 class="subsection-title">SHAP依赖图</h3>', unsafe_allow_html=True
+        st.markdown('<h3 class="section-title">SHAP依赖图</h3>', unsafe_allow_html=True)
+
+        plot_all = st.checkbox("绘制所有特征的SHAP依赖图", value=False)
+
+        if plot_all:
+            plot_all_shap_dependence()
+        else:
+            plot_single_shap_dependence()
+
+
+def plot_single_shap_dependence():
+    """
+    绘制单个选定特征的SHAP依赖图。
+    """
+    selected_feature = st.selectbox(
+        "选择要展示依赖图的特征", st.session_state.selected_columns[1:]
+    )
+    plot_shap_dependence(selected_feature)
+
+
+def plot_all_shap_dependence():
+    """
+    绘制所有特征的SHAP依赖图。
+    """
+    with st.spinner("正在生成所有特征的SHAP依赖图..."):
+        for feature in st.session_state.selected_columns[1:]:
+            plot_shap_dependence(feature)
+
+
+def plot_shap_dependence(feature):
+    """
+    绘制指定特征的SHAP依赖图。
+
+    Args:
+        feature (str): 要绘制依赖图的特征名。
+    """
+    with st.spinner(f"正在生成 {feature} 的SHAP依赖图..."):
+        feature_values, shap_values = calculate_shap_dependence(
+            st.session_state.model,
+            st.session_state.filtered_df[st.session_state.selected_columns[1:]],
+            feature,
         )
-        selected_feature = st.selectbox(
-            "选择要展示依赖图的特征", st.session_state.selected_columns[1:]
+
+        fig = go.Figure()
+        fig.add_trace(
+            go.Scatter(
+                x=feature_values,
+                y=shap_values,
+                mode="markers",
+                marker=dict(
+                    size=8,
+                    color=feature_values,
+                    colorscale="RdBu",
+                    colorbar=dict(title=feature),
+                    showscale=True,
+                ),
+                text=feature_values,
+                hoverinfo="text+y",
+            )
         )
 
-        with st.spinner("正在生成SHAP依赖图..."):
-            feature_values, shap_values = calculate_shap_dependence(
-                st.session_state.model,
-                st.session_state.filtered_df[st.session_state.selected_columns[1:]],
-                selected_feature,
-            )
+        fig.update_layout(
+            title=f"SHAP依赖图 - {feature}",
+            xaxis_title=feature,
+            yaxis_title="SHAP值",
+            height=600,
+            width=800,
+        )
 
-            fig = go.Figure()
-            fig.add_trace(
-                go.Scatter(
-                    x=feature_values,
-                    y=shap_values,
-                    mode="markers",
-                    marker=dict(
-                        size=8,
-                        color=feature_values,
-                        colorscale="RdBu",
-                        colorbar=dict(title=selected_feature),
-                        showscale=True,
-                    ),
-                    text=feature_values,
-                    hoverinfo="text+y",
-                )
-            )
-
-            fig.update_layout(
-                title=f"SHAP依赖图 - {selected_feature}",
-                xaxis_title=selected_feature,
-                yaxis_title="SHAP值",
-                height=600,
-                width=800,
-            )
-
-            st.plotly_chart(fig)
+        st.plotly_chart(fig)
 
 
 def display_download_button():
