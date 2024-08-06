@@ -14,7 +14,7 @@ import hashlib
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 sys.path.append(project_root)
 
-# from frontend.shared_components import show_sidebar, show_footer, apply_common_styles
+from frontend.ui_components import show_sidebar, show_footer, apply_common_styles
 from backend.data_processing.analysis.feature_importance_evaluator import (
     encode_categorical_variables,
     random_forest_analysis,
@@ -31,10 +31,10 @@ st.set_page_config(
 )
 
 # 应用自定义样式
-# apply_common_styles()
+apply_common_styles()
 
 # 显示侧边栏
-# show_sidebar()
+show_sidebar()
 
 
 # 初始化会话状态
@@ -159,7 +159,7 @@ def main():
     display_shap_analysis()
     display_download_button()
 
-    # show_footer()
+    show_footer()
 
 
 def display_info_message():
