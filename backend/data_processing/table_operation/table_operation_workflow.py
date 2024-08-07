@@ -2,11 +2,11 @@ import logging
 from typing import List, Dict, Any, Tuple
 import pandas as pd
 
-from backend.data_processing.table_operation_assistant.table_operation_core import (
+from backend.data_processing.table_operation.table_operation_core import (
     create_dataframe_assistant,
     process_user_query,
 )
-from backend.data_processing.table_operation_assistant.table_operations import (
+from backend.data_processing.table_operation.table_operations import (
     merge_dataframes,
     reshape_wide_to_long,
     reshape_long_to_wide,

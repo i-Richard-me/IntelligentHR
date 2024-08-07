@@ -11,7 +11,7 @@ from PIL import Image
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 sys.path.append(project_root)
 
-from backend.data_processing.table_operation_assistant.table_operation_workflow import DataFrameWorkflow
+from backend.data_processing.table_operation.table_operation_workflow import DataFrameWorkflow
 from frontend.ui_components import show_sidebar, show_footer, apply_common_styles
 
 # 设置页面配置

@@ -3,10 +3,10 @@ from typing import List, Dict, Any
 
 from langchain_core.tools import tool
 
-from backend.data_processing.table_operation_assistant.table_operation_models import (
+from backend.data_processing.table_operation.table_operation_models import (
     AssistantResponse,
 )
-from backend.data_processing.table_operation_assistant.table_operations import (
+from backend.data_processing.table_operation.table_operations import (
     merge_dataframes,
     reshape_wide_to_long,
     reshape_long_to_wide,
