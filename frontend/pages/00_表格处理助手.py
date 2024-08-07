@@ -11,13 +11,11 @@ from PIL import Image
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 sys.path.append(project_root)
 
-from backend.data_processing.table_operation_assistant.table_operation_workflow import (
-    DataFrameWorkflow,
-)
+from backend.data_processing.table_operation_assistant.table_operation_workflow import DataFrameWorkflow
 from frontend.ui_components import show_sidebar, show_footer, apply_common_styles
 
 # 设置页面配置
-st.set_page_config(page_title="智能HR助手 - 表格处理助手", page_icon="🧮")
+st.set_page_config(page_title="智能HR助手 - 数据集处理助手", page_icon="🧮")
 
 # 应用自定义样式
 apply_common_styles()
@@ -26,10 +24,14 @@ apply_common_styles()
 show_sidebar()
 
 # 初始化会话状态
-if "workflow" not in st.session_state:
+if 'workflow' not in st.session_state:
     st.session_state.workflow = DataFrameWorkflow()
-if "files_uploaded" not in st.session_state:
+if 'files_uploaded' not in st.session_state:
     st.session_state.files_uploaded = False
+if 'operation_result' not in st.session_state:
+    st.session_state.operation_result = None
+if 'conversation_history' not in st.session_state:
+    st.session_state.conversation_history = []
 
 
 def main():
@@ -41,6 +43,7 @@ def main():
     handle_file_upload()
     if st.session_state.files_uploaded:
         process_user_query()
+        display_operation_result()
 
     show_footer()
 
@@ -53,9 +56,9 @@ def display_workflow_introduction():
     with st.container(border=True):
         col1, col2 = st.columns([1, 1])
 
-        with col1:
-            image = Image.open("frontend/assets/dataframe_assistant_workflow.png")
-            st.image(image, caption="数据集操作助手流程图", use_column_width=True)
+        # with col1:
+        #     image = Image.open("frontend/assets/dataframe_assistant_workflow.png")
+        #     st.image(image, caption="数据集操作助手流程图", use_column_width=True)
 
         with col2:
             st.markdown(
@@ -134,21 +137,19 @@ def process_user_query():
         display_user_input(chat_container, user_query)
         process_and_display_response(chat_container, user_query)
 
-
 def display_conversation_history(container):
     """显示对话历史。"""
     with container:
-        for message in st.session_state.workflow.conversation_history:
+        for message in st.session_state.conversation_history:
             with st.chat_message(message["role"]):
                 st.markdown(message["content"])
 
-
 def display_user_input(container, user_query):
-    """显示用户输入。"""
+    """显示用户输入并保存到对话历史。"""
     with container:
         with st.chat_message("user"):
             st.markdown(user_query)
-
+    st.session_state.conversation_history.append({"role": "user", "content": user_query})
 
 def process_and_display_response(container, user_query):
     """处理用户查询并显示响应。"""
@@ -163,63 +164,64 @@ def process_and_display_response(container, user_query):
 
     display_assistant_response(container, result)
 
-
 def display_assistant_response(container, result):
-    """显示助手的响应。"""
+    """显示助手的响应并保存到对话历史。"""
     with container:
         with st.chat_message("assistant"):
             if st.session_state.workflow.current_state == "need_more_info":
-                st.markdown(st.session_state.workflow.get_last_message())
+                message = st.session_state.workflow.get_last_message()
+                st.markdown(message)
+                st.session_state.conversation_history.append({"role": "assistant", "content": message})
             elif st.session_state.workflow.current_state == "ready":
-                st.markdown("操作执行成功！")
-                display_operation_result(result)
+                message = "操作执行成功！"
+                st.markdown(message)
+                st.session_state.conversation_history.append({"role": "assistant", "content": message})
+                st.session_state.operation_result = result
             elif st.session_state.workflow.current_state == "out_of_scope":
-                st.markdown(st.session_state.workflow.get_last_message())
+                message = st.session_state.workflow.get_last_message()
+                st.markdown(message)
+                st.session_state.conversation_history.append({"role": "assistant", "content": message})
 
-
-def display_operation_result(result):
+def display_operation_result():
     """显示操作结果。"""
-    if "result_df1" in result and "result_df2" in result:
-        display_dual_dataframe_result(result)
-    elif "result_df" in result:
-        display_single_dataframe_result(result)
-
+    if st.session_state.operation_result:
+        result = st.session_state.operation_result
+        st.markdown('<h2 class="section-title">操作结果</h2>', unsafe_allow_html=True)
+        with st.container(border=True):
+            if 'result_df1' in result and 'result_df2' in result:
+                display_dual_dataframe_result(result)
+            elif 'result_df' in result:
+                display_single_dataframe_result(result)
 
 def display_dual_dataframe_result(result):
     """显示双数据框结果。"""
-    st.subheader("操作结果:")
     tab1, tab2 = st.tabs(["结果1", "结果2"])
     with tab1:
-        st.dataframe(result["result_df1"])
+        st.dataframe(result['result_df1'])
     with tab2:
-        st.dataframe(result["result_df2"])
+        st.dataframe(result['result_df2'])
 
-    provide_excel_download(result["result_df1"], result["result_df2"])
-
+    provide_excel_download(result['result_df1'], result['result_df2'])
 
 def display_single_dataframe_result(result):
     """显示单数据框结果。"""
-    st.subheader("操作结果:")
-    st.dataframe(result["result_df"])
-
-    provide_excel_download(result["result_df"])
-
+    st.dataframe(result['result_df'])
+    provide_excel_download(result['result_df'])
 
 def provide_excel_download(*dataframes):
     """提供Excel格式下载选项。"""
     buffer = io.BytesIO()
-    with pd.ExcelWriter(buffer, engine="xlsxwriter") as writer:
+    with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
         for i, df in enumerate(dataframes, 1):
-            df.to_excel(writer, sheet_name=f"结果{i}", index=False)
+            df.to_excel(writer, sheet_name=f'结果{i}', index=False)
     buffer.seek(0)
-
+    
     st.download_button(
         label="下载结果Excel",
         data=buffer,
         file_name="operation_result.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
-
 
 if __name__ == "__main__":
     main()

@@ -2,13 +2,23 @@ import logging
 from typing import List, Dict, Any, Tuple
 import pandas as pd
 
-from backend.data_processing.table_operation_assistant.table_operation_core import create_dataframe_assistant, process_user_query
-from backend.data_processing.table_operation_assistant.table_operations import merge_dataframes, reshape_wide_to_long, \
-    reshape_long_to_wide, compare_dataframes
+from backend.data_processing.table_operation_assistant.table_operation_core import (
+    create_dataframe_assistant,
+    process_user_query,
+)
+from backend.data_processing.table_operation_assistant.table_operations import (
+    merge_dataframes,
+    reshape_wide_to_long,
+    reshape_long_to_wide,
+    compare_dataframes,
+)
 
 # 配置日志
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 logger = logging.getLogger(__name__)
+
 
 class DataFrameWorkflow:
     """
@@ -21,7 +31,12 @@ class DataFrameWorkflow:
         """
         self.assistant_chain = create_dataframe_assistant()
         self.dataframes: Dict[str, pd.DataFrame] = {}
-        self.available_tools = [merge_dataframes, reshape_wide_to_long, reshape_long_to_wide, compare_dataframes]
+        self.available_tools = [
+            merge_dataframes,
+            reshape_wide_to_long,
+            reshape_long_to_wide,
+            compare_dataframes,
+        ]
         self.conversation_history: List[Dict[str, str]] = []
         self.current_state: str = "initial"
 
@@ -49,18 +64,20 @@ class DataFrameWorkflow:
         logger.info(f"Processing query: {query}")
         self.conversation_history.append({"role": "user", "content": query})
 
-        dataframe_variables = list(self.dataframes.keys())
         dataframe_info = self.get_dataframe_info()
 
-        full_context = "\n".join([f"{msg['role']}: {msg['content']}" for msg in self.conversation_history])
+        full_context = "\n".join(
+            [f"{msg['role']}: {msg['content']}" for msg in self.conversation_history]
+        )
 
-        result = process_user_query(self.assistant_chain, full_context, dataframe_variables, dataframe_info,
-                                    self.available_tools)
+        result = process_user_query(
+            self.assistant_chain, full_context, dataframe_info, self.available_tools
+        )
         logger.info(f"AI response: {result}")
 
-        if result['next_step'] == 'need_more_info':
+        if result["next_step"] == "need_more_info":
             self._handle_need_more_info(result)
-        elif result['next_step'] == 'tool_use':
+        elif result["next_step"] == "tool_use":
             self._handle_tool_use(result)
         else:  # out_of_scope
             self._handle_out_of_scope(result)
@@ -75,7 +92,9 @@ class DataFrameWorkflow:
             result: AI 助手的响应结果。
         """
         self.current_state = "need_more_info"
-        self.conversation_history.append({"role": "assistant", "content": result['message']})
+        self.conversation_history.append(
+            {"role": "assistant", "content": result["message"]}
+        )
 
     def _handle_tool_use(self, result: Dict[str, Any]) -> None:
         """
@@ -85,8 +104,8 @@ class DataFrameWorkflow:
             result: AI 助手的响应结果。
         """
         self.current_state = "ready"
-        tool_name = result['operation']['tool_name']
-        tool_args = result['operation']['tool_args']
+        tool_name = result["operation"]["tool_name"]
+        tool_args = result["operation"]["tool_args"]
         logger.info(f"Attempting to use tool: {tool_name} with args: {tool_args}")
 
         self._replace_dataframe_names_with_objects(tool_args)
@@ -98,7 +117,7 @@ class DataFrameWorkflow:
                 self._process_tool_result(result, tool_result)
             except Exception as e:
                 logger.error(f"Error executing tool: {str(e)}")
-                result['error'] = str(e)
+                result["error"] = str(e)
         else:
             error_msg = f"Unknown tool: {tool_name}"
             logger.error(error_msg)
@@ -112,7 +131,9 @@ class DataFrameWorkflow:
             result: AI 助手的响应结果。
         """
         self.current_state = "out_of_scope"
-        self.conversation_history.append({"role": "assistant", "content": result['message']})
+        self.conversation_history.append(
+            {"role": "assistant", "content": result["message"]}
+        )
 
     def _replace_dataframe_names_with_objects(self, tool_args: Dict[str, Any]) -> None:
         """
@@ -139,7 +160,9 @@ class DataFrameWorkflow:
         Returns:
             对应的工具函数，如果未找到则返回 None。
         """
-        return next((tool for tool in self.available_tools if tool.name == tool_name), None)
+        return next(
+            (tool for tool in self.available_tools if tool.name == tool_name), None
+        )
 
     def _process_tool_result(self, result: Dict[str, Any], tool_result: Any) -> None:
         """
@@ -150,14 +173,16 @@ class DataFrameWorkflow:
             tool_result: 工具执行的原始结果。
         """
         if isinstance(tool_result, tuple) and len(tool_result) == 2:
-            result['result_df1'], result['result_df2'] = tool_result
+            result["result_df1"], result["result_df2"] = tool_result
             logger.info(
                 f"Tool execution successful. Result 1 shape: {result['result_df1'].shape}, "
                 f"Result 2 shape: {result['result_df2'].shape}"
             )
         else:
-            result['result_df'] = tool_result
-            logger.info(f"Tool execution successful. Result shape: {result['result_df'].shape}")
+            result["result_df"] = tool_result
+            logger.info(
+                f"Tool execution successful. Result shape: {result['result_df'].shape}"
+            )
 
         logger.info(
             f"First few rows of result:\n"
@@ -184,10 +209,8 @@ class DataFrameWorkflow:
             包含所有 DataFrame 信息的字典。
         """
         return {
-            name: {
-                "shape": df.shape,
-                "dtypes": df.dtypes.to_dict()
-            } for name, df in self.dataframes.items()
+            name: {"shape": df.shape, "dtypes": df.dtypes.to_dict()}
+            for name, df in self.dataframes.items()
         }
 
     def get_last_message(self) -> str:
@@ -197,7 +220,11 @@ class DataFrameWorkflow:
         Returns:
             最后一条消息的内容，如果没有消息则返回空字符串。
         """
-        return self.conversation_history[-1]['content'] if self.conversation_history else ""
+        return (
+            self.conversation_history[-1]["content"]
+            if self.conversation_history
+            else ""
+        )
 
     def reset_conversation(self) -> None:
         """
