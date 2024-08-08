@@ -10,7 +10,7 @@ from backend.text_processing.clustering.clustering_core import (
     Categories,
     ClassificationResult,
 )
-from text_processing.clustering.clustering_core import (
+from backend.text_processing.clustering.clustering_core import (
     INITIAL_CATEGORY_GENERATION_SYSTEM_MESSAGE,
     INITIAL_CATEGORY_GENERATION_HUMAN_MESSAGE,
     MERGE_CATEGORIES_SYSTEM_MESSAGE,
