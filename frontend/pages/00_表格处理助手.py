@@ -65,7 +65,7 @@ def display_workflow_introduction():
                 """
             <div class="workflow-container">
                 <div class="workflow-step">
-                    <strong>1. 多文件上传</strong>: 支持同时上传多个CSV文件。
+                    <strong>1. 多文件上传</strong>: 支持同时上传多个CSV或Excel文件。
                 </div>
                 <div class="workflow-step">
                     <strong>2. 智能对话操作</strong>: 通过AI自然语言交互，理解用户意图并选择数据处理工具。
@@ -97,11 +97,26 @@ def handle_file_upload():
     st.markdown('<h2 class="section-title">数据上传</h2>', unsafe_allow_html=True)
     with st.container(border=True):
         uploaded_files = st.file_uploader(
-            "选择CSV文件（可多选）", type="csv", accept_multiple_files=True
+            "选择CSV或Excel文件（可多选）", type=["csv", "xlsx", "xls"], accept_multiple_files=True
         )
         if uploaded_files:
             for uploaded_file in uploaded_files:
-                df = pd.read_csv(uploaded_file)
+                file_extension = uploaded_file.name.split(".")[-1].lower()
+                if file_extension == "csv":
+                    df = pd.read_csv(uploaded_file)
+                elif file_extension in ["xlsx", "xls"]:
+                    # 读取Excel文件的所有sheet
+                    xls = pd.ExcelFile(uploaded_file)
+                    sheet_names = xls.sheet_names
+                    if len(sheet_names) > 1:
+                        sheet_name = st.selectbox(f"请选择要导入的sheet（{uploaded_file.name}）：", sheet_names)
+                    else:
+                        sheet_name = sheet_names[0]
+                    df = pd.read_excel(uploaded_file, sheet_name=sheet_name)
+                else:
+                    st.error(f"不支持的文件格式：{file_extension}")
+                    continue
+
                 df_name = uploaded_file.name.split(".")[0]
                 st.session_state.workflow.load_dataframe(df_name, df)
                 st.success(f"成功加载数据集: {df_name}")
