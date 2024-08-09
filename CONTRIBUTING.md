@@ -62,26 +62,32 @@
 ## 开发环境设置
 
 1. 克隆仓库：
+
    ```
    git clone https://github.com/i-Richard-me/IntelligentHR
    cd IntelligentHR
    ```
 
-2. 创建并激活虚拟环境：
+2. 安装 Conda（如果尚未安装）：
+   访问 [Conda 官网](https://docs.conda.io/en/latest/miniconda.html) 下载并安装适合您系统的 Miniconda。
+
+3. 创建并激活 Conda 环境：
+
    ```
-   python -m venv venv
-   source venv/bin/activate  # 在 Windows 上使用 venv\Scripts\activate
+   conda create -n intelligenthr python=3.9
+   conda activate intelligenthr
    ```
 
-3. 安装依赖：
+4. 安装依赖：
+
    ```
-   pip install -r requirements.txt
+   conda install --file requirements.txt
    ```
 
-4. 配置环境变量：
+5. 配置环境变量：
    复制 `.env.example` 为 `.env` 并填写必要的 API 密钥。
 
-5. 运行测试：
+6. 运行测试：
    ```
    python -m unittest discover tests
    ```
