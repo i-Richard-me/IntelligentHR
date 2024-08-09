@@ -48,20 +48,21 @@ def merge_dataframes(
       * 如果用户没有明确指定或说明，默认会包含所有列。
     """
     try:
+        # 确保 left_on 和 right_on 是列表
+        left_on = [left_on] if isinstance(left_on, str) else left_on
+        right_on = [right_on] if isinstance(right_on, str) else right_on
+
+        # 确保 left_on 中的列和 right_on 中的列都存在于 left_df 和 right_df 中
+        if left_columns is not None:
+            left_columns = list(set(left_columns + left_on))
+        if right_columns is not None:
+            right_columns = list(set(right_columns + right_on))
+
         # 选择要包含的列
         if left_columns is not None:
             left_df = left_df[left_columns]
         if right_columns is not None:
             right_df = right_df[right_columns]
-
-        # 确保合并键包含在选定的列中
-        if isinstance(left_on, str):
-            left_on = [left_on]
-        if isinstance(right_on, str):
-            right_on = [right_on]
-
-        left_df = left_df[list(set(left_df.columns) | set(left_on))]
-        right_df = right_df[list(set(right_df.columns) | set(right_on))]
 
         # 执行合并
         merged_df = pd.merge(
