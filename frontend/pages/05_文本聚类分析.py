@@ -51,6 +51,7 @@ def main():
     st.title("🔬 文本聚类分析")
     st.markdown("---")
 
+    display_info_message()
     display_workflow_introduction()
     handle_data_input_and_clustering()
     review_clustering_results()
@@ -59,26 +60,49 @@ def main():
     show_footer()
 
 
-def display_workflow_introduction():
+def display_info_message():
     """
-    显示文本聚类分析工作流程介绍
+    显示表格处理助手的信息消息。
     """
-    st.markdown(
-        '<h2 class="section-title">文本聚类分析工作流程</h2>', unsafe_allow_html=True
-    )
-    with st.container(border=True):
-        st.markdown(
-            """
-        1. **数据输入**: 上传包含大量文本数据的CSV文件。
-        2. **参数设置**: 设置聚类参数，如类别数量范围等。
-        3. **初始聚类**: 系统对输入的文本进行预处理和初始聚类。
-        4. **类别审核**: 展示初始聚类结果，允许用户修改、添加或删除类别。
-        5. **文本分类**: 基于确认的类别对所有文本进行分类。
-        6. **结果展示**: 显示最终的分类结果。
+    st.info(
         """
-        )
+        **🔬 文本聚类分析工具**
 
-    st.markdown("---")
+        文本聚类分析工具利用大语言模型的语义理解能力，自动化地从大量文本中识别和归类主要主题。
+
+        工具采用分批处理和多阶段聚类策略，能够高效处理大规模文本数据。支持自定义类别数量范围，并提供交互式的类别审核和编辑功能，让用户能够根据具体需求优化聚类结果。
+        
+        适用于各类文本内容分析场景，如用户反馈归类、话题趋势分析等。
+        """
+    )
+
+
+def display_workflow_introduction():
+    with st.expander("📋 查看文本聚类分析工作流程", expanded=False):
+        with st.container(border=True):
+            st.markdown(
+            """
+            1. **数据准备与参数设置**
+
+                上传CSV文件，选择文本列，输入主题背景，并设置聚类参数。
+
+            2. **初始聚类与类别优化**
+
+                系统使用大语言模型进行初始文本分类，然后合并和优化类别。
+
+            3. **人工审核与调整**
+
+                展示并允许编辑生成的类别列表，优化类别名称和描述。
+
+            4. **文本分类与结果生成**
+
+                基于确认的类别对所有文本进行分类，生成并展示最终结果。
+
+            5. **结果导出**
+
+                提供分类结果的CSV格式下载选项。
+            """
+            )
 
 
 def handle_data_input_and_clustering():
