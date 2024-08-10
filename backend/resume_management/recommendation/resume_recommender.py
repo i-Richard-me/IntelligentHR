@@ -2,7 +2,7 @@ import os
 import shutil
 import uuid
 from typing import Dict, Optional, List
-from backend.resume_management.recommendation.resume_recommendation_workflow import app
+from backend.resume_management.recommendation.recommendation_workflow import app
 from backend.resume_management.recommendation.recommendation_state import (
     ResumeRecommendationState,
 )
