@@ -3,7 +3,7 @@ from typing import List, Optional
 
 
 class PersonalInfo(BaseModel):
-    """个人基本信息、概述和技能的数据模型。"""
+    """个人基本信息、概述/总结和技能的数据模型。"""
 
     name: str = Field(..., description="姓名")
     email: Optional[str] = Field(None, description="电子邮件地址")
@@ -16,7 +16,7 @@ class PersonalInfo(BaseModel):
 
 
 class Education(BaseModel):
-    """教育经历的数据模型。"""
+    """教育经历数据模型。"""
 
     institution: str = Field(..., description="教育机构名称")
     degree: str = Field(..., description="学位")
@@ -25,7 +25,7 @@ class Education(BaseModel):
 
 
 class WorkExperience(BaseModel):
-    """工作经历的数据模型。"""
+    """工作经历数据模型。"""
 
     company: str = Field(..., description="公司名称")
     position: str = Field(..., description="职位名称")
@@ -35,7 +35,7 @@ class WorkExperience(BaseModel):
 
 
 class ProjectExperience(BaseModel):
-    """项目经历的数据模型（仅针对简历中单独列出的项目经历）。"""
+    """项目经历数据模型（仅针对简历中单独列出的项目经历，而非从工作经历中提取）。"""
 
     name: str = Field(..., description="项目名称")
     role: str = Field(..., description="在项目中担任的角色")
@@ -45,7 +45,7 @@ class ProjectExperience(BaseModel):
 
 
 class ResumeSummary(BaseModel):
-    """简历概述的数据模型。"""
+    """简历概述数据模型。"""
 
     characteristics: str = Field(..., description="员工特点概述")
     experience: str = Field(..., description="工作和项目经历概述")
@@ -53,14 +53,14 @@ class ResumeSummary(BaseModel):
 
 
 class ResumePersonalEducation(BaseModel):
-    """个人信息和教育背景的数据模型。"""
+    """个人信息和教育背景数据模型。"""
 
     personal_info: PersonalInfo = Field(..., description="个人基本信息、概述和技能")
     education: List[Education] = Field(..., description="教育背景列表")
 
 
 class ResumeWorkProject(BaseModel):
-    """工作经历和项目经历的数据模型。"""
+    """工作经历和项目经历数据模型。"""
 
     work_experiences: List[WorkExperience] = Field(..., description="工作经历列表")
     project_experiences: Optional[List[ProjectExperience]] = Field(
@@ -69,7 +69,7 @@ class ResumeWorkProject(BaseModel):
 
 
 class CompleteResume(BaseModel):
-    """完整简历信息的数据模型。"""
+    """完整简历信息数据模型。"""
 
     id: str = Field(..., description="简历ID")
     personal_info: PersonalInfo = Field(..., description="个人基本信息、概述和技能")
