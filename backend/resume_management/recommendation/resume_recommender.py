@@ -1,197 +1,232 @@
 import os
 import shutil
-import uuid
 from typing import Dict, Optional, List
-from backend.resume_management.recommendation.recommendation_workflow import app
-from backend.resume_management.recommendation.recommendation_state import (
-    ResumeRecommendationState,
+from backend.resume_management.recommendation.recommendation_requirements import (
+    RecommendationRequirements,
+)
+from backend.resume_management.recommendation.resume_search_strategy import (
+    ResumeSearchStrategyGenerator,
+    CollectionSearchStrategyGenerator,
+)
+from backend.resume_management.recommendation.resume_scorer import ResumeScorer
+from backend.resume_management.recommendation.recommendation_reason_generator import (
+    RecommendationReasonGenerator,
+)
+from backend.resume_management.recommendation.recommendation_output_generator import (
+    RecommendationOutputGenerator,
 )
 from utils.dataset_utils import load_df_from_csv
-from langfuse.callback import CallbackHandler
 
 
 class ResumeRecommender:
-    """简历推荐系统的主类"""
-
     def __init__(self):
-        """初始化简历推荐器"""
-        self.session_id = str(uuid.uuid4())
-        self.workflow = app
-        self.thread = {"configurable": {"thread_id": self.session_id}}
-        self.langfuse_handler = CallbackHandler(
-            tags=["resume_demo"], session_id=self.session_id
-        )
+        self.requirements = RecommendationRequirements()
+        self.resume_search_strategy_generator = ResumeSearchStrategyGenerator()
+        self.collection_search_strategy_generator = CollectionSearchStrategyGenerator()
+        self.resume_scorer = ResumeScorer()
+        self.reason_generator = RecommendationReasonGenerator()
+        self.output_generator = RecommendationOutputGenerator()
+        self.refined_query: Optional[str] = None
+        self.collection_relevances: Optional[List[Dict[str, float]]] = None
+        self.collection_search_strategies: Optional[Dict] = None
+        self.ranked_resume_scores_file: Optional[str] = None
+        self.resume_details_file: Optional[str] = None
+        self.recommendation_reasons_file: Optional[str] = None
+        self.final_recommendations_file: Optional[str] = None
 
-    def process_query(self, query: str) -> Dict:
+    def process_query(self, query: str) -> str:
         """
         处理用户的初始查询，启动推荐过程。
 
         Args:
-            query (str): 用户的初始查询。
+            query (str): 用户的初始查询
 
         Returns:
-            Dict: 处理结果。
+            str: 处理状态，可能是 'need_more_info' 或 'ready'
         """
-        initial_state: ResumeRecommendationState = {
-            "original_query": query,
-            "status": "need_more_info",
-            "refined_query": "",
-            "query_history": [query],
-            "current_question": None,
-            "user_input": None,
-            "collection_relevances": [],
-            "collection_search_strategies": {},
-            "ranked_resume_scores_file": None,
-            "resume_details_file": None,
-            "recommendation_reasons_file": None,
-            "final_recommendations_file": None,
-        }
-
-        return self.workflow.invoke(initial_state, config=self.thread)
+        return self.requirements.confirm_requirements(query)
 
     def get_next_question(self) -> Optional[str]:
         """
         获取下一个需要用户回答的问题（如果有的话）。
 
         Returns:
-            Optional[str]: 下一个问题，如果没有则返回 None。
+            Optional[str]: 下一个问题，如果没有则返回 None
         """
-        state = self.workflow.get_state(self.thread).values
-        return state.get("current_question")
+        return self.requirements.get_current_question()
 
-    def process_answer(self, answer: str) -> Dict:
+    def process_answer(self, answer: str) -> str:
         """
         处理用户对问题的回答，继续推荐过程。
 
         Args:
-            answer (str): 用户的回答。
+            answer (str): 用户的回答
 
         Returns:
-            Dict: 处理结果。
+            str: 处理状态，可能是 'need_more_info' 或 'ready'
         """
-        self.workflow.update_state(
-            self.thread, {"user_input": answer}, as_node="get_user_input"
+        return self.requirements.confirm_requirements(answer)
+
+    def generate_search_strategy(self) -> None:
+        """
+        生成简历搜索策略。
+        """
+        self.refined_query = self.requirements.get_refined_query()
+        if not self.refined_query:
+            raise ValueError("未找到精炼后的查询。无法生成搜索策略。")
+
+        self.collection_relevances = (
+            self.resume_search_strategy_generator.generate_resume_search_strategy(
+                self.refined_query
+            )
         )
-        return self.workflow.invoke(None, self.thread)
+        self.search_strategy = self.collection_relevances
+        # 将生成详细的检索策略移到单独的方法中
+        self.generate_detailed_search_strategy()
 
-    def get_next_node(self) -> Optional[str]:
+    def generate_detailed_search_strategy(self) -> None:
         """
-        获取工作流程中的下一个节点。
+        生成详细的检索策略。
+        """
+        self.collection_search_strategies = self.collection_search_strategy_generator.generate_collection_search_strategy(
+            self.refined_query, self.collection_relevances
+        )
 
-        Returns:
-            Optional[str]: 下一个节点的名称，如果没有则返回 None。
+    def get_search_strategy(self) -> Optional[List[Dict[str, float]]]:
         """
-        next_node = self.workflow.get_state(self.thread).next
-        return next_node[0] if next_node else None
-
-    def continue_process(self) -> tuple[Dict, Optional[str]]:
-        """
-        继续执行推荐过程。
-
-        Returns:
-            tuple[Dict, Optional[str]]: 处理结果和下一个节点名称。
-        """
-        next_node = self.get_next_node()
-        result = self.workflow.invoke(None, self.thread)
-        return result, next_node
-
-    def get_collection_relevances(self) -> List[Dict]:
-        """
-        获取集合相关性列表。
+        获取搜索策略。
 
         Returns:
-            List[Dict]: 集合相关性列表。
+            Optional[List[Dict[str, float]]]: 搜索策略，如果尚未生成则返回 None
         """
-        state = self.workflow.get_state(self.thread).values
-        return state.get("collection_relevances", [])
+        return self.search_strategy
 
-    def is_process_complete(self) -> bool:
+    def calculate_resume_scores(self) -> None:
         """
-        检查推荐过程是否已完成。
+        计算简历得分。
+        """
+        if (
+            not self.refined_query
+            or not self.collection_relevances
+            or not self.collection_search_strategies
+        ):
+            raise ValueError("缺少生成简历得分所需的信息。")
 
-        Returns:
-            bool: 如果过程完成则返回 True，否则返回 False。
-        """
-        state = self.workflow.get_state(self.thread).values
-        return state.get("final_recommendations_file") is not None
+        self.ranked_resume_scores_file = (
+            self.resume_scorer.calculate_overall_resume_scores(
+                self.refined_query,
+                self.collection_relevances,
+                self.collection_search_strategies,
+            )
+        )
 
-    def get_refined_query(self) -> Optional[str]:
+    def generate_recommendation_reasons(self) -> None:
         """
-        获取精炼后的查询。
+        生成推荐理由。
+        """
+        if not self.refined_query or not self.resume_details_file:
+            raise ValueError("缺少生成推荐理由所需的信息。")
 
-        Returns:
-            Optional[str]: 精炼后的查询，如果没有则返回 None。
+        self.recommendation_reasons_file = (
+            self.reason_generator.generate_recommendation_reasons(
+                self.refined_query, self.resume_details_file
+            )
+        )
+
+    def prepare_final_recommendations(self) -> None:
         """
-        state = self.workflow.get_state(self.thread).values
-        return state.get("refined_query")
+        准备最终的推荐结果。
+        """
+        if not self.resume_details_file or not self.recommendation_reasons_file:
+            raise ValueError("缺少准备最终推荐所需的信息。")
+
+        self.final_recommendations_file = self.output_generator.prepare_final_output(
+            self.resume_details_file, self.recommendation_reasons_file
+        )
 
     def get_recommendations(self) -> Optional[List[Dict]]:
         """
         获取最终的推荐结果。
 
         Returns:
-            Optional[List[Dict]]: 推荐结果列表，如果没有则返回 None。
+            Optional[List[Dict]]: 推荐结果列表，如果尚未生成则返回 None
         """
-        state = self.workflow.get_state(self.thread).values
-        if state.get("final_recommendations_file"):
-            df = load_df_from_csv(state["final_recommendations_file"])
+        if self.final_recommendations_file:
+            df = load_df_from_csv(self.final_recommendations_file)
             return df.to_dict("records")
         return None
 
-    def run_full_process(self) -> Optional[List[Dict]]:
+    def run_full_process(self, initial_query: str) -> Optional[List[Dict]]:
         """
         运行完整的推荐过程。
 
+        Args:
+            initial_query (str): 用户的初始查询
+
         Returns:
-            Optional[List[Dict]]: 推荐结果列表，如果没有则返回 None。
+            Optional[List[Dict]]: 推荐结果列表，如果过程中出错则返回 None
         """
         try:
-            while not self.is_process_complete():
+            status = self.process_query(initial_query)
+            while status == "need_more_info":
                 next_question = self.get_next_question()
                 if next_question:
                     answer = input(f"{next_question}\n请回答: ")
-                    self.process_answer(answer)
+                    status = self.process_answer(answer)
                 else:
-                    self.workflow.invoke(None, self.thread)
+                    raise ValueError("需要更多信息，但没有下一个问题。")
+
+            self.generate_search_strategy()
+            self.calculate_resume_scores()
+            self.resume_details_file = self.output_generator.fetch_resume_details(
+                self.ranked_resume_scores_file
+            )
+            self.generate_recommendation_reasons()
+            self.prepare_final_recommendations()
 
             return self.get_recommendations()
+        except Exception as e:
+            print(f"推荐过程中发生错误: {str(e)}")
+            return None
         finally:
             self.cleanup_temp_files()
 
-    def get_current_state(self) -> Dict:
+    def cleanup_temp_files(self) -> None:
         """
-        获取当前的状态。
-
-        Returns:
-            Dict: 当前状态字典。
+        清理临时文件。
         """
-        return self.workflow.get_state(self.thread).values
-
-    def cleanup_temp_files(self):
-        """清理临时文件"""
         temp_dir = os.path.join("data", "temp")
         if os.path.exists(temp_dir):
             shutil.rmtree(temp_dir)
         os.makedirs(temp_dir, exist_ok=True)
         print("临时文件已清理。")
 
+    def get_refined_query(self) -> Optional[str]:
+        """
+        获取精炼后的查询。
+
+        Returns:
+            Optional[str]: 精炼后的查询，如果尚未生成则返回 None
+        """
+        return self.requirements.get_refined_query()
+
 
 def main():
-    """主函数，用于演示简历推荐系统的使用"""
     recommender = ResumeRecommender()
 
     try:
+        # 获取用户的初始查询
         query = input("请输入你的招聘需求: ")
-        recommender.process_query(query)
+        recommendations = recommender.run_full_process(query)
 
-        recommendations = recommender.run_full_process()
-
+        # 获取并显示精炼后的查询
         refined_query = recommender.get_refined_query()
         if refined_query:
             print(f"\n精炼后的查询:\n{refined_query}")
         else:
             print("无法获取精炼后的查询。")
 
+        # 显示推荐结果
         if recommendations:
             print("\n推荐结果:")
             for rec in recommendations:
@@ -205,8 +240,8 @@ def main():
         else:
             print("无法获取推荐结果。")
 
-    finally:
-        recommender.cleanup_temp_files()
+    except Exception as e:
+        print(f"程序执行过程中发生错误: {str(e)}")
 
 
 if __name__ == "__main__":
