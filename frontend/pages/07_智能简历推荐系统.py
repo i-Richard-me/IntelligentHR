@@ -37,6 +37,64 @@ def get_node_description(node_name):
     return node_descriptions.get(node_name, "处理中...")
 
 
+def display_info_message():
+    """
+    显示智能简历推荐系统的功能介绍。
+    """
+    st.info(
+        """
+    **👥 智能简历推荐系统**
+
+    智能简历推荐系统利用大模型的语义理解能力，实现高效的招聘需求匹配。
+
+    系统能够通过对话式交互，从用户描述中推断出理想候选人画像，并自动生成精准的搜索策略。基于多维度评分机制，系统快速筛选出最匹配的简历，适用于各类人才甄选场景。
+    """
+    )
+
+
+def display_workflow():
+    """
+    显示智能简历推荐系统的工作流程。
+    """
+    with st.expander("👥 查看简历推荐工作流程", expanded=False):
+        st.markdown(
+            '<h2 class="section-title">简历推荐工作流程</h2>', unsafe_allow_html=True
+        )
+
+        col1, col2 = st.columns([1, 1])
+
+        # with col1:
+        #     image = Image.open("frontend/assets/resume_recommendation_workflow.png")
+        #     st.image(image, caption="简历推荐工作流程图", use_column_width=True)
+
+        with col2:
+            st.markdown(
+                """
+                <div class="workflow-container">
+                    <div class="workflow-step">
+                        <strong>1. 对话式需求分析</strong>: 通过智能对话，深入理解用户的招聘需求，构建理想候选人画像。
+                    </div>
+                    <div class="workflow-step">
+                        <strong>2. 候选人画像生成</strong>: 基于对话内容，自动生成全面的理想候选人特征描述。
+                    </div>
+                    <div class="workflow-step">
+                        <strong>3. 搜索策略制定</strong>: 根据候选人画像，创建精准的简历搜索和匹配策略。
+                    </div>
+                    <div class="workflow-step">
+                        <strong>4. 多维度简历评分</strong>: 利用向量匹配技术，对简历进行全方位的相似度评估。
+                    </div>
+                    <div class="workflow-step">
+                        <strong>5. 结果筛选与排序</strong>: 综合评分结果，筛选并排序最匹配的候选人简历。
+                    </div>
+                    <div class="workflow-step">
+                        <strong>6. 推荐结果展示</strong>: 以清晰、直观的方式呈现推荐结果，支持进一步筛选和分析。
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+
 # 初始化会话状态
 if "recommender" not in st.session_state:
     st.session_state.recommender = ResumeRecommender()
@@ -57,42 +115,8 @@ if "recommender" not in st.session_state:
 st.title("👥 智能简历推荐系统")
 st.markdown("---")
 
-# 工作流程介绍
-st.markdown('<h2 class="section-title">简历推荐工作流程</h2>', unsafe_allow_html=True)
-with st.container(border=True):
-    col1, col2 = st.columns([1, 1])
-
-    # with col1:
-    #     # 假设您有一个简历推荐助手的流程图
-    #     image = Image.open("frontend/assets/resume_recommendation_workflow.png")
-    #     st.image(image, caption="简历推荐助手流程图", use_column_width=True)
-
-    with col2:
-        st.markdown(
-            """
-        <div class="workflow-container">
-            <div class="workflow-step">
-                <strong>1. 需求分析</strong>: 智能分析用户的招聘需求，提取关键信息和要求。
-            </div>
-            <div class="workflow-step">
-                <strong>2. 搜索策略生成</strong>: 根据需求自动生成针对性的简历搜索策略。
-            </div>
-            <div class="workflow-step">
-                <strong>3. 简历评分</strong>: 利用向量匹配和机器学习算法对简历进行多维度评分。
-            </div>
-            <div class="workflow-step">
-                <strong>4. 详细信息获取</strong>: 提取候选简历的详细信息，包括工作经验、技能等。
-            </div>
-            <div class="workflow-step">
-                <strong>5. 推荐理由生成</strong>: 为每份推荐的简历生成个性化的推荐理由。
-            </div>
-            <div class="workflow-step">
-                <strong>6. 结果呈现</strong>: 以用户友好的方式展示推荐结果，便于快速决策。
-            </div>
-        </div>
-        """,
-            unsafe_allow_html=True,
-        )
+display_info_message()
+display_workflow()
 
 st.markdown("---")
 
