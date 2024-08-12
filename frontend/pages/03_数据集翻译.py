@@ -82,20 +82,51 @@ async def batch_translate(texts: List[str], text_topic: str) -> List[str]:
         return await asyncio.gather(*tasks)
 
 
-def display_workflow() -> None:
-    """显示AI翻译助手工作流程。"""
-    st.markdown(
-        '<h2 class="section-title">AI翻译助手工作流程</h2>', unsafe_allow_html=True
-    )
-    with st.container(border=True):
-        st.markdown(
-            """
-        1. **输入文本**: 输入需要翻译的文本或上传CSV文件。
-        2. **指定主题**: 提供文本的主题或类型，以提高翻译准确性。
-        3. **翻译处理**: 系统将文本发送到AI模型进行翻译。
-        4. **结果展示**: 显示翻译结果，并提供下载选项。
+def display_translation_info():
+    st.info(
         """
+    **🌐 AI翻译助手**
+
+    AI翻译助手是一个高效的多语言翻译工具，专为批量处理文本设计。它支持单条文本和CSV文件的翻译，
+    通过上下文理解提高翻译准确性。该工具集成了异步处理和速率限制功能，确保大规模翻译任务的
+    稳定性。AI翻译助手适用于需要快速、准确翻译大量文本的各类场景，如国际化文档处理或多语言
+    数据分析。
+    """
+    )
+
+
+def display_translation_workflow():
+    with st.expander("📋 查看AI翻译助手工作流程", expanded=False):
+        st.markdown(
+            '<h2 class="section-title">AI翻译助手工作流程</h2>',
+            unsafe_allow_html=True,
         )
+        with st.container(border=True):
+            col1, col2 = st.columns([1, 1])
+
+            # with col1:
+            #     st.image(
+            #         "frontend/assets/translation_workflow.png",
+            #         caption="AI翻译助手流程图",
+            #         use_column_width=True,
+            #     )
+
+            with col2:
+                st.markdown(
+                    """
+                    **1. 输入准备**
+                    指定文本主题，提供上下文信息以提高翻译准确性。
+
+                    **2. 智能翻译**
+                    AI模型结合上下文进行翻译，优化专业术语和行业特定表达。
+
+                    **3. 异步处理**
+                    系统进行文本分割和批处理，高效处理大量文本。
+
+                    **4. 结果展示**
+                    显示翻译结果，支持单条文本即时显示和批量结果预览。
+                    """
+                )
 
 
 def upload_and_process_file() -> Tuple[pd.DataFrame, str]:
@@ -178,7 +209,12 @@ def main():
     if "translation_results" not in st.session_state:
         st.session_state.translation_results = None
 
-    display_workflow()
+    # 显示功能介绍
+    display_translation_info()
+    st.markdown("---")
+
+    # 显示工作流程
+    display_translation_workflow()
     st.markdown("---")
 
     st.markdown('<h2 class="section-title">文本翻译</h2>', unsafe_allow_html=True)
