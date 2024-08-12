@@ -47,6 +47,9 @@ def initialize_session_state():
         "context": "",
         "labels": [],
         "current_batch_index": 0,
+        "progress": 0,
+        "total_rows": 0,
+        "is_processing": False,
     }
     for key, value in default_states.items():
         if key not in st.session_state:
@@ -199,6 +202,11 @@ def main():
                                 [text_column]
                             ].copy()
                             st.session_state.current_batch_index = 0
+                            st.session_state.total_rows = len(
+                                st.session_state.filtered_df
+                            )
+                            st.session_state.progress = 0
+                            st.session_state.is_processing = True
                             st.rerun()
                         else:
                             st.warning("请输入上下文和标签")
@@ -206,19 +214,19 @@ def main():
                 except Exception as e:
                     st.error(f"处理CSV文件时出错：{str(e)}")
 
-    if st.session_state.filtered_df is not None:
+    if st.session_state.is_processing:
         st.markdown(
             '<h2 class="section-title">批量分类进度</h2>', unsafe_allow_html=True
         )
         with st.container(border=True):
-            total_rows = len(st.session_state.filtered_df)
+            total_rows = st.session_state.total_rows
             start_index = st.session_state.current_batch_index * BATCH_SIZE
             end_index = min(start_index + BATCH_SIZE, total_rows)
 
             progress_text = (
                 f"正在处理 {start_index + 1} 到 {end_index} 行，共 {total_rows} 行"
             )
-            my_bar = st.progress(0, text=progress_text)
+            my_bar = st.progress(st.session_state.progress, text=progress_text)
 
             current_batch = st.session_state.filtered_df.iloc[start_index:end_index]
             texts_to_classify = current_batch[text_column].tolist()
@@ -242,15 +250,16 @@ def main():
                     start_index + i, "是否包含敏感信息"
                 ] = result["sensitive_info"]
 
-            my_bar.progress(end_index / total_rows, text=progress_text)
-
-            st.session_state.current_batch_index += 1
+            st.session_state.progress = end_index / total_rows
+            my_bar.progress(st.session_state.progress, text=progress_text)
 
             if end_index < total_rows:
+                st.session_state.current_batch_index += 1
                 st.rerun()
             else:
                 st.success("批量分类完成！")
                 st.session_state.classification_results = st.session_state.filtered_df
+                st.session_state.is_processing = False
 
     # 显示分类结果
     if st.session_state.classification_results is not None:

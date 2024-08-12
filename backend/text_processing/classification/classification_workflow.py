@@ -1,14 +1,3 @@
-import os
-import sys
-
-
-# 添加项目根目录到 Python 路径
-project_root = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..", "..", "..")
-)
-sys.path.append(project_root)
-
-
 from typing import List
 from utils.llm_tools import init_language_model, LanguageModelChain
 from backend.text_processing.classification.classification_core import (
