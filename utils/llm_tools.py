@@ -3,6 +3,7 @@ import time
 import logging
 import traceback
 from typing import Any, Dict, List, Tuple, Optional, Type, Union
+import requests
 
 import pandas as pd
 from tqdm import tqdm
@@ -10,6 +11,7 @@ from pydantic import BaseModel
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
+from langchain.embeddings.base import Embeddings
 
 # 配置日志
 logging.basicConfig(
@@ -300,3 +302,41 @@ def batch_process_data(
         logger.info(f"处理失败的行数: {len(error_df)}")
 
         return result_df, error_df
+
+
+class CustomEmbeddings(Embeddings):
+    def __init__(
+        self,
+        api_key: str,
+        api_url: str = "https://api.siliconflow.cn/v1/embeddings",
+        model: str = "BAAI/bge-large-zh-v1.5",
+    ):
+        self.api_key = api_key
+        self.api_url = api_url
+        self.model = model
+
+    def _get_embeddings(self, texts: List[str]) -> List[List[float]]:
+        headers = {
+            "accept": "application/json",
+            "authorization": f"Bearer {self.api_key}",
+            "content-type": "application/json",
+        }
+
+        all_embeddings = []
+
+        for text in texts:
+            payload = {"model": self.model, "input": text, "encoding_format": "float"}
+
+            response = requests.post(self.api_url, headers=headers, json=payload)
+            response.raise_for_status()  # Raises an HTTPError for bad responses
+
+            embedding = response.json()["data"][0]["embedding"]
+            all_embeddings.append(embedding)
+
+        return all_embeddings
+
+    def embed_documents(self, texts: List[str]) -> List[List[float]]:
+        return self._get_embeddings(texts)
+
+    def embed_query(self, text: str) -> List[float]:
+        return self._get_embeddings([text])[0]
