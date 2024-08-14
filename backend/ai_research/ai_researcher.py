@@ -228,24 +228,3 @@ class AIResearcher:
         await self.conduct_research()
         report = await self.generate_report()
         return report
-
-
-# 测试函数
-async def test_ai_researcher():
-    researcher = AIResearcher(
-        query="2024年网约车行业发展情况",
-        report_type=ReportType.DetailedReport.value,
-        tone=Tone.Objective,
-        max_iterations=5,
-        max_subtopics=4,
-        max_search_results_per_query=7,
-    )
-    report = await researcher.run()
-    print(f"生成的报告:\n{report[:1000]}...")  # 打印前1000个字符
-
-    with open("report.md", "w", encoding="utf-8") as file:
-        file.write(report)
-
-
-if __name__ == "__main__":
-    asyncio.run(test_ai_researcher())
