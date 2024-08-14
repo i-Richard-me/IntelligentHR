@@ -156,8 +156,6 @@ def generate_subtopic_report_prompt(
 
 - 你必须在报告中引用相关URL时包含markdown超链接，例如：
 
-    # 报告标题
-
     这是一个示例文本。([网站名称](URL地址))
 
 "现有子主题报告":
