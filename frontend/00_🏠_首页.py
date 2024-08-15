@@ -28,6 +28,7 @@ def main():
     display_project_intro()
     display_feature_overview()
     display_project_highlights()
+    display_documentation_link()
 
     # 页脚
     show_footer()
@@ -36,10 +37,8 @@ def main():
 def display_project_intro():
     st.markdown(
         """
-        智能HR助手是一个实验性的人力资源管理工具集，探索AI技术在HR领域的应用。
-        本项目致力于提供从数据处理到决策支持的智能化解决方案，提高HR工作效率。
-        
-        [📚 查看完整文档](https://docs.irichard.wang/intelligenthr/intelligenthr-intro)
+        智能HR助手是一个实验性的人力资源管理工具集，旨在探索AI技术在HR领域的应用潜力。
+        工具集涵盖了从数据处理、文本分析到决策支持的多个HR工作分析环节，致力于为人力资源管理提供全方位的智能化解决方案。
         """
     )
 
@@ -68,19 +67,24 @@ def display_feature_overview():
 
 
 def display_project_highlights():
-    st.markdown('<h2 class="section-title">项目特点</h2>', unsafe_allow_html=True)
+    st.markdown('<h2 class="section-title">项目亮点</h2>', unsafe_allow_html=True)
     st.markdown(
         """
-        - **辅助决策**: 提供数据分析和建议，作为人工决策的参考。
-
-        - **效率尝试**: 自动化部分数据处理和研究任务，探索提高工作效率的可能性。
-
-        - **数据洞察**: 利用AI技术，尝试从数据中提取有价值的信息。
-
-        - **用户友好**: 直观的界面设计，便于使用和测试。
-
-        - **实验性质**: 作为一个探索性项目，持续优化和改进功能。
+        - **实际场景应用**: 将大模型能力融入HR实际工作流程，解决真实痛点
+        - **效率提升**: 自动化处理费时费力的重复性工作，显著提高效率
+        - **智能分析**: 提供新颖的数据分析视角，助力数据驱动决策
+        - **灵活适应**: 针对不同HR任务定制AI解决方案，满足多样化需求
         """
+    )
+
+
+def display_documentation_link():
+    st.markdown('<h2 class="section-title">产品文档</h2>', unsafe_allow_html=True)
+
+    st.markdown("探索完整功能、使用指南和最佳实践")
+    st.link_button(
+        "📚 查看完整文档",
+        "https://docs.irichard.wang/intelligenthr/intelligenthr-intro",
     )
 
 
