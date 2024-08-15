@@ -1,7 +1,7 @@
 import streamlit as st
 
 # 版本号
-VERSION = "0.0.1"
+VERSION = "0.0.2"
 
 
 def show_sidebar():
