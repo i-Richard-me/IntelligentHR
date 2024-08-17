@@ -57,8 +57,13 @@ def main():
     display_workflow_introduction()
 
     # 在用户开始新任务时生成session_id
-    if "session_id" not in st.session_state or st.button("开始新任务"):
+    if st.button("开始新任务") or st.session_state.session_id is None:
         st.session_state.session_id = str(uuid.uuid4())
+        st.session_state.df_preprocessed = None
+        st.session_state.categories = None
+        st.session_state.df_result = None
+        st.session_state.text_column = None
+        st.session_state.text_topic = None
 
     handle_data_input_and_clustering()
     review_clustering_results()
@@ -153,6 +158,7 @@ def handle_data_input_and_clustering():
                 # 保存结果到 session state
                 st.session_state.df_preprocessed = result["preprocessed_df"]
                 st.session_state.categories = result["categories"]["categories"]
+                st.session_state.session_id = result["session_id"]
 
         else:
             st.warning("请上传CSV文件")
