@@ -38,10 +38,24 @@ def initialize_session_state():
         "text_column",
         "text_topic",
         "session_id",
+        "clustering_params",
     ]
     for var in session_vars:
         if var not in st.session_state:
             st.session_state[var] = None
+
+    # 确保session_id总是有值
+    if st.session_state.session_id is None:
+        st.session_state.session_id = str(uuid.uuid4())
+
+    # 初始化 clustering_params
+    if st.session_state.clustering_params is None:
+        st.session_state.clustering_params = {
+            "min_categories": 10,
+            "max_categories": 15,
+            "batch_size": 100,
+            "classification_batch_size": 20,
+        }
 
 
 def main():
@@ -55,15 +69,6 @@ def main():
 
     display_info_message()
     display_workflow_introduction()
-
-    # 在用户开始新任务时生成session_id
-    if st.button("开始新任务") or st.session_state.session_id is None:
-        st.session_state.session_id = str(uuid.uuid4())
-        st.session_state.df_preprocessed = None
-        st.session_state.categories = None
-        st.session_state.df_result = None
-        st.session_state.text_column = None
-        st.session_state.text_topic = None
 
     handle_data_input_and_clustering()
     review_clustering_results()
@@ -138,7 +143,7 @@ def handle_data_input_and_clustering():
             st.write(df.head())
             st.session_state.text_column = st.selectbox("选择包含文本的列", df.columns)
 
-            clustering_params = get_clustering_parameters()
+            st.session_state.clustering_params = get_clustering_parameters()
 
             if st.button("开始初始聚类"):
                 with st.spinner("正在进行初始聚类..."):
@@ -146,10 +151,16 @@ def handle_data_input_and_clustering():
                         df=df,
                         text_column=st.session_state.text_column,
                         text_topic=st.session_state.text_topic,
-                        initial_category_count=clustering_params["max_categories"],
-                        min_categories=clustering_params["min_categories"],
-                        max_categories=clustering_params["max_categories"],
-                        batch_size=clustering_params["batch_size"],
+                        initial_category_count=st.session_state.clustering_params[
+                            "max_categories"
+                        ],
+                        min_categories=st.session_state.clustering_params[
+                            "min_categories"
+                        ],
+                        max_categories=st.session_state.clustering_params[
+                            "max_categories"
+                        ],
+                        batch_size=st.session_state.clustering_params["batch_size"],
                         session_id=st.session_state.session_id,
                     )
 
@@ -158,7 +169,6 @@ def handle_data_input_and_clustering():
                 # 保存结果到 session state
                 st.session_state.df_preprocessed = result["preprocessed_df"]
                 st.session_state.categories = result["categories"]["categories"]
-                st.session_state.session_id = result["session_id"]
 
         else:
             st.warning("请上传CSV文件")
@@ -172,14 +182,40 @@ def get_clustering_parameters():
         dict: 包含聚类参数的字典
     """
     with st.expander("聚类参数设置"):
-        min_categories = st.slider("最小类别数量", 5, 15, 10)
-        max_categories = st.slider("最大类别数量", min_categories, 20, 15)
-        batch_size = st.slider("批处理大小", 10, 1000, 100)
+        min_categories = st.slider(
+            "最小类别数量",
+            5,
+            15,
+            st.session_state.clustering_params["min_categories"],
+            key="min_categories_slider",
+        )
+        max_categories = st.slider(
+            "最大类别数量",
+            min_categories,
+            20,
+            st.session_state.clustering_params["max_categories"],
+            key="max_categories_slider",
+        )
+        batch_size = st.slider(
+            "聚类批处理大小",
+            10,
+            1000,
+            st.session_state.clustering_params["batch_size"],
+            key="batch_size_slider",
+        )
+        classification_batch_size = st.slider(
+            "分类批处理大小",
+            10,
+            100,
+            st.session_state.clustering_params["classification_batch_size"],
+            key="classification_batch_size_slider",
+        )
 
     return {
         "min_categories": min_categories,
         "max_categories": max_categories,
         "batch_size": batch_size,
+        "classification_batch_size": classification_batch_size,
     }
 
 
@@ -232,6 +268,9 @@ def review_clustering_results():
                         categories={"categories": edited_categories},
                         text_topic=st.session_state.text_topic,
                         session_id=st.session_state.session_id,
+                        classification_batch_size=st.session_state.clustering_params[
+                            "classification_batch_size"
+                        ],
                     )
 
                 st.session_state.df_result = df_result
