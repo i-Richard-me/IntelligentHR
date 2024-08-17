@@ -38,49 +38,63 @@ def main():
     st.title("🔍 AI 研究助手")
     st.markdown("---")
 
+    display_info_message()
     display_workflow()
     display_research_settings()
     display_report()
     show_footer()
 
 
-def display_workflow():
-    st.markdown(
-        '<h2 class="section-title">AI 研究助手工作流程</h2>', unsafe_allow_html=True
+def display_info_message():
+    """
+    显示AI研究助手的功能介绍。
+    """
+    st.info(
+        """
+    AI 研究助手是一个基于大语言模型的研究工具，旨在协助用户进行深入的主题研究。
+
+    该工具能够根据用户提供的主题自动生成相关子查询，从多个来源收集信息，并进行分析整理。
+    系统支持多种报告类型和语气，可根据用户需求生成定制化的研究报告。
+    
+    AI 研究助手适用于需要快速获取和整理特定主题信息的场景。
+    """
     )
-    with st.container(border=True):
-        col1, col2 = st.columns([1, 1])
 
-        # with col1:
-        #     image = Image.open("frontend/assets/ai_research_assistant.png")
-        #     st.image(image, caption="AI 研究助手流程图", use_column_width=True)
 
-        with col2:
-            st.markdown(
-                """
-            <div class="workflow-container">
-                <div class="workflow-step">
-                    <strong>1. 智能代理选择</strong>: 根据研究主题，系统自动选择最合适的AI代理角色和专业指令。
-                </div>
-                <div class="workflow-step">
-                    <strong>2. 子查询生成</strong>: AI代理根据主题生成多个相关的子查询，以全面覆盖研究范围。
-                </div>
-                <div class="workflow-step">
-                    <strong>3. 并行信息检索</strong>: 系统同时处理多个子查询，从网络搜索引擎获取相关信息。
-                </div>
-                <div class="workflow-step">
-                    <strong>4. 上下文压缩</strong>: 使用嵌入技术和相似度匹配，从检索到的大量信息中提取最相关的内容。
-                </div>
-                <div class="workflow-step">
-                    <strong>5. 报告生成</strong>: 根据压缩后的上下文信息，AI生成结构化的研究报告。
-                </div>
-                <div class="workflow-step">
-                    <strong>6. 报告优化</strong>: 根据指定的语气和格式要求，对生成的报告进行调整和优化。
-                </div>
-            </div>
-            """,
-                unsafe_allow_html=True,
-            )
+def display_workflow():
+    """
+    显示AI研究助手的工作流程。
+    """
+    with st.expander("🔍 查看AI研究助手工作流程", expanded=False):
+        st.markdown(
+            '<h2 class="section-title">AI 研究助手工作流程</h2>', unsafe_allow_html=True
+        )
+        with st.container(border=True):
+            col1, col2 = st.columns([1, 1])
+
+            with col2:
+                st.markdown(
+                    """
+                    <div class="workflow-container">
+                        <div class="workflow-step">
+                            <strong>1. 智能代理选择</strong>: 根据研究主题，系统自动选择合适的AI代理角色和专业指令。
+                        </div>
+                        <div class="workflow-step">
+                            <strong>2. 子查询生成</strong>: AI代理根据主题生成多个相关的子查询，以全面覆盖研究范围。
+                        </div>
+                        <div class="workflow-step">
+                            <strong>3. 并行信息检索</strong>: 系统同时处理多个子查询，从网络搜索引擎获取相关信息。
+                        </div>
+                        <div class="workflow-step">
+                            <strong>4. 上下文压缩</strong>: 使用嵌入技术和相似度匹配，从检索到的大量信息中提取最相关的内容。
+                        </div>
+                        <div class="workflow-step">
+                            <strong>5. 报告生成</strong>: 根据压缩后的上下文信息，生成结构化的研究报告，并根据指定的语气和格式进行调整。
+                        </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
 
 
 def display_research_settings():
