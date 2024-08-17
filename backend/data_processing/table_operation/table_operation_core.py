@@ -1,5 +1,8 @@
 import logging
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
+
+import uuid
+from langfuse.callback import CallbackHandler
 
 from langchain_core.tools import tool
 
@@ -13,7 +16,6 @@ from backend.data_processing.table_operation.table_operations import (
     compare_dataframes,
 )
 from utils.llm_tools import LanguageModelChain, init_language_model
-
 
 # 初始化日志记录
 logging.basicConfig(
@@ -69,6 +71,22 @@ HUMAN_MESSAGE_TEMPLATE = """
 """
 
 
+def create_langfuse_handler(session_id: str, step: str) -> CallbackHandler:
+    """
+    创建 Langfuse CallbackHandler。
+
+    Args:
+        session_id: 会话ID。
+        step: 当前步骤名称。
+
+    Returns:
+        配置好的 Langfuse CallbackHandler。
+    """
+    return CallbackHandler(
+        tags=["table_operation"], session_id=session_id, metadata={"step": step}
+    )
+
+
 def get_tools_description(tools: List[tool]) -> str:
     """
     获取工具函数的描述。
@@ -82,7 +100,7 @@ def get_tools_description(tools: List[tool]) -> str:
     descriptions = []
     for tool in tools:
         descriptions.append(
-            f"函数名：{tool.name}\n描述：{tool.description}\n参数：{tool.args}\n"
+            f"函数名：{tool.name}\n描述：{tool.description}\n\n参数：{tool.args}\n"
         )
     return "\n".join(descriptions)
 
@@ -106,24 +124,27 @@ def process_user_query(
     user_input: str,
     dataframe_info: Dict[str, Dict],
     tools: List[tool],
+    session_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
-    处理用户查询，生成相应的响应。
+    处理用户查询并返回结果。
 
     Args:
-        assistant_chain: 配置好的语言模型链。
+        assistant_chain: 语言模型链。
         user_input: 用户输入的查询。
-        dataframe_variables: 可用的DataFrame变量名列表。
-        dataframe_info: DataFrame信息字典。
+        dataframe_info: DataFrame 信息字典。
         tools: 可用的工具函数列表。
+        session_id: 会话ID，如果没有提供则生成新的。
 
     Returns:
-        包含处理结果的字典。
-
-    Raises:
-        ValueError: 当处理查询时发生错误。
+        处理结果字典。
     """
     try:
+        if session_id is None:
+            session_id = str(uuid.uuid4())
+
+        langfuse_handler = create_langfuse_handler(session_id, "process_user_query")
+
         tools_description = get_tools_description(tools)
         dataframe_info_str = format_dataframe_info(dataframe_info)
 
@@ -134,7 +155,9 @@ def process_user_query(
         }
 
         logger.info(f"Processing user query: {user_input}")
-        result = assistant_chain.invoke(input_data)
+        result = assistant_chain.invoke(
+            input_data, config={"callbacks": [langfuse_handler]}
+        )
         logger.info(f"Query processed successfully. Result: {result}")
 
         return result
