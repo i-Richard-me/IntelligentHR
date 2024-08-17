@@ -63,10 +63,6 @@ def display_workflow():
 
         col1, col2 = st.columns([1, 1])
 
-        # with col1:
-        #     image = Image.open("frontend/assets/resume_recommendation_workflow.png")
-        #     st.image(image, caption="简历推荐工作流程图", use_column_width=True)
-
         with col2:
             st.markdown(
                 """
@@ -110,6 +106,7 @@ if "recommender" not in st.session_state:
     st.session_state.processing = False
     st.session_state.strategy_displayed = False
     st.session_state.refined_query = None
+    st.session_state.top_n = 3  # 默认推荐数量
 
 # 主界面
 st.title("👥 智能简历推荐系统")
@@ -121,6 +118,12 @@ display_workflow()
 st.markdown("---")
 
 st.markdown('<h2 class="section-title">简历推荐</h2>', unsafe_allow_html=True)
+
+# 添加高级设置
+with st.expander("高级设置", expanded=False):
+    st.session_state.top_n = st.number_input(
+        "推荐简历数量", min_value=1, max_value=10, value=st.session_state.top_n
+    )
 
 # 创建一个容器来显示聊天历史
 chat_container = st.empty()
@@ -236,7 +239,7 @@ if st.session_state.processing:
         st.session_state.recommender.generate_detailed_search_strategy()
 
     with st.spinner("正在计算简历得分..."):
-        st.session_state.recommender.calculate_resume_scores()
+        st.session_state.recommender.calculate_resume_scores(st.session_state.top_n)
 
     with st.spinner("正在获取简历详细信息..."):
         st.session_state.recommender.resume_details_file = (
@@ -266,7 +269,7 @@ if st.session_state.processing:
         display_chat_history()
 
         st.info(
-            "以上是为您推荐的简历，您可以展开查看详细信息。如需进行新的查询，请在下方输入框中输入新的需求。"
+            f"以上是为您推荐的 {len(recommendations)} 份简历，您可以展开查看详细信息。如需进行新的查询，请在下方输入框中输入新的需求。"
         )
     else:
         st.warning("抱歉，我们没有找到符合您要求的简历。您可以尝试调整一下需求再试试。")
