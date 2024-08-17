@@ -1,10 +1,12 @@
 import logging
-from typing import List, Dict, Any, Tuple
+import uuid
+from typing import List, Dict, Any, Tuple, Optional
 import pandas as pd
 
 from backend.data_processing.table_operation.table_operation_core import (
     create_dataframe_assistant,
     process_user_query,
+    create_langfuse_handler,
 )
 from backend.data_processing.table_operation.table_operations import (
     merge_dataframes,
@@ -39,6 +41,7 @@ class DataFrameWorkflow:
         ]
         self.conversation_history: List[Dict[str, str]] = []
         self.current_state: str = "initial"
+        self.session_id: Optional[str] = None
 
     def load_dataframe(self, name: str, df: pd.DataFrame) -> None:
         """
@@ -64,6 +67,9 @@ class DataFrameWorkflow:
         logger.info(f"Processing query: {query}")
         self.conversation_history.append({"role": "user", "content": query})
 
+        if self.session_id is None:
+            self.session_id = str(uuid.uuid4())
+
         dataframe_info = self.get_dataframe_info()
 
         full_context = "\n".join(
@@ -71,7 +77,11 @@ class DataFrameWorkflow:
         )
 
         result = process_user_query(
-            self.assistant_chain, full_context, dataframe_info, self.available_tools
+            self.assistant_chain,
+            full_context,
+            dataframe_info,
+            self.available_tools,
+            self.session_id,
         )
         logger.info(f"AI response: {result}")
 
