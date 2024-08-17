@@ -25,10 +25,10 @@ from backend.text_processing.clustering.clustering_core import (
 language_model = init_language_model()
 
 
-def create_langfuse_handler(session_id=None):
-    if session_id is None:
-        session_id = str(uuid.uuid4())
-    return CallbackHandler(tags=["text_clustering"], session_id=session_id)
+def create_langfuse_handler(session_id, step):
+    return CallbackHandler(
+        tags=["text_clustering"], session_id=session_id, metadata={"step": step}
+    )
 
 
 def generate_unique_ids(df: pd.DataFrame) -> pd.DataFrame:
@@ -60,11 +60,12 @@ def batch_texts(df: pd.DataFrame, text_column: str, batch_size: int = 100) -> Li
 
 
 def generate_initial_categories(
-    texts: List[str], text_topic: str, category_count: int, langfuse_handler
+    texts: List[str], text_topic: str, category_count: int, session_id: str
 ) -> List[Dict]:
     """
     生成初始类别
     """
+    langfuse_handler = create_langfuse_handler(session_id, "initial_categories")
     category_chain = LanguageModelChain(
         Categories,
         INITIAL_CATEGORY_GENERATION_SYSTEM_MESSAGE,
@@ -92,11 +93,12 @@ def merge_categories(
     text_topic: str,
     min_categories: int,
     max_categories: int,
-    langfuse_handler,
+    session_id: str,
 ) -> Dict:
     """
     合并生成的类别
     """
+    langfuse_handler = create_langfuse_handler(session_id, "merge_categories")
     merge_chain = LanguageModelChain(
         Categories,
         MERGE_CATEGORIES_SYSTEM_MESSAGE,
@@ -130,18 +132,23 @@ def generate_categories(
     """
     生成类别的主函数
     """
-    langfuse_handler = create_langfuse_handler(session_id)
+    if session_id is None:
+        session_id = str(uuid.uuid4())
 
     preprocessed_df = preprocess_data(df, text_column)
     batched_texts = batch_texts(preprocessed_df, text_column, batch_size)
     initial_categories = generate_initial_categories(
-        batched_texts, text_topic, initial_category_count, langfuse_handler
+        batched_texts, text_topic, initial_category_count, session_id
     )
     merged_categories = merge_categories(
-        initial_categories, text_topic, min_categories, max_categories, langfuse_handler
+        initial_categories, text_topic, min_categories, max_categories, session_id
     )
 
-    return {"categories": merged_categories, "preprocessed_df": preprocessed_df}
+    return {
+        "categories": merged_categories,
+        "preprocessed_df": preprocessed_df,
+        "session_id": session_id,
+    }
 
 
 def classify_texts(
@@ -150,12 +157,12 @@ def classify_texts(
     id_column: str,
     categories: Dict,
     text_topic: str,
-    session_id: str = None,
+    session_id: str,
 ) -> pd.DataFrame:
     """
     对文本进行分类
     """
-    langfuse_handler = create_langfuse_handler(session_id)
+    langfuse_handler = create_langfuse_handler(session_id, "classify_texts")
 
     classification_chain = LanguageModelChain(
         ClassificationResult,
