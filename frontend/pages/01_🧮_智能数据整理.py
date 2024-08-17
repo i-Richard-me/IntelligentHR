@@ -2,6 +2,7 @@ import io
 import os
 import sys
 from typing import Dict, List, Tuple
+import uuid
 
 import pandas as pd
 import streamlit as st
@@ -34,6 +35,8 @@ if "operation_result" not in st.session_state:
     st.session_state.operation_result = None
 if "conversation_history" not in st.session_state:
     st.session_state.conversation_history = []
+if "session_id" not in st.session_state:
+    st.session_state.session_id = str(uuid.uuid4())
 
 
 def main():
@@ -80,10 +83,6 @@ def display_workflow():
         )
         with st.container(border=True):
             col1, col2 = st.columns([1, 1])
-
-            # with col1:
-            #     image = Image.open("frontend/assets/table_assistant_workflow.png")
-            #     st.image(image, caption="表格处理助手流程图", use_column_width=True)
 
             with col2:
                 st.markdown(
