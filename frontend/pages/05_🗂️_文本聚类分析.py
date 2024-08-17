@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import sys
 import os
+import uuid
 
 # 添加项目根目录到 Python 路径
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -36,6 +37,7 @@ def initialize_session_state():
         "df_result",
         "text_column",
         "text_topic",
+        "session_id",
     ]
     for var in session_vars:
         if var not in st.session_state:
@@ -53,6 +55,11 @@ def main():
 
     display_info_message()
     display_workflow_introduction()
+
+    # 在用户开始新任务时生成session_id
+    if "session_id" not in st.session_state or st.button("开始新任务"):
+        st.session_state.session_id = str(uuid.uuid4())
+
     handle_data_input_and_clustering()
     review_clustering_results()
     display_classification_results()
@@ -81,7 +88,7 @@ def display_workflow_introduction():
     with st.expander("📋 查看文本聚类分析工作流程", expanded=False):
         with st.container(border=True):
             st.markdown(
-            """
+                """
             1. **数据准备与参数设置**
 
                 上传CSV文件，选择文本列，输入主题背景，并设置聚类参数。
@@ -138,6 +145,7 @@ def handle_data_input_and_clustering():
                         min_categories=clustering_params["min_categories"],
                         max_categories=clustering_params["max_categories"],
                         batch_size=clustering_params["batch_size"],
+                        session_id=st.session_state.session_id,
                     )
 
                 st.success("初始聚类完成！")
@@ -217,6 +225,7 @@ def review_clustering_results():
                         id_column="unique_id",
                         categories={"categories": edited_categories},
                         text_topic=st.session_state.text_topic,
+                        session_id=st.session_state.session_id,
                     )
 
                 st.session_state.df_result = df_result
