@@ -101,9 +101,12 @@ class ResumeRecommender:
         """
         return self.search_strategy
 
-    def calculate_resume_scores(self) -> None:
+    def calculate_resume_scores(self, top_n: int = 3) -> None:
         """
         计算简历得分。
+
+        Args:
+            top_n (int): 要推荐的简历数量
         """
         if (
             not self.refined_query
@@ -117,6 +120,7 @@ class ResumeRecommender:
                 self.refined_query,
                 self.collection_relevances,
                 self.collection_search_strategies,
+                top_n,
             )
         )
 
@@ -156,12 +160,15 @@ class ResumeRecommender:
             return df.to_dict("records")
         return None
 
-    def run_full_process(self, initial_query: str) -> Optional[List[Dict]]:
+    def run_full_process(
+        self, initial_query: str, top_n: int = 3
+    ) -> Optional[List[Dict]]:
         """
         运行完整的推荐过程。
 
         Args:
             initial_query (str): 用户的初始查询
+            top_n (int): 要推荐的简历数量
 
         Returns:
             Optional[List[Dict]]: 推荐结果列表，如果过程中出错则返回 None
@@ -177,7 +184,7 @@ class ResumeRecommender:
                     raise ValueError("需要更多信息，但没有下一个问题。")
 
             self.generate_search_strategy()
-            self.calculate_resume_scores()
+            self.calculate_resume_scores(top_n)
             self.resume_details_file = self.output_generator.fetch_resume_details(
                 self.ranked_resume_scores_file
             )
@@ -217,7 +224,8 @@ def main():
     try:
         # 获取用户的初始查询
         query = input("请输入你的招聘需求: ")
-        recommendations = recommender.run_full_process(query)
+        top_n = int(input("请输入要推荐的简历数量 (默认为3): ") or "3")
+        recommendations = recommender.run_full_process(query, top_n)
 
         # 获取并显示精炼后的查询
         refined_query = recommender.get_refined_query()
@@ -228,7 +236,7 @@ def main():
 
         # 显示推荐结果
         if recommendations:
-            print("\n推荐结果:")
+            print(f"\n推荐结果 (共 {len(recommendations)} 份):")
             for rec in recommendations:
                 print(f"简历ID: {rec['简历ID']}")
                 print(f"总分: {rec['总分']:.2f}")
