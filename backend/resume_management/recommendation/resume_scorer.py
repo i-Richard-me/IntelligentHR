@@ -131,6 +131,7 @@ class ResumeScorer:
         refined_query: str,
         collection_relevances: List[Dict],
         collection_search_strategies: Dict,
+        top_n: int = 3,
     ) -> str:
         """
         计算所有集合的综合简历得分并返回前N个简历。
@@ -139,6 +140,7 @@ class ResumeScorer:
             refined_query (str): 精炼后的查询
             collection_relevances (List[Dict]): 集合相关性列表
             collection_search_strategies (Dict): 集合搜索策略
+            top_n (int): 要返回的最佳匹配简历数量
 
         Returns:
             str: 存储排名后的简历得分的CSV文件名
@@ -150,7 +152,6 @@ class ResumeScorer:
         )
 
         all_scores = {}
-        top_n = 3  # 可以根据需求调整
 
         for collection_info in collection_relevances:
             collection_name = collection_info["collection_name"]
@@ -208,7 +209,7 @@ class ResumeScorer:
         # 保存DataFrame为CSV并返回文件名
         filename = save_df_to_csv(df, "ranked_resume_scores.csv")
 
-        print("已完成简历评分，正在筛选最佳匹配的简历")
+        print(f"已完成简历评分，正在筛选最佳匹配的 {top_n} 份简历")
 
         return filename
 
@@ -274,30 +275,35 @@ if __name__ == "__main__":
                 ),
             }
 
-            # 运行方法
-            result_filename = self.resume_scorer.calculate_overall_resume_scores(
-                refined_query, collection_relevances, collection_search_strategies
-            )
+            # 测试不同的 top_n 值
+            for top_n in [3, 5, 10]:
+                # 运行方法
+                result_filename = self.resume_scorer.calculate_overall_resume_scores(
+                    refined_query,
+                    collection_relevances,
+                    collection_search_strategies,
+                    top_n,
+                )
 
-            # 验证结果
-            self.assertTrue(result_filename.endswith(".csv"))
+                # 验证结果
+                self.assertTrue(result_filename.endswith(".csv"))
 
-            # 读取生成的 CSV 文件
-            df = pd.read_csv(f"data/temp/{result_filename}")
+                # 读取生成的 CSV 文件
+                df = pd.read_csv(f"data/temp/{result_filename}")
 
-            # 验证DataFrame的结构
-            self.assertIn("resume_id", df.columns)
-            self.assertIn("total_score", df.columns)
-            self.assertIn("work_experiences", df.columns)
-            self.assertIn("skills", df.columns)
+                # 验证DataFrame的结构
+                self.assertIn("resume_id", df.columns)
+                self.assertIn("total_score", df.columns)
+                self.assertIn("work_experiences", df.columns)
+                self.assertIn("skills", df.columns)
 
-            # 验证结果数量
-            self.assertEqual(len(df), 3)  # 我们设置 top_n = 3
+                # 验证结果数量
+                self.assertEqual(len(df), min(top_n, 10))  # 10 是模拟的总简历数量
 
-            # 验证分数排序
-            self.assertTrue(df["total_score"].is_monotonic_decreasing)
+                # 验证分数排序
+                self.assertTrue(df["total_score"].is_monotonic_decreasing)
 
-            print("测试通过！生成的CSV文件内容：")
-            print(df)
+                print(f"测试通过！top_n={top_n}，生成的CSV文件内容：")
+                print(df)
 
     unittest.main()
