@@ -19,7 +19,7 @@ from backend.resume_management.extractor.resume_extraction_core import (
 
 # 设置页面配置
 st.set_page_config(
-    page_title="智能HR助手 - 简历信息提取",
+    page_title="智能HR助手 - 智能简历解析",
     page_icon="📄",
 )
 
@@ -123,52 +123,74 @@ def display_resume_info(resume_data):
                     st.markdown("---")
 
 
+def display_info_message():
+    """
+    显示智能简历解析系统的功能介绍。
+    """
+    st.info(
+        """
+    智能简历解析系统利用大语言模型，实现对多种格式简历的高效解析。
+    
+    系统能自动提取和结构化关键信息，有效处理非标准化表述，提高解析准确率。也为后续的简历推荐和人才画像等应用提供了更可靠的数据基础。
+    """
+    )
+
+
+def display_workflow():
+    """
+    显示智能简历解析系统的工作流程。
+    """
+    with st.expander("📄 查看智能简历解析工作流程", expanded=False):
+        st.markdown(
+            '<h2 class="section-title">智能简历解析工作流程</h2>',
+            unsafe_allow_html=True,
+        )
+
+        col1, col2 = st.columns([1, 1])
+
+        # with col1:
+        #     image = Image.open("frontend/assets/resume_extraction_workflow.png")
+        #     st.image(image, caption="智能简历解析工作流程图", use_column_width=True)
+
+        with col2:
+            st.markdown(
+                """
+                <div class="workflow-container">
+                    <div class="workflow-step">
+                        <strong>1. 文件处理与内容提取</strong>
+                        - 支持HTML和PDF格式的简历文件
+                    </div>
+                    <div class="workflow-step">
+                        <strong>2. 信息解析与结构化</strong>
+                        - 利用大语言模型解析简历内容
+                        - 提取个人信息、教育背景、工作经历等关键信息
+                    </div>
+                    <div class="workflow-step">
+                        <strong>3. 简历概述生成</strong>
+                        - 基于提取的信息自动生成简历概述
+                        - 包括员工特点、工作和项目经历、技能概览等
+                    </div>
+                    <div class="workflow-step">
+                        <strong>4. 结果展示</strong>
+                        - 以用户友好的方式可视化展示解析结果
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+
 def main():
     """主函数，包含 Streamlit 应用的主要逻辑"""
     # 初始化 session_state
     if "resume_data" not in st.session_state:
         st.session_state.resume_data = None
 
-    st.title("📄 简历信息提取")
+    st.title("📄 智能简历解析")
     st.markdown("---")
 
-    # 工作流程介绍
-    st.markdown(
-        '<h2 class="section-title">简历信息提取工作流程</h2>', unsafe_allow_html=True
-    )
-    with st.container(border=True):
-        col1, col2 = st.columns([1, 1])
-
-        # with col1:
-        #     image = Image.open("frontend/assets/resume_extraction_workflow.png")
-        #     st.image(image, caption="简历信息提取流程图", use_column_width=True)
-
-        with col2:
-            st.markdown(
-                """
-            <div class="workflow-container">
-                <div class="workflow-step">
-                    <strong>1. 上传简历</strong>: 用户上传HTML或PDF格式的简历文件。
-                </div>
-                <div class="workflow-step">
-                    <strong>2. 预处理</strong>: 清理文件内容，提取纯文本信息。
-                </div>
-                <div class="workflow-step">
-                    <strong>3. AI解析</strong>: 使用AI模型解析简历内容，提取关键信息。
-                </div>
-                <div class="workflow-step">
-                    <strong>4. 结构化数据生成</strong>: 将提取的信息组织成结构化的数据格式。
-                </div>
-                <div class="workflow-step">
-                    <strong>5. 信息展示</strong>: 以用户友好的方式展示提取的简历信息。
-                </div>
-                <div class="workflow-step">
-                    <strong>6. 数据导出</strong>: 提供提取结果的下载选项。
-                </div>
-            </div>
-            """,
-                unsafe_allow_html=True,
-            )
+    display_info_message()
+    display_workflow()
 
     st.markdown("---")
 
