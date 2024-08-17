@@ -158,6 +158,7 @@ def classify_texts(
     categories: Dict,
     text_topic: str,
     session_id: str,
+    classification_batch_size: int = 20,  # 新增参数
 ) -> pd.DataFrame:
     """
     对文本进行分类
@@ -171,7 +172,9 @@ def classify_texts(
         language_model,
     )()
 
-    markdown_tables = dataframe_to_markdown_tables(df, [id_column, text_column])
+    markdown_tables = dataframe_to_markdown_tables(
+        df, [id_column, text_column], rows_per_table=classification_batch_size
+    )
 
     classification_results = []
     for table in markdown_tables:
