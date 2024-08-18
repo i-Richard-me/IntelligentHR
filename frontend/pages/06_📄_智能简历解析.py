@@ -15,6 +15,7 @@ from frontend.ui_components import show_sidebar, show_footer, apply_common_style
 from backend.resume_management.extractor.resume_extraction_core import (
     process_resume,
     calculate_resume_hash,
+    store_resume,
 )
 
 # 设置页面配置
@@ -148,10 +149,6 @@ def display_workflow():
 
         col1, col2 = st.columns([1, 1])
 
-        # with col1:
-        #     image = Image.open("frontend/assets/resume_extraction_workflow.png")
-        #     st.image(image, caption="智能简历解析工作流程图", use_column_width=True)
-
         with col2:
             st.markdown(
                 """
@@ -173,6 +170,11 @@ def display_workflow():
                     <div class="workflow-step">
                         <strong>4. 结果展示</strong>
                         - 以用户友好的方式可视化展示解析结果
+                    </div>
+                    <div class="workflow-step">
+                        <strong>5. 数据存储（可选）</strong>
+                        - 将解析后的数据存储到向量数据库中
+                        - 为后续的检索和分析提供基础
                     </div>
                 </div>
                 """,
@@ -227,6 +229,14 @@ def main():
             file_name="resume_extracted_info.json",
             mime="application/json",
         )
+
+        # 添加存储到数据库的按钮
+        if st.button("存储简历到数据库"):
+            with st.spinner("正在存储简历数据..."):
+                if store_resume(st.session_state.resume_data):
+                    st.success("简历数据已成功存储到数据库")
+                else:
+                    st.error("存储简历数据时出错，请稍后重试")
 
     # 页脚
     show_footer()
