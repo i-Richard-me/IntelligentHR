@@ -22,6 +22,9 @@ from backend.resume_management.extractor.resume_extraction_prompts import (
     RESUME_SUMMARY_SYSTEM_MESSAGE,
     RESUME_SUMMARY_HUMAN_MESSAGE,
 )
+from backend.resume_management.storage.resume_vector_storage import (
+    store_resume_in_milvus,
+)
 
 # 初始化语言模型
 language_model = init_language_model()
@@ -125,3 +128,21 @@ def calculate_resume_hash(resume_content: str) -> str:
         str: 简历内容的MD5哈希值。
     """
     return hashlib.md5(resume_content.encode()).hexdigest()
+
+
+def store_resume(resume_data: Dict[str, Any]) -> bool:
+    """
+    将处理后的简历数据存储到Milvus数据库中。
+
+    Args:
+        resume_data (Dict[str, Any]): 处理后的简历数据。
+
+    Returns:
+        bool: 存储操作是否成功。
+    """
+    try:
+        store_resume_in_milvus(resume_data)
+        return True
+    except Exception as e:
+        print(f"存储简历数据时出错: {str(e)}")
+        return False
