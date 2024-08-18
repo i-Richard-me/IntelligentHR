@@ -1,8 +1,6 @@
 import streamlit as st
 import pandas as pd
 import asyncio
-import aiohttp
-import time
 from typing import List, Dict, Any, Tuple
 import os
 import sys
@@ -12,6 +10,7 @@ project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..
 sys.path.append(project_root)
 
 from frontend.ui_components import show_sidebar, show_footer, apply_common_styles
+from backend.text_processing.translation.translator import Translator
 
 # 设置页面配置
 st.set_page_config(page_title="智能HR助手 - AI翻译助手", page_icon="🌐")
@@ -19,20 +18,18 @@ st.set_page_config(page_title="智能HR助手 - AI翻译助手", page_icon="🌐
 # 应用自定义样式
 apply_common_styles()
 
-# API配置
-API_URL = "http://localhost:8765/translation"
-MAX_CONCURRENT_REQUESTS = 5
-MAX_REQUESTS_PER_MINUTE = 60
+# 显示侧边栏
+show_sidebar()
+
+# 初始化翻译器
+translator = Translator()
 
 
-async def translate_text(
-    session: aiohttp.ClientSession, text: str, text_topic: str
-) -> str:
+async def translate_text(text: str, text_topic: str) -> str:
     """
-    异步发送翻译请求。
+    异步翻译文本。
 
     Args:
-        session (aiohttp.ClientSession): 异步HTTP会话。
         text (str): 要翻译的文本。
         text_topic (str): 文本主题。
 
@@ -40,21 +37,14 @@ async def translate_text(
         str: 翻译后的文本或错误信息。
     """
     try:
-        async with session.post(
-            API_URL, json={"text": text, "text_topic": text_topic}
-        ) as response:
-            if response.status == 200:
-                data = await response.json()
-                return data["translated_text"]
-            else:
-                return f"翻译错误: HTTP {response.status}"
+        return await translator.translate(text, text_topic)
     except Exception as e:
-        return f"请求错误: {str(e)}"
+        return f"翻译错误: {str(e)}"
 
 
 async def batch_translate(texts: List[str], text_topic: str) -> List[str]:
     """
-    批量翻译文本，包含并发和速率限制。
+    批量翻译文本。
 
     Args:
         texts (List[str]): 要翻译的文本列表。
@@ -63,23 +53,8 @@ async def batch_translate(texts: List[str], text_topic: str) -> List[str]:
     Returns:
         List[str]: 翻译后的文本列表。
     """
-    async with aiohttp.ClientSession() as session:
-        semaphore = asyncio.Semaphore(MAX_CONCURRENT_REQUESTS)
-        tasks = []
-        start_time = time.time()
-
-        for i, text in enumerate(texts):
-            if i > 0 and i % MAX_REQUESTS_PER_MINUTE == 0:
-                elapsed = time.time() - start_time
-                if elapsed < 60:
-                    await asyncio.sleep(60 - elapsed)
-                start_time = time.time()
-
-            async with semaphore:
-                task = asyncio.ensure_future(translate_text(session, text, text_topic))
-                tasks.append(task)
-
-        return await asyncio.gather(*tasks)
+    tasks = [translate_text(text, text_topic) for text in texts]
+    return await asyncio.gather(*tasks)
 
 
 def display_translation_info():
@@ -88,9 +63,8 @@ def display_translation_info():
     **🌐 AI翻译助手**
 
     AI翻译助手是一个高效的多语言翻译工具，专为批量处理文本设计。它支持单条文本和CSV文件的翻译，
-    通过上下文理解提高翻译准确性。该工具集成了异步处理和速率限制功能，确保大规模翻译任务的
-    稳定性。AI翻译助手适用于需要快速、准确翻译大量文本的各类场景，如国际化文档处理或多语言
-    数据分析。
+    通过上下文理解提高翻译准确性。该工具利用异步处理功能，确保大规模翻译任务的稳定性。
+    AI翻译助手适用于需要快速、准确翻译大量文本的各类场景，如国际化文档处理或多语言数据分析。
     """
     )
 
@@ -103,13 +77,6 @@ def display_translation_workflow():
         )
         with st.container(border=True):
             col1, col2 = st.columns([1, 1])
-
-            # with col1:
-            #     st.image(
-            #         "frontend/assets/translation_workflow.png",
-            #         caption="AI翻译助手流程图",
-            #         use_column_width=True,
-            #     )
 
             with col2:
                 st.markdown(
@@ -234,8 +201,8 @@ def main():
                 if submit_button and text_to_translate and text_topic:
                     with st.spinner("正在翻译..."):
                         translated_text = asyncio.run(
-                            batch_translate([text_to_translate], text_topic)
-                        )[0]
+                            translate_text(text_to_translate, text_topic)
+                        )
                     st.session_state.translation_results = {
                         "original": text_to_translate,
                         "translated": translated_text,
