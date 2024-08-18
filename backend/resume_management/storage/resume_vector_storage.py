@@ -1,10 +1,10 @@
 from pymilvus import connections, Collection, DataType
 from typing import Dict, Any, List
 import pandas as pd
-from utils.llm_tools import EmbeddingService
+from utils.llm_tools import VectorEncoder
 
 # 初始化embedding服务
-embeddings = EmbeddingService(provider="siliconcloud", model="BAAI/bge-large-en-v1.5")
+embeddings = VectorEncoder(model="BAAI/bge-m3")
 
 
 def connect_to_milvus(

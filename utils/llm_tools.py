@@ -309,7 +309,7 @@ class CustomEmbeddings(Embeddings):
         self,
         api_key: str,
         api_url: str = "https://api.siliconflow.cn/v1/embeddings",
-        model: str = "BAAI/bge-large-zh-v1.5",
+        model: str = "BAAI/bge-m3",
     ):
         self.api_key = api_key
         self.api_url = api_url
@@ -340,3 +340,25 @@ class CustomEmbeddings(Embeddings):
 
     def embed_query(self, text: str) -> List[float]:
         return self._get_embeddings([text])[0]
+
+
+class VectorEncoder:
+    def __init__(
+        self,
+        model: str = "BAAI/bge-m3",
+    ):
+        self.embeddings = CustomEmbeddings(
+            os.getenv("OPENAI_API_KEY_SILICONCLOUD"), model=model
+        )
+
+    def get_embedding(self, text: str) -> Optional[List[float]]:
+        while True:
+            try:
+                return self.embeddings.embed_query(text)
+            except Exception as e:
+                if len(text) <= 1:
+                    print(f"文本太短，无法进一步截断。中止操作。")
+                    return None
+                text = text[: int(len(text) * 0.9)]
+                time.sleep(0.1)
+                print(f"截断文本至 {len(text)} 个字符并重试...")
