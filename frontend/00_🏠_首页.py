@@ -6,6 +6,11 @@ import os
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.append(project_root)
 
+from langchain_core.globals import set_llm_cache
+from langchain_community.cache import SQLiteCache
+
+set_llm_cache(SQLiteCache(database_path="data/langchain.db"))
+
 from frontend.ui_components import show_sidebar, show_footer, apply_common_styles
 
 # 设置页面配置
