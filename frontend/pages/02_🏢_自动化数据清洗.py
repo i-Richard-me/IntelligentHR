@@ -1,9 +1,9 @@
 import streamlit as st
 import pandas as pd
-from PIL import Image
 import sys
 import os
 from typing import Dict, Any, List, Optional
+from uuid import uuid4
 
 # 添加项目根目录到 Python 路径
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -102,10 +102,6 @@ def display_workflow():
         with st.container(border=True):
             col1, col2 = st.columns([1, 1])
 
-            # with col1:
-            #     image = Image.open("frontend/assets/company_label_cleaning.png")
-            #     st.image(image, caption="自动化数据清洗流程图", use_column_width=True)
-
             with col2:
                 st.markdown(
                     """
@@ -146,7 +142,8 @@ def single_company_verification(workflow: CompanyVerificationWorkflow):
         submit_button = st.form_submit_button("标准化")
         if submit_button and company_name:
             with st.spinner("正在标准化..."):
-                result = workflow.run(company_name)
+                session_id = str(uuid4())
+                result = workflow.run(company_name, session_id=session_id)
             display_single_result(result)
 
 
@@ -197,8 +194,9 @@ def process_batch(df: pd.DataFrame, workflow: CompanyVerificationWorkflow):
     progress_bar = st.progress(0)
     for i, company_name in enumerate(df.iloc[:, 0]):
         with st.spinner(f"正在处理: {company_name}"):
-            result = workflow.run(company_name)
-            results.append(vars(result))
+            session_id = str(uuid4())
+            result = workflow.run(company_name, session_id=session_id)
+            results.append(result)
         progress_bar.progress((i + 1) / len(df))
 
     result_df = pd.DataFrame(results)
