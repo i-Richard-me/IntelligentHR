@@ -2,6 +2,8 @@ import logging
 from pydantic import BaseModel, Field
 from typing import Dict, Any
 from utils.llm_tools import init_language_model, LanguageModelChain
+import uuid
+from langfuse.callback import CallbackHandler
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +43,12 @@ HUMAN_MESSAGE_TEMPLATE = """
 """
 
 
+def create_langfuse_handler(session_id, step):
+    return CallbackHandler(
+        tags=["translation"], session_id=session_id, metadata={"step": step}
+    )
+
+
 class Translator:
     def __init__(self, temperature: float = 0.0):
         """
@@ -54,13 +62,16 @@ class Translator:
             TranslatedText, SYSTEM_MESSAGE, HUMAN_MESSAGE_TEMPLATE, self.language_model
         )()
 
-    async def translate(self, text: str, text_topic: str) -> str:
+    async def translate(
+        self, text: str, text_topic: str, session_id: str = None
+    ) -> str:
         """
         异步翻译单个文本。
 
         Args:
             text (str): 要翻译的文本。
             text_topic (str): 文本主题，用于上下文理解。
+            session_id (str, optional): 会话ID，用于Langfuse监控。
 
         Returns:
             str: 翻译后的文本。
@@ -69,9 +80,14 @@ class Translator:
             ValueError: 当翻译结果格式不正确时抛出。
             Exception: 当翻译过程中发生其他错误时抛出。
         """
+        if session_id is None:
+            session_id = str(uuid.uuid4())
+
         try:
+            langfuse_handler = create_langfuse_handler(session_id, "translate")
             result = await self.translation_chain.ainvoke(
-                {"text_to_translate": text, "text_topic": text_topic}
+                {"text_to_translate": text, "text_topic": text_topic},
+                config={"callbacks": [langfuse_handler]},
             )
             self._validate_translation_result(result)
             return result["translated_text"]

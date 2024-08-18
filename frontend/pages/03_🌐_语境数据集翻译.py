@@ -4,6 +4,7 @@ import asyncio
 from typing import List, Dict, Any, Tuple
 import os
 import sys
+import uuid
 
 # 获取项目根目录的绝对路径
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -24,10 +25,14 @@ show_sidebar()
 # 初始化翻译器
 translator = Translator()
 
+# 初始化 session state
+if "translation_results" not in st.session_state:
+    st.session_state.translation_results = None
+
 
 async def translate_text(text: str, text_topic: str) -> str:
     """
-    异步翻译文本。
+    异步翻译单个文本。
 
     Args:
         text (str): 要翻译的文本。
@@ -37,23 +42,27 @@ async def translate_text(text: str, text_topic: str) -> str:
         str: 翻译后的文本或错误信息。
     """
     try:
-        return await translator.translate(text, text_topic)
+        session_id = str(uuid.uuid4())
+        return await translator.translate(text, text_topic, session_id)
     except Exception as e:
         return f"翻译错误: {str(e)}"
 
 
-async def batch_translate(texts: List[str], text_topic: str) -> List[str]:
+async def batch_translate(
+    texts: List[str], text_topic: str, session_id: str
+) -> List[str]:
     """
     批量翻译文本。
 
     Args:
         texts (List[str]): 要翻译的文本列表。
         text_topic (str): 文本主题。
+        session_id (str): 用于整个CSV文件的session ID。
 
     Returns:
         List[str]: 翻译后的文本列表。
     """
-    tasks = [translate_text(text, text_topic) for text in texts]
+    tasks = [translator.translate(text, text_topic, session_id) for text in texts]
     return await asyncio.gather(*tasks)
 
 
@@ -132,8 +141,11 @@ def perform_translation(
         pd.DataFrame: 包含翻译结果的数据框。
     """
     texts_to_translate = df[text_column].tolist()
+    session_id = str(uuid.uuid4())
     with st.spinner("正在批量翻译..."):
-        translated_texts = asyncio.run(batch_translate(texts_to_translate, text_topic))
+        translated_texts = asyncio.run(
+            batch_translate(texts_to_translate, text_topic, session_id)
+        )
     df["translated_text"] = translated_texts
     return df
 
@@ -171,10 +183,6 @@ def main():
     """主函数，包含AI翻译助手的整个流程。"""
     st.title("🌐 AI翻译助手")
     st.markdown("---")
-
-    # 初始化 session state
-    if "translation_results" not in st.session_state:
-        st.session_state.translation_results = None
 
     # 显示功能介绍
     display_translation_info()
