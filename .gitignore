@@ -162,4 +162,9 @@ cython_debug/
 #.idea/
 
 # Data
-data/
+data/llm_cache/*
+!data/llm_cache/.gitkeep
+data/datasets/*
+!data/datasets/.gitkeep
+data/temp/*
+!data/temp/.gitkeep

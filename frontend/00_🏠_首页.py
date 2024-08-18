@@ -9,7 +9,7 @@ sys.path.append(project_root)
 from langchain_core.globals import set_llm_cache
 from langchain_community.cache import SQLiteCache
 
-set_llm_cache(SQLiteCache(database_path="data/langchain.db"))
+set_llm_cache(SQLiteCache(database_path="data/llm_cache/langchain.db"))
 
 from frontend.ui_components import show_sidebar, show_footer, apply_common_styles
 

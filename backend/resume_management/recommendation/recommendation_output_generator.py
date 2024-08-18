@@ -26,7 +26,7 @@ class RecommendationOutputGenerator:
         ranked_resume_scores_df = load_df_from_csv(ranked_resume_scores_file)
         top_resume_ids = ranked_resume_scores_df["resume_id"].tolist()
 
-        df_resume_summary = pd.read_csv("data/resume_recommender/resume_summary.csv")
+        df_resume_summary = pd.read_csv("data/datasets/resume_summary.csv")
         resume_details = df_resume_summary[df_resume_summary["id"].isin(top_resume_ids)]
         resume_details = resume_details.rename(columns={"id": "resume_id"})
 

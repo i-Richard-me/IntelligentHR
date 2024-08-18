@@ -60,7 +60,7 @@ def initialize_vector_store(
     connection_args = {"host": "localhost", "port": "19530", "db_name": "data_cleaning"}
 
     if use_demo:
-        csv_path = "data/company.csv"
+        csv_path = "data/datasets/company.csv"
         company_data = load_company_data(csv_path)
         documents = create_company_documents(company_data)
         return Milvus.from_documents(
