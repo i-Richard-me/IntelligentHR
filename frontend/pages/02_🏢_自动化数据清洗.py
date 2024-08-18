@@ -30,8 +30,13 @@ apply_common_styles()
 # 显示侧边栏
 show_sidebar()
 
+# 初始化会话状态
+if "batch_results" not in st.session_state:
+    st.session_state.batch_results = None
+if "processing_complete" not in st.session_state:
+    st.session_state.processing_complete = False
 
-@st.cache_resource
+
 def initialize_workflow(use_demo: bool) -> CompanyVerificationWorkflow:
     """
     初始化公司验证工作流。
@@ -181,6 +186,22 @@ def batch_processing(workflow: CompanyVerificationWorkflow):
             if st.button("开始批量处理"):
                 process_batch(df, workflow)
 
+        # 显示处理结果（如果有）
+        if (
+            st.session_state.processing_complete
+            and st.session_state.batch_results is not None
+        ):
+            st.success("批量处理完成！")
+            st.dataframe(st.session_state.batch_results)
+
+            csv = st.session_state.batch_results.to_csv(index=False)
+            st.download_button(
+                label="📥 下载处理结果",
+                data=csv.encode("utf-8-sig"),
+                file_name="processed_companies.csv",
+                mime="text/csv",
+            )
+
 
 def process_batch(df: pd.DataFrame, workflow: CompanyVerificationWorkflow):
     """
@@ -194,22 +215,19 @@ def process_batch(df: pd.DataFrame, workflow: CompanyVerificationWorkflow):
     progress_bar = st.progress(0)
     for i, company_name in enumerate(df.iloc[:, 0]):
         with st.spinner(f"正在处理: {company_name}"):
-            session_id = str(uuid4())
+            session_id = str(uuid4())  # 为每个公司生成新的 session_id
             result = workflow.run(company_name, session_id=session_id)
             results.append(result)
         progress_bar.progress((i + 1) / len(df))
 
     result_df = pd.DataFrame(results)
-    st.success("批量处理完成！")
-    st.dataframe(result_df)
 
-    csv = result_df.to_csv(index=False)
-    st.download_button(
-        label="📥 下载处理结果",
-        data=csv.encode("utf-8-sig"),
-        file_name="processed_companies.csv",
-        mime="text/csv",
-    )
+    # 更新会话状态
+    st.session_state.batch_results = result_df
+    st.session_state.processing_complete = True
+
+    # 刷新页面以显示结果
+    st.experimental_rerun()
 
 
 if __name__ == "__main__":
