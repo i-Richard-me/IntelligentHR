@@ -28,7 +28,7 @@ class SearchTools:
         Returns:
             str: 搜索结果。
         """
-        return self.duckduckgo_search_tool.invoke(query + " 简称")
+        return self.duckduckgo_search_tool.invoke(query)
 
     def tavily_search(self, query: str) -> str:
         """
