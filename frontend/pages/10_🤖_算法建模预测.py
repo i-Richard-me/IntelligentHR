@@ -4,8 +4,8 @@ import numpy as np
 import plotly.graph_objects as go
 import sys
 import os
-from io import BytesIO
-from PIL import Image
+import joblib
+from datetime import datetime
 
 # 添加项目根目录到 Python 路径
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -48,6 +48,9 @@ def initialize_session_state():
             "max_features": ["sqrt", "log2"],
         },
         "custom_param_ranges": None,
+        "model_records": pd.DataFrame(
+            columns=["模型ID", "训练时间", "参数", "交叉验证分数", "测试集分数"]
+        ),
     }
 
     for key, value in default_states.items():
@@ -75,6 +78,7 @@ def main():
     display_data_preview()
     display_column_selection()
     display_model_training_and_advanced_settings()
+    display_model_records()
     display_results()
     display_feature_importance()
 
@@ -98,6 +102,7 @@ def display_info_message():
         - 自动化的模型训练和优化
         - 模型性能评估
         - 特征重要性可视化
+        - 模型记录跟踪
 
         该工具使用交叉验证和独立的验证集来评估模型性能，确保结果的可靠性。
         """
@@ -123,6 +128,7 @@ def display_workflow():
             6. **性能评估**: 展示交叉验证和验证集上的模型性能。
             7. **特征重要性**: 可视化展示各个特征对模型的重要程度。
             8. **结果解释**: 提供模型结果的简要解释和建议。
+            9. **模型记录**: 跟踪并比较不同参数设置下的模型性能。
             """
         )
 
@@ -296,6 +302,32 @@ def display_model_training_and_advanced_settings():
                             st.session_state.feature_columns,
                             param_ranges=param_ranges,
                         )
+
+                        # 添加新的模型记录
+                        new_record = pd.DataFrame(
+                            {
+                                "模型ID": [
+                                    f"Model_{len(st.session_state.model_records) + 1}"
+                                ],
+                                "训练时间": [
+                                    datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                                ],
+                                "参数": [
+                                    str(st.session_state.model_results["best_params"])
+                                ],
+                                "交叉验证分数": [
+                                    st.session_state.model_results["cv_mean_score"]
+                                ],
+                                "测试集分数": [
+                                    st.session_state.model_results["val_roc_auc"]
+                                ],
+                            }
+                        )
+                        st.session_state.model_records = pd.concat(
+                            [st.session_state.model_records, new_record],
+                            ignore_index=True,
+                        )
+
                         st.success("模型训练完成！")
                     except Exception as e:
                         st.error(f"模型训练过程中出错：{str(e)}")
@@ -485,6 +517,107 @@ def display_feature_importance():
                 4. 指导进一步的特征工程和选择。
                 """
                 )
+
+
+def save_model(model, model_id, timestamp):
+    """
+    保存模型到指定路径。
+
+    Args:
+        model: 要保存的模型对象
+        model_id: 模型的唯一标识符
+        timestamp: 模型训练的时间戳
+    """
+    save_path = os.path.join("data", "ml_models")
+    os.makedirs(save_path, exist_ok=True)
+    file_name = f"Model_{timestamp.strftime('%Y%m%d_%H%M%S')}.joblib"
+    file_path = os.path.join(save_path, file_name)
+    joblib.dump(model, file_path)
+    st.success(f"模型 {model_id} 已成功保存到 {file_path}")
+
+
+def display_model_records():
+    """
+    显示模型记录表格，并提供保存选项。
+    """
+    if not st.session_state.model_records.empty:
+        st.markdown('<h2 class="section-title">模型记录</h2>', unsafe_allow_html=True)
+        with st.container(border=True):
+            # 重新排序列并添加新列
+            columns_order = [
+                "模型ID",
+                "交叉验证分数",
+                "测试集分数",
+                "最佳模型",
+                "保存",
+                "训练时间",
+                "参数",
+            ]
+            temp_df = st.session_state.model_records.reindex(columns=columns_order)
+            temp_df["保存"] = False
+            temp_df["最佳模型"] = False
+
+            # 找出交叉验证分数最高的行索引
+            best_model_index = temp_df["交叉验证分数"].idxmax()
+            temp_df.loc[best_model_index, "最佳模型"] = True
+
+            # 使用 st.data_editor 来显示可编辑的表格
+            edited_df = st.data_editor(
+                temp_df,
+                column_config={
+                    "保存": st.column_config.CheckboxColumn(
+                        "保存",
+                        help="选择要保存的模型",
+                        default=False,
+                    ),
+                    "最佳模型": st.column_config.CheckboxColumn(
+                        "最佳模型",
+                        help="交叉验证分数最高的模型",
+                        default=False,
+                    ),
+                    "交叉验证分数": st.column_config.NumberColumn(
+                        "交叉验证分数",
+                        format="%.4f",
+                    ),
+                    "测试集分数": st.column_config.NumberColumn(
+                        "测试集分数",
+                        format="%.4f",
+                    ),
+                },
+                disabled=[
+                    "模型ID",
+                    "训练时间",
+                    "参数",
+                    "交叉验证分数",
+                    "测试集分数",
+                    "最佳模型",
+                ],
+                hide_index=True,
+                column_order=columns_order,
+                use_container_width=True,
+            )
+
+            # 检查是否有模型被选中保存
+            models_to_save = edited_df[edited_df["保存"]]
+            if not models_to_save.empty:
+                for _, row in models_to_save.iterrows():
+                    model_id = row["模型ID"]
+                    timestamp = datetime.strptime(row["训练时间"], "%Y-%m-%d %H:%M:%S")
+                    if (
+                        st.session_state.model_results
+                        and st.session_state.model_results["model"]
+                    ):
+                        save_model(
+                            st.session_state.model_results["model"], model_id, timestamp
+                        )
+                    else:
+                        st.warning(f"无法保存模型 {model_id}，模型对象不存在。")
+
+            if st.button("清除所有模型记录"):
+                st.session_state.model_records = pd.DataFrame(
+                    columns=["模型ID", "训练时间", "参数", "交叉验证分数", "测试集分数"]
+                )
+                st.success("所有模型记录已清除。")
 
 
 if __name__ == "__main__":
