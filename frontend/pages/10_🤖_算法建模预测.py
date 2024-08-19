@@ -32,9 +32,6 @@ show_sidebar()
 
 # 初始化会话状态
 def initialize_session_state():
-    """
-    初始化 Streamlit 会话状态，设置默认值。
-    """
     default_states = {
         "df": None,
         "model_results": None,
@@ -62,9 +59,6 @@ initialize_session_state()
 
 
 def main():
-    """
-    主函数，包含机器学习建模的整个流程。
-    """
     st.title("🤖 机器学习建模")
     st.markdown("---")
 
@@ -86,9 +80,6 @@ def main():
 
 
 def display_info_message():
-    """
-    显示机器学习建模工具的信息消息。
-    """
     st.info(
         """
         **🤖 机器学习建模工具**
@@ -110,9 +101,6 @@ def display_info_message():
 
 
 def display_workflow():
-    """
-    显示机器学习建模的工作流程。
-    """
     with st.expander("📋 查看机器学习建模工作流程", expanded=False):
         st.markdown(
             '<h2 class="section-title">机器学习建模工作流程</h2>',
@@ -134,12 +122,6 @@ def display_workflow():
 
 
 def upload_file():
-    """
-    处理文件上传并加载数据。
-
-    Returns:
-        pd.DataFrame or None: 加载的数据框，如果上传失败则返回None。
-    """
     st.markdown('<h2 class="section-title">数据上传</h2>', unsafe_allow_html=True)
     with st.container(border=True):
         uploaded_file = st.file_uploader(
@@ -167,9 +149,6 @@ def upload_file():
 
 
 def display_data_preview():
-    """
-    显示数据预览。
-    """
     if st.session_state.df is not None:
         st.markdown('<h2 class="section-title">数据预览</h2>', unsafe_allow_html=True)
         with st.container(border=True):
@@ -177,14 +156,12 @@ def display_data_preview():
                 f"数据集包含 {len(st.session_state.df)} 行和 {len(st.session_state.df.columns)} 列"
             )
             st.write(st.session_state.df.head())
-            st.write("数据类型信息：")
-            st.write(st.session_state.df.dtypes)
+
+            with st.expander("查看数据类型信息", expanded=False):
+                st.write(st.session_state.df.dtypes)
 
 
 def display_column_selection():
-    """
-    显示目标变量和特征选择界面。
-    """
     if st.session_state.df is not None:
         st.markdown('<h2 class="section-title">变量选择</h2>', unsafe_allow_html=True)
         with st.container(border=True):
@@ -193,26 +170,24 @@ def display_column_selection():
                 options=st.session_state.df.columns,
                 key="target_column_select",
             )
-            st.session_state.feature_columns = st.multiselect(
-                "选择特征变量",
-                options=[
-                    col
-                    for col in st.session_state.df.columns
-                    if col != st.session_state.target_column
-                ],
-                default=[
-                    col
-                    for col in st.session_state.df.columns
-                    if col != st.session_state.target_column
-                ],
-                key="feature_columns_select",
-            )
+            with st.expander("选择特征变量", expanded=False):
+                st.session_state.feature_columns = st.multiselect(
+                    "选择特征变量",
+                    options=[
+                        col
+                        for col in st.session_state.df.columns
+                        if col != st.session_state.target_column
+                    ],
+                    default=[
+                        col
+                        for col in st.session_state.df.columns
+                        if col != st.session_state.target_column
+                    ],
+                    key="feature_columns_select",
+                )
 
 
 def display_model_training_and_advanced_settings():
-    """
-    显示模型训练界面，包括高级设置和训练过程。
-    """
     if (
         st.session_state.df is not None
         and st.session_state.target_column
@@ -334,13 +309,9 @@ def display_model_training_and_advanced_settings():
 
 
 def display_results():
-    """
-    显示模型训练结果。
-    """
     if st.session_state.model_results:
         st.markdown('<h2 class="section-title">模型结果</h2>', unsafe_allow_html=True)
 
-        # 添加一些自定义 CSS 来美化结果展示
         st.markdown(
             """
         <style>
@@ -389,11 +360,9 @@ def display_results():
                     unsafe_allow_html=True,
                 )
 
-            # 最佳参数
             with st.expander("查看最佳模型参数", expanded=False):
                 st.json(st.session_state.model_results["best_params"])
 
-            # 混淆矩阵
             st.markdown("---")
             st.markdown("#### 混淆矩阵")
             cm = st.session_state.model_results["val_confusion_matrix"]
@@ -440,7 +409,6 @@ def display_results():
                 """
                 )
 
-            # 分类报告
             st.markdown("---")
             st.markdown("#### 分类报告")
             st.text(st.session_state.model_results["val_classification_report"])
@@ -463,9 +431,6 @@ def display_results():
 
 
 def display_feature_importance():
-    """
-    显示特征重要性。
-    """
     if (
         st.session_state.model_results
         and "feature_importance" in st.session_state.model_results
@@ -473,7 +438,6 @@ def display_feature_importance():
         st.markdown('<h2 class="section-title">特征重要性</h2>', unsafe_allow_html=True)
 
         with st.container(border=True):
-            # 特征重要性图表
             feature_importance = st.session_state.model_results[
                 "feature_importance"
             ].sort_values(ascending=True)
@@ -520,14 +484,6 @@ def display_feature_importance():
 
 
 def save_model(model, model_id, timestamp):
-    """
-    保存模型到指定路径。
-
-    Args:
-        model: 要保存的模型对象
-        model_id: 模型的唯一标识符
-        timestamp: 模型训练的时间戳
-    """
     save_path = os.path.join("data", "ml_models")
     os.makedirs(save_path, exist_ok=True)
     file_name = f"Model_{timestamp.strftime('%Y%m%d_%H%M%S')}.joblib"
@@ -537,13 +493,9 @@ def save_model(model, model_id, timestamp):
 
 
 def display_model_records():
-    """
-    显示模型记录表格，并提供保存选项。
-    """
     if not st.session_state.model_records.empty:
         st.markdown('<h2 class="section-title">模型记录</h2>', unsafe_allow_html=True)
         with st.container(border=True):
-            # 重新排序列并添加新列
             columns_order = [
                 "模型ID",
                 "交叉验证分数",
@@ -557,11 +509,9 @@ def display_model_records():
             temp_df["保存"] = False
             temp_df["最佳模型"] = False
 
-            # 找出交叉验证分数最高的行索引
             best_model_index = temp_df["交叉验证分数"].idxmax()
             temp_df.loc[best_model_index, "最佳模型"] = True
 
-            # 使用 st.data_editor 来显示可编辑的表格
             edited_df = st.data_editor(
                 temp_df,
                 column_config={
@@ -597,7 +547,6 @@ def display_model_records():
                 use_container_width=True,
             )
 
-            # 检查是否有模型被选中保存
             models_to_save = edited_df[edited_df["保存"]]
             if not models_to_save.empty:
                 for _, row in models_to_save.iterrows():
@@ -612,12 +561,6 @@ def display_model_records():
                         )
                     else:
                         st.warning(f"无法保存模型 {model_id}，模型对象不存在。")
-
-            if st.button("清除所有模型记录"):
-                st.session_state.model_records = pd.DataFrame(
-                    columns=["模型ID", "训练时间", "参数", "交叉验证分数", "测试集分数"]
-                )
-                st.success("所有模型记录已清除。")
 
 
 if __name__ == "__main__":
