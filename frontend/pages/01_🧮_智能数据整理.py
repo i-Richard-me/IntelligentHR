@@ -18,7 +18,7 @@ from backend.data_processing.table_operation.table_operation_workflow import (
 from frontend.ui_components import show_sidebar, show_footer, apply_common_styles
 
 # 设置页面配置
-st.set_page_config(page_title="智能HR助手 - 数据集处理助手", page_icon="🧮")
+st.set_page_config(page_title="智能HR助手 - 智能数据整理", page_icon="🧮")
 
 # 应用自定义样式
 apply_common_styles()
@@ -41,7 +41,7 @@ if "session_id" not in st.session_state:
 
 def main():
     """主函数，包含应用的主要逻辑和UI结构。"""
-    st.title("🧮 表格处理助手")
+    st.title("🧮 智能数据整理")
     st.markdown("---")
 
     display_info_message()
@@ -57,13 +57,13 @@ def main():
 
 def display_info_message():
     """
-    显示表格处理助手的信息消息。
+    显示智能数据整理的信息消息。
     """
     st.info(
         """
-    **🧮 表格处理助手**
+    **🧮 智能数据整理**
 
-    表格处理助手是一个智能化的数据处理工具，利用大模型的语义理解能力，通过自然语言交互实现复杂的表格操作。
+    智能数据整理是一个智能化的数据处理工具，利用大模型的语义理解能力，通过自然语言交互实现复杂的表格操作。
 
     它能够理解并执行用户的自然语言指令，支持表格合并、数据重塑（宽转长、长转宽）和数据集比较等核心功能。同时提供实时结果预览和便捷的导出功能，大大简化了数据处理流程。
     
@@ -74,15 +74,18 @@ def display_info_message():
 
 def display_workflow():
     """
-    显示表格处理助手的工作流程。
+    显示智能数据整理的工作流程。
     """
-    with st.expander("📋 查看表格处理助手工作流程", expanded=False):
-        st.markdown(
-            '<h2 class="section-title">表格处理助手工作流程</h2>',
-            unsafe_allow_html=True,
-        )
+    with st.expander("📋 查看智能数据整理工作流程", expanded=False):
+
         with st.container(border=True):
             col1, col2 = st.columns([1, 1])
+
+            with col1:
+                image = Image.open(
+                    "frontend/assets/table_operation_workflow.png"
+                )
+                st.image(image, caption="智能数据整理流程图", use_column_width=True)
 
             with col2:
                 st.markdown(

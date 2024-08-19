@@ -1,4 +1,5 @@
 import streamlit as st
+from PIL import Image
 import pandas as pd
 import sys
 import os
@@ -20,7 +21,7 @@ from backend.data_processing.data_cleaning.verification_workflow import (
 
 # Streamlit 页面配置
 st.set_page_config(
-    page_title="智能HR助手 - 数据标准化",
+    page_title="智能HR助手 - 自动化数据清洗",
     page_icon="🏢",
 )
 
@@ -106,7 +107,7 @@ def initialize_workflow(use_demo: bool, entity_type: str) -> EntityVerificationW
 
 
 def main():
-    st.title("🏢 自动化数据标准化")
+    st.title("🏢 自动化数据清洗")
     st.markdown("---")
 
     # 显示功能介绍
@@ -139,11 +140,11 @@ def main():
 
 def display_info_message():
     """
-    显示自动化数据标准化工具的功能介绍。
+    显示自动化数据清洗的功能介绍。
     """
     st.info(
         """
-    自动化数据标准化工具集成了大语言模型的推理和工具调用能力，实现高效精准的数据标准化。
+    自动化数据清洗工具集成了大语言模型的推理和工具调用能力，实现高效精准的数据标准化。
 
     系统通过多阶段验证流程，智能识别和验证输入的实体名称，并利用向量检索技术在数据库中进行快速匹配。
     适用于需要大规模标准化和验证各类实体名称的数据处理场景。
@@ -153,15 +154,18 @@ def display_info_message():
 
 def display_workflow():
     """
-    显示自动化数据标准化工具的工作流程。
+    显示自动化数据清洗工具的工作流程。
     """
-    with st.expander("🏢 查看自动化数据标准化工作流程", expanded=False):
-        st.markdown(
-            '<h2 class="section-title">自动化数据标准化工作流程</h2>',
-            unsafe_allow_html=True,
-        )
+    with st.expander("🏢 查看自动化数据清洗工作流程", expanded=False):
+
         with st.container(border=True):
             col1, col2 = st.columns([1, 1])
+
+            with col1:
+                image = Image.open(
+                    "frontend/assets/data_cleaning_workflow.png"
+                )
+                st.image(image, caption="自动化数据清洗流程图", use_column_width=True)
 
             with col2:
                 st.markdown(
