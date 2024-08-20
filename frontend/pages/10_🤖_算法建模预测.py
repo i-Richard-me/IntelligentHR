@@ -14,6 +14,7 @@ sys.path.append(project_root)
 from frontend.ui_components import show_sidebar, show_footer, apply_common_styles
 from backend.data_processing.analysis.random_forest_trainer import train_random_forest
 from backend.data_processing.analysis.decision_tree_trainer import train_decision_tree
+from backend.data_processing.analysis.xgboost_trainer import train_xgboost  # 新增导入
 from backend.data_processing.analysis.ml_explanations import (
     ML_TOOL_INFO,
     CONFUSION_MATRIX_EXPLANATION,
@@ -54,6 +55,16 @@ def initialize_session_state():
             "classifier__min_samples_split": [2, 3, 4, 5, 8],
             "classifier__min_samples_leaf": [2, 5, 10, 15, 20, 25],
             "classifier__max_leaf_nodes": [10, 20, 25, 30, 35, 40, 45, None],
+        },
+        "xgb_param_ranges": {  # 新增 XGBoost 参数范围
+            "n_estimators": (50, 500),
+            "max_depth": (3, 10),
+            "learning_rate": (0.01, 1.0),
+            "subsample": (0.5, 1.0),
+            "colsample_bytree": (0.5, 1.0),
+            "min_child_weight": (1, 10),
+            "reg_alpha": (0, 10),
+            "reg_lambda": (0, 10),
         },
         "custom_param_ranges": None,
         "model_records": pd.DataFrame(
@@ -168,7 +179,9 @@ def display_model_selection():
     st.markdown('<h2 class="section-title">模型选择</h2>', unsafe_allow_html=True)
     with st.container(border=True):
         st.session_state.model_type = st.radio(
-            "选择模型类型", ("随机森林", "决策树"), key="model_type_radio"
+            "选择模型类型",
+            ("随机森林", "决策树", "XGBoost"),  # 添加 XGBoost 选项
+            key="model_type_radio",
         )
 
 
@@ -183,16 +196,20 @@ def display_model_training_and_advanced_settings():
             with st.expander("高级设置"):
                 if st.session_state.model_type == "随机森林":
                     display_random_forest_settings()
-                else:
+                elif st.session_state.model_type == "决策树":
                     display_decision_tree_settings()
+                else:  # XGBoost
+                    display_xgboost_settings()
 
             if st.button("开始训练模型"):
                 with st.spinner("正在训练模型，请稍候..."):
                     try:
                         if st.session_state.model_type == "随机森林":
                             train_random_forest_model()
-                        else:
+                        elif st.session_state.model_type == "决策树":
                             train_decision_tree_model()
+                        else:  # XGBoost
+                            train_xgboost_model()
 
                         st.success("模型训练完成！")
                     except Exception as e:
@@ -248,38 +265,131 @@ def display_random_forest_settings():
 
 
 def display_decision_tree_settings():
-    col1, col2 = st.columns(2)
-    with col1:
-        max_depth = st.multiselect(
-            "max_depth",
-            options=[2, 4, 5, 6, 7, None],
-            default=st.session_state.dt_param_grid["classifier__max_depth"],
-        )
-        min_samples_split = st.multiselect(
-            "min_samples_split",
-            options=[2, 3, 4, 5, 8],
-            default=st.session_state.dt_param_grid["classifier__min_samples_split"],
-        )
-    with col2:
-        min_samples_leaf = st.multiselect(
-            "min_samples_leaf",
-            options=[2, 5, 10, 15, 20, 25],
-            default=st.session_state.dt_param_grid["classifier__min_samples_leaf"],
-        )
-        max_leaf_nodes = st.multiselect(
-            "max_leaf_nodes",
-            options=[10, 20, 25, 30, 35, 40, 45, None],
-            default=st.session_state.dt_param_grid["classifier__max_leaf_nodes"],
+    st.markdown("#### 决策树参数设置")
+
+    def create_param_range(param_name, default_values):
+        non_none_values = [v for v in default_values if v is not None]
+        min_val, max_val = min(non_none_values), max(non_none_values)
+        step = min(
+            set(
+                non_none_values[i + 1] - non_none_values[i]
+                for i in range(len(non_none_values) - 1)
+            ),
+            default=1,
         )
 
+        col1, col2, col3, col4 = st.columns([3, 3, 3, 2])
+        with col1:
+            start = st.number_input(f"{param_name} 最小值", value=min_val, step=step)
+        with col2:
+            end = st.number_input(f"{param_name} 最大值", value=max_val, step=step)
+        with col3:
+            custom_step = st.number_input(
+                f"{param_name} 步长", value=step, min_value=step
+            )
+        with col4:
+            include_none = st.checkbox(
+                "包含None", key=f"{param_name}_none", value=None in default_values
+            )
+
+        values = list(range(int(start), int(end) + int(custom_step), int(custom_step)))
+        if include_none:
+            values.append(None)
+
+        return values
+
+    default_params = st.session_state.dt_param_grid
+    max_depth = create_param_range("max_depth", default_params["classifier__max_depth"])
+    min_samples_split = create_param_range(
+        "min_samples_split", default_params["classifier__min_samples_split"]
+    )
+    min_samples_leaf = create_param_range(
+        "min_samples_leaf", default_params["classifier__min_samples_leaf"]
+    )
+    max_leaf_nodes = create_param_range(
+        "max_leaf_nodes", default_params["classifier__max_leaf_nodes"]
+    )
+
     if st.button("确认决策树参数设置"):
-        st.session_state.dt_param_grid = {
+        new_param_grid = {
             "classifier__max_depth": max_depth,
             "classifier__min_samples_split": min_samples_split,
             "classifier__min_samples_leaf": min_samples_leaf,
             "classifier__max_leaf_nodes": max_leaf_nodes,
         }
-        st.success("决策树参数设置已更新，将在下次模型训练时使用。")
+
+        # 计算参数空间大小
+        param_space_size = np.prod([len(v) for v in new_param_grid.values()])
+
+        st.session_state.dt_param_grid = new_param_grid
+        st.success(
+            f"决策树参数设置已更新，将在下次模型训练时使用。参数空间大小：{param_space_size:,} 种组合。"
+        )
+
+        # 可选：添加警告信息
+        if param_space_size > 1000000:
+            st.warning(
+                "警告：参数空间非常大，可能会导致训练时间过长。考虑减少某些参数的范围或增加步长。"
+            )
+
+
+def display_xgboost_settings():
+    col1, col2 = st.columns(2)
+    with col1:
+        n_estimators_range = st.slider(
+            "n_estimators 范围",
+            min_value=50,
+            max_value=1000,
+            value=st.session_state.xgb_param_ranges["n_estimators"],
+            step=50,
+        )
+        max_depth_range = st.slider(
+            "max_depth 范围",
+            min_value=1,
+            max_value=15,
+            value=st.session_state.xgb_param_ranges["max_depth"],
+        )
+        learning_rate_range = st.slider(
+            "learning_rate 范围",
+            min_value=0.01,
+            max_value=1.0,
+            value=st.session_state.xgb_param_ranges["learning_rate"],
+            step=0.01,
+        )
+    with col2:
+        subsample_range = st.slider(
+            "subsample 范围",
+            min_value=0.5,
+            max_value=1.0,
+            value=st.session_state.xgb_param_ranges["subsample"],
+            step=0.1,
+        )
+        colsample_bytree_range = st.slider(
+            "colsample_bytree 范围",
+            min_value=0.5,
+            max_value=1.0,
+            value=st.session_state.xgb_param_ranges["colsample_bytree"],
+            step=0.1,
+        )
+        min_child_weight_range = st.slider(
+            "min_child_weight 范围",
+            min_value=1,
+            max_value=20,
+            value=st.session_state.xgb_param_ranges["min_child_weight"],
+        )
+
+    if st.button("确认XGBoost参数设置"):
+        st.session_state.xgb_param_ranges = {
+            "n_estimators": n_estimators_range,
+            "max_depth": max_depth_range,
+            "learning_rate": learning_rate_range,
+            "subsample": subsample_range,
+            "colsample_bytree": colsample_bytree_range,
+            "min_child_weight": min_child_weight_range,
+            "reg_alpha": st.session_state.xgb_param_ranges["reg_alpha"],
+            "reg_lambda": st.session_state.xgb_param_ranges["reg_lambda"],
+        }
+        st.success("XGBoost参数设置已更新，将在下次模型训练时使用。")
 
 
 def train_random_forest_model():
@@ -308,6 +418,17 @@ def train_decision_tree_model():
     )
 
     add_model_record("决策树")
+
+
+def train_xgboost_model():
+    st.session_state.model_results = train_xgboost(
+        st.session_state.df,
+        st.session_state.target_column,
+        st.session_state.feature_columns,
+        param_ranges=st.session_state.xgb_param_ranges,
+    )
+
+    add_model_record("XGBoost")
 
 
 def add_model_record(model_type):
@@ -381,6 +502,14 @@ def display_results():
 
             with st.expander("查看最佳模型参数", expanded=False):
                 st.json(st.session_state.model_results["best_params"])
+
+            if st.session_state.model_type == "XGBoost":
+                label_encoding = st.session_state.model_results.get("label_encoding")
+                if label_encoding:
+                    st.info("标签编码信息:")
+                    for original, encoded in label_encoding.items():
+                        st.write(f"  - {original}: {encoded}")
+                    st.write("在解释结果时请参考上述标签编码。")
 
             st.markdown("---")
             st.markdown("#### 混淆矩阵")
