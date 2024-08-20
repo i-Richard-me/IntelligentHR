@@ -1,6 +1,7 @@
 import streamlit as st
 import sys
 import os
+from PIL import Image
 
 # 添加项目根目录到 Python 路径
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -31,6 +32,10 @@ def main():
     st.markdown("---")
 
     display_project_intro()
+
+    image = Image.open("frontend/assets/IntelligentHR_Intro.png")
+    st.image(image, use_column_width=True)
+
     display_feature_overview()
     display_project_highlights()
     display_documentation_link()
