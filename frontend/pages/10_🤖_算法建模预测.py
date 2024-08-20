@@ -12,9 +12,13 @@ project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..
 sys.path.append(project_root)
 
 from frontend.ui_components import show_sidebar, show_footer, apply_common_styles
-from backend.data_processing.analysis.model_trainer import (
-    train_and_evaluate_model,
-    encode_categorical_variables,
+from backend.data_processing.analysis.random_forest_trainer import train_random_forest
+from backend.data_processing.analysis.decision_tree_trainer import train_decision_tree
+from backend.data_processing.analysis.ml_explanations import (
+    ML_TOOL_INFO,
+    CONFUSION_MATRIX_EXPLANATION,
+    CLASSIFICATION_REPORT_EXPLANATION,
+    FEATURE_IMPORTANCE_EXPLANATION,
 )
 
 # Streamlit 页面配置
@@ -37,6 +41,7 @@ def initialize_session_state():
         "model_results": None,
         "target_column": None,
         "feature_columns": None,
+        "model_type": "随机森林",
         "param_ranges": {
             "n_estimators": (10, 200),
             "max_depth": (5, 30),
@@ -44,9 +49,22 @@ def initialize_session_state():
             "min_samples_leaf": (1, 20),
             "max_features": ["sqrt", "log2"],
         },
+        "dt_param_grid": {
+            "classifier__max_depth": [2, 4, 5, 6, 7, None],
+            "classifier__min_samples_split": [2, 3, 4, 5, 8],
+            "classifier__min_samples_leaf": [2, 5, 10, 15, 20, 25],
+            "classifier__max_leaf_nodes": [10, 20, 25, 30, 35, 40, 45, None],
+        },
         "custom_param_ranges": None,
         "model_records": pd.DataFrame(
-            columns=["模型ID", "训练时间", "参数", "交叉验证分数", "测试集分数"]
+            columns=[
+                "模型ID",
+                "模型类型",
+                "训练时间",
+                "参数",
+                "交叉验证分数",
+                "测试集分数",
+            ]
         ),
     }
 
@@ -55,15 +73,11 @@ def initialize_session_state():
             st.session_state[key] = value
 
 
-initialize_session_state()
-
-
 def main():
     st.title("🤖 机器学习建模")
     st.markdown("---")
 
     display_info_message()
-    display_workflow()
 
     uploaded_file = upload_file()
     if uploaded_file is None:
@@ -71,6 +85,7 @@ def main():
 
     display_data_preview()
     display_column_selection()
+    display_model_selection()
     display_model_training_and_advanced_settings()
     display_model_records()
     display_results()
@@ -80,45 +95,7 @@ def main():
 
 
 def display_info_message():
-    st.info(
-        """
-        **🤖 机器学习建模工具**
-
-        这个工具允许您上传数据，选择目标变量和特征，然后使用随机森林分类器进行机器学习建模。
-
-        主要功能包括：
-        - 数据上传和预览
-        - 目标变量和特征选择
-        - 自定义模型参数设置
-        - 自动化的模型训练和优化
-        - 模型性能评估
-        - 特征重要性可视化
-        - 模型记录跟踪
-
-        该工具使用交叉验证和独立的验证集来评估模型性能，确保结果的可靠性。
-        """
-    )
-
-
-def display_workflow():
-    with st.expander("📋 查看机器学习建模工作流程", expanded=False):
-        st.markdown(
-            '<h2 class="section-title">机器学习建模工作流程</h2>',
-            unsafe_allow_html=True,
-        )
-        st.markdown(
-            """
-            1. **数据上传**: 上传包含目标变量和特征的CSV或Excel文件。
-            2. **数据预览**: 查看数据的基本信息和前几行内容。
-            3. **变量选择**: 选择目标变量和用于建模的特征。
-            4. **参数设置**: 可选择调整模型参数搜索范围。
-            5. **模型训练**: 使用随机森林分类器进行建模，包括自动化的参数优化。
-            6. **性能评估**: 展示交叉验证和验证集上的模型性能。
-            7. **特征重要性**: 可视化展示各个特征对模型的重要程度。
-            8. **结果解释**: 提供模型结果的简要解释和建议。
-            9. **模型记录**: 跟踪并比较不同参数设置下的模型性能。
-            """
-        )
+    st.info(ML_TOOL_INFO)
 
 
 def upload_file():
@@ -187,6 +164,14 @@ def display_column_selection():
                 )
 
 
+def display_model_selection():
+    st.markdown('<h2 class="section-title">模型选择</h2>', unsafe_allow_html=True)
+    with st.container(border=True):
+        st.session_state.model_type = st.radio(
+            "选择模型类型", ("随机森林", "决策树"), key="model_type_radio"
+        )
+
+
 def display_model_training_and_advanced_settings():
     if (
         st.session_state.df is not None
@@ -196,116 +181,150 @@ def display_model_training_and_advanced_settings():
         st.markdown('<h2 class="section-title">模型训练</h2>', unsafe_allow_html=True)
         with st.container(border=True):
             with st.expander("高级设置"):
-                col1, col2 = st.columns(2)
-                with col1:
-                    n_estimators_range = st.slider(
-                        "n_estimators 范围",
-                        min_value=10,
-                        max_value=500,
-                        value=st.session_state.param_ranges["n_estimators"],
-                        step=10,
-                    )
-                    max_depth_range = st.slider(
-                        "max_depth 范围",
-                        min_value=1,
-                        max_value=50,
-                        value=st.session_state.param_ranges["max_depth"],
-                    )
-                with col2:
-                    min_samples_split_range = st.slider(
-                        "min_samples_split 范围",
-                        min_value=2,
-                        max_value=30,
-                        value=st.session_state.param_ranges["min_samples_split"],
-                    )
-                    min_samples_leaf_range = st.slider(
-                        "min_samples_leaf 范围",
-                        min_value=1,
-                        max_value=30,
-                        value=st.session_state.param_ranges["min_samples_leaf"],
-                    )
-
-                max_features_options = st.multiselect(
-                    "max_features 选项",
-                    options=["sqrt", "log2"]
-                    + list(range(1, len(st.session_state.feature_columns) + 1)),
-                    default=st.session_state.param_ranges["max_features"],
-                )
-
-                if st.button("确认参数设置"):
-                    st.session_state.custom_param_ranges = {
-                        "n_estimators": n_estimators_range,
-                        "max_depth": max_depth_range,
-                        "min_samples_split": min_samples_split_range,
-                        "min_samples_leaf": min_samples_leaf_range,
-                        "max_features": max_features_options,
-                    }
-                    st.success("参数设置已更新，将在下次模型训练时使用。")
+                if st.session_state.model_type == "随机森林":
+                    display_random_forest_settings()
+                else:
+                    display_decision_tree_settings()
 
             if st.button("开始训练模型"):
                 with st.spinner("正在训练模型，请稍候..."):
                     try:
-                        # 处理分类变量
-                        categorical_columns = (
-                            st.session_state.df[st.session_state.feature_columns]
-                            .select_dtypes(include=["object"])
-                            .columns
-                        )
-                        if len(categorical_columns) > 0:
-                            st.session_state.df = encode_categorical_variables(
-                                st.session_state.df, categorical_columns
-                            )
-                            # 更新特征列名，使用编码后的列名
-                            st.session_state.feature_columns = [
-                                (
-                                    col
-                                    if col not in categorical_columns
-                                    else f"{col}_encoded"
-                                )
-                                for col in st.session_state.feature_columns
-                            ]
-
-                        param_ranges = (
-                            st.session_state.custom_param_ranges
-                            if st.session_state.custom_param_ranges
-                            else st.session_state.param_ranges
-                        )
-
-                        st.session_state.model_results = train_and_evaluate_model(
-                            st.session_state.df,
-                            st.session_state.target_column,
-                            st.session_state.feature_columns,
-                            param_ranges=param_ranges,
-                        )
-
-                        # 添加新的模型记录
-                        new_record = pd.DataFrame(
-                            {
-                                "模型ID": [
-                                    f"Model_{len(st.session_state.model_records) + 1}"
-                                ],
-                                "训练时间": [
-                                    datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                                ],
-                                "参数": [
-                                    str(st.session_state.model_results["best_params"])
-                                ],
-                                "交叉验证分数": [
-                                    st.session_state.model_results["cv_mean_score"]
-                                ],
-                                "测试集分数": [
-                                    st.session_state.model_results["val_roc_auc"]
-                                ],
-                            }
-                        )
-                        st.session_state.model_records = pd.concat(
-                            [st.session_state.model_records, new_record],
-                            ignore_index=True,
-                        )
+                        if st.session_state.model_type == "随机森林":
+                            train_random_forest_model()
+                        else:
+                            train_decision_tree_model()
 
                         st.success("模型训练完成！")
                     except Exception as e:
                         st.error(f"模型训练过程中出错：{str(e)}")
+
+
+def display_random_forest_settings():
+    col1, col2 = st.columns(2)
+    with col1:
+        n_estimators_range = st.slider(
+            "n_estimators 范围",
+            min_value=10,
+            max_value=500,
+            value=st.session_state.param_ranges["n_estimators"],
+            step=10,
+        )
+        max_depth_range = st.slider(
+            "max_depth 范围",
+            min_value=1,
+            max_value=50,
+            value=st.session_state.param_ranges["max_depth"],
+        )
+    with col2:
+        min_samples_split_range = st.slider(
+            "min_samples_split 范围",
+            min_value=2,
+            max_value=30,
+            value=st.session_state.param_ranges["min_samples_split"],
+        )
+        min_samples_leaf_range = st.slider(
+            "min_samples_leaf 范围",
+            min_value=1,
+            max_value=30,
+            value=st.session_state.param_ranges["min_samples_leaf"],
+        )
+
+    max_features_options = st.multiselect(
+        "max_features 选项",
+        options=["sqrt", "log2"]
+        + list(range(1, len(st.session_state.feature_columns) + 1)),
+        default=st.session_state.param_ranges["max_features"],
+    )
+
+    if st.button("确认随机森林参数设置"):
+        st.session_state.custom_param_ranges = {
+            "n_estimators": n_estimators_range,
+            "max_depth": max_depth_range,
+            "min_samples_split": min_samples_split_range,
+            "min_samples_leaf": min_samples_leaf_range,
+            "max_features": max_features_options,
+        }
+        st.success("随机森林参数设置已更新，将在下次模型训练时使用。")
+
+
+def display_decision_tree_settings():
+    col1, col2 = st.columns(2)
+    with col1:
+        max_depth = st.multiselect(
+            "max_depth",
+            options=[2, 4, 5, 6, 7, None],
+            default=st.session_state.dt_param_grid["classifier__max_depth"],
+        )
+        min_samples_split = st.multiselect(
+            "min_samples_split",
+            options=[2, 3, 4, 5, 8],
+            default=st.session_state.dt_param_grid["classifier__min_samples_split"],
+        )
+    with col2:
+        min_samples_leaf = st.multiselect(
+            "min_samples_leaf",
+            options=[2, 5, 10, 15, 20, 25],
+            default=st.session_state.dt_param_grid["classifier__min_samples_leaf"],
+        )
+        max_leaf_nodes = st.multiselect(
+            "max_leaf_nodes",
+            options=[10, 20, 25, 30, 35, 40, 45, None],
+            default=st.session_state.dt_param_grid["classifier__max_leaf_nodes"],
+        )
+
+    if st.button("确认决策树参数设置"):
+        st.session_state.dt_param_grid = {
+            "classifier__max_depth": max_depth,
+            "classifier__min_samples_split": min_samples_split,
+            "classifier__min_samples_leaf": min_samples_leaf,
+            "classifier__max_leaf_nodes": max_leaf_nodes,
+        }
+        st.success("决策树参数设置已更新，将在下次模型训练时使用。")
+
+
+def train_random_forest_model():
+    param_ranges = (
+        st.session_state.custom_param_ranges
+        if st.session_state.custom_param_ranges
+        else st.session_state.param_ranges
+    )
+
+    st.session_state.model_results = train_random_forest(
+        st.session_state.df,
+        st.session_state.target_column,
+        st.session_state.feature_columns,
+        param_ranges=param_ranges,
+    )
+
+    add_model_record("随机森林")
+
+
+def train_decision_tree_model():
+    st.session_state.model_results = train_decision_tree(
+        st.session_state.df,
+        st.session_state.target_column,
+        st.session_state.feature_columns,
+        param_grid=st.session_state.dt_param_grid,
+    )
+
+    add_model_record("决策树")
+
+
+def add_model_record(model_type):
+    new_record = pd.DataFrame(
+        {
+            "模型ID": [f"Model_{len(st.session_state.model_records) + 1}"],
+            "模型类型": [model_type],
+            "训练时间": [datetime.now().strftime("%Y-%m-%d %H:%M:%S")],
+            "参数": [str(st.session_state.model_results["best_params"])],
+            "交叉验证分数": [st.session_state.model_results["cv_mean_score"]],
+            "测试集分数": [st.session_state.model_results["test_roc_auc"]],
+        }
+    )
+    st.session_state.model_records = pd.concat(
+        [st.session_state.model_records, new_record],
+        ignore_index=True,
+    )
 
 
 def display_results():
@@ -353,8 +372,8 @@ def display_results():
                 st.markdown(
                     f"""
                     <div class="metric-card">
-                        <div class="metric-value">{st.session_state.model_results['val_roc_auc']:.4f}</div>
-                        <div class="metric-label">验证集 ROC AUC</div>
+                        <div class="metric-value">{st.session_state.model_results['test_roc_auc']:.4f}</div>
+                        <div class="metric-label">测试集 ROC AUC</div>
                     </div>
                     """,
                     unsafe_allow_html=True,
@@ -365,69 +384,47 @@ def display_results():
 
             st.markdown("---")
             st.markdown("#### 混淆矩阵")
-            cm = st.session_state.model_results["val_confusion_matrix"]
-            cm_sum = np.sum(cm)
-            cm_percentages = cm / cm_sum * 100
-
-            fig = go.Figure(
-                data=go.Heatmap(
-                    z=cm_percentages,
-                    x=["预测: 0", "预测: 1"],
-                    y=["实际: 0", "实际: 1"],
-                    hoverongaps=False,
-                    colorscale="Blues",
-                    text=[
-                        [f"{v:.1f}%<br>({cm[i][j]})" for j, v in enumerate(row)]
-                        for i, row in enumerate(cm_percentages)
-                    ],
-                    texttemplate="%{text}",
-                    textfont={"size": 14},
-                )
-            )
-            fig.update_layout(
-                title="混淆矩阵 (百分比和实际数量)",
-                xaxis_title="预测类别",
-                yaxis_title="实际类别",
-                width=500,
-                height=500,
-            )
-            st.plotly_chart(fig)
-
-            with st.expander("混淆矩阵解读", expanded=False):
-                st.caption(
-                    """
-                混淆矩阵展示了模型在各个类别上的预测情况：
-                
-                - 左上角：正确预测为负类的样本数（真负例，TN）
-                - 右上角：错误预测为正类的样本数（假正例，FP）
-                - 左下角：错误预测为负类的样本数（假负例，FN）
-                - 右下角：正确预测为正类的样本数（真正例，TP）
-                
-                理想情况下，对角线上的数字（TN和TP）应该较大，而非对角线上的数字（FP和FN）应该较小。
-                
-                这个矩阵可以帮助我们理解模型在哪些类别上表现较好或较差，从而针对性地改进模型或调整决策阈值。
-                """
-                )
+            display_confusion_matrix()
 
             st.markdown("---")
             st.markdown("#### 分类报告")
-            st.text(st.session_state.model_results["val_classification_report"])
+            st.text(st.session_state.model_results["test_classification_report"])
 
             with st.expander("分类报告解读", expanded=False):
-                st.caption(
-                    """
-                分类报告提供了每个类别的详细性能指标：
-                
-                - Precision（精确率）：预测为正例中实际为正例的比例
-                - Recall（召回率）：实际为正例中被正确预测的比例
-                - F1-score：精确率和召回率的调和平均数
-                - Support：每个类别的样本数量
-                
-                'macro avg' 是所有类别的简单平均，'weighted avg' 是考虑了每个类别样本数量的加权平均。
-                
-                这些指标可以帮助我们全面评估模型在各个类别上的表现，特别是在处理不平衡数据集时。
-                """
-                )
+                st.caption(CLASSIFICATION_REPORT_EXPLANATION)
+
+
+def display_confusion_matrix():
+    cm = st.session_state.model_results["test_confusion_matrix"]
+    cm_sum = np.sum(cm)
+    cm_percentages = cm / cm_sum * 100
+
+    fig = go.Figure(
+        data=go.Heatmap(
+            z=cm_percentages,
+            x=["预测: 0", "预测: 1"],
+            y=["实际: 0", "实际: 1"],
+            hoverongaps=False,
+            colorscale="Blues",
+            text=[
+                [f"{v:.1f}%<br>({cm[i][j]})" for j, v in enumerate(row)]
+                for i, row in enumerate(cm_percentages)
+            ],
+            texttemplate="%{text}",
+            textfont={"size": 14},
+        )
+    )
+    fig.update_layout(
+        title="混淆矩阵 (百分比和实际数量)",
+        xaxis_title="预测类别",
+        yaxis_title="实际类别",
+        width=500,
+        height=500,
+    )
+    st.plotly_chart(fig)
+
+    with st.expander("混淆矩阵解读", expanded=False):
+        st.caption(CONFUSION_MATRIX_EXPLANATION)
 
 
 def display_feature_importance():
@@ -460,36 +457,7 @@ def display_feature_importance():
             st.plotly_chart(fig)
 
             with st.expander("特征重要性解释", expanded=False):
-                st.caption(
-                    """
-                特征重要性图展示了模型中各个特征的相对重要性：
-
-                - 重要性得分反映了每个特征对模型预测的贡献程度。
-                - 得分越高，表示该特征在模型决策中的影响越大。
-                - 这个排序可以帮助我们识别最关键的预测因素。
-
-                注意事项：
-                - 特征重要性不表示因果关系，只反映预测能力。
-                - 高度相关的特征可能会分散重要性得分。
-                - 不同类型的模型可能会产生不同的特征重要性排序。
-                - 解释时应结合领域知识和其他分析方法。
-
-                利用特征重要性，我们可以：
-                1. 聚焦于最重要的特征，优化数据收集和处理。
-                2. 简化模型，可能去除不太重要的特征。
-                3. 获得对预测过程的洞察，提升模型可解释性。
-                4. 指导进一步的特征工程和选择。
-                """
-                )
-
-
-def save_model(model, model_id, timestamp):
-    save_path = os.path.join("data", "ml_models")
-    os.makedirs(save_path, exist_ok=True)
-    file_name = f"Model_{timestamp.strftime('%Y%m%d_%H%M%S')}.joblib"
-    file_path = os.path.join(save_path, file_name)
-    joblib.dump(model, file_path)
-    st.success(f"模型 {model_id} 已成功保存到 {file_path}")
+                st.caption(FEATURE_IMPORTANCE_EXPLANATION)
 
 
 def display_model_records():
@@ -498,6 +466,7 @@ def display_model_records():
         with st.container(border=True):
             columns_order = [
                 "模型ID",
+                "模型类型",
                 "交叉验证分数",
                 "测试集分数",
                 "最佳模型",
@@ -536,6 +505,7 @@ def display_model_records():
                 },
                 disabled=[
                     "模型ID",
+                    "模型类型",
                     "训练时间",
                     "参数",
                     "交叉验证分数",
@@ -547,21 +517,39 @@ def display_model_records():
                 use_container_width=True,
             )
 
-            models_to_save = edited_df[edited_df["保存"]]
-            if not models_to_save.empty:
-                for _, row in models_to_save.iterrows():
-                    model_id = row["模型ID"]
-                    timestamp = datetime.strptime(row["训练时间"], "%Y-%m-%d %H:%M:%S")
-                    if (
-                        st.session_state.model_results
-                        and st.session_state.model_results["model"]
-                    ):
-                        save_model(
-                            st.session_state.model_results["model"], model_id, timestamp
-                        )
-                    else:
-                        st.warning(f"无法保存模型 {model_id}，模型对象不存在。")
+            save_selected_models(edited_df)
+
+
+def save_selected_models(edited_df):
+    models_to_save = edited_df[edited_df["保存"]]
+    if not models_to_save.empty:
+        for _, row in models_to_save.iterrows():
+            model_id = row["模型ID"]
+            model_type = row["模型类型"]
+            timestamp = datetime.strptime(row["训练时间"], "%Y-%m-%d %H:%M:%S")
+            if (
+                st.session_state.model_results
+                and st.session_state.model_results["model"]
+            ):
+                save_model(
+                    st.session_state.model_results["model"],
+                    model_id,
+                    model_type,
+                    timestamp,
+                )
+            else:
+                st.warning(f"无法保存模型 {model_id}，模型对象不存在。")
+
+
+def save_model(model, model_id, model_type, timestamp):
+    save_path = os.path.join("data", "ml_models")
+    os.makedirs(save_path, exist_ok=True)
+    file_name = f"{model_type}_{model_id}_{timestamp.strftime('%Y%m%d_%H%M%S')}.joblib"
+    file_path = os.path.join(save_path, file_name)
+    joblib.dump(model, file_path)
+    st.success(f"模型 {model_id} ({model_type}) 已成功保存到 {file_path}")
 
 
 if __name__ == "__main__":
+    initialize_session_state()
     main()
