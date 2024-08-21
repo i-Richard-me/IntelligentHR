@@ -30,11 +30,11 @@ def prepare_data(
     y = df[target_column]
 
     X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=test_size, random_state=42
+        X, y, test_size=test_size, random_state=42, stratify=y
     )
 
-    categorical_cols = X.select_dtypes(include=["object"]).columns.tolist()
-    numerical_cols = X.select_dtypes(exclude=["object"]).columns.tolist()
+    categorical_cols = X.select_dtypes(include=["object", "category"]).columns.tolist()
+    numerical_cols = X.select_dtypes(include=["int64", "float64"]).columns.tolist()
 
     return X_train, X_test, y_train, y_test, categorical_cols, numerical_cols
 
@@ -52,12 +52,20 @@ def create_preprocessor(
     Returns:
         预处理器
     """
-    return ColumnTransformer(
+    numeric_transformer = Pipeline(steps=[("scaler", StandardScaler())])
+
+    categorical_transformer = Pipeline(
+        steps=[("onehot", OneHotEncoder(handle_unknown="ignore"))]
+    )
+
+    preprocessor = ColumnTransformer(
         transformers=[
-            ("num", StandardScaler(), numerical_cols),
-            ("cat", OneHotEncoder(handle_unknown="ignore"), categorical_cols),
+            ("num", numeric_transformer, numerical_cols),
+            ("cat", categorical_transformer, categorical_cols),
         ]
     )
+
+    return preprocessor
 
 
 def evaluate_model(

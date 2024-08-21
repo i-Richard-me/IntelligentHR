@@ -21,7 +21,8 @@ def optimize_random_forest(
     categorical_cols: List[str],
     numerical_cols: List[str],
     param_ranges: Dict[str, Any],
-) -> Tuple[Pipeline, Dict[str, Any], float]:
+    n_trials: int = 100,
+) -> Tuple[Pipeline, Dict[str, Any], float, int]:
     """
     使用Optuna优化随机森林模型的超参数。
 
@@ -31,9 +32,10 @@ def optimize_random_forest(
         categorical_cols: 分类特征列名列表
         numerical_cols: 数值特征列名列表
         param_ranges: 超参数搜索范围的字典
+        n_trials: Optuna优化的试验次数
 
     Returns:
-        优化后的随机森林模型管道、最佳参数字典和最佳交叉验证分数
+        优化后的随机森林模型管道、最佳参数字典、最佳交叉验证分数和最佳轮次
     """
     preprocessor = create_preprocessor(categorical_cols, numerical_cols)
 
@@ -70,7 +72,7 @@ def optimize_random_forest(
         return np.mean(scores)
 
     study = optuna.create_study(direction="maximize", sampler=TPESampler())
-    study.optimize(objective, n_trials=100, n_jobs=-1)
+    study.optimize(objective, n_trials=n_trials, n_jobs=-1)
 
     best_params = study.best_params
     best_rf = RandomForestClassifier(**best_params, random_state=42)
@@ -79,8 +81,9 @@ def optimize_random_forest(
     )
     best_pipeline.fit(X_train, y_train)
     best_score = study.best_value
+    best_trial = study.best_trial.number + 1  # 获取最佳轮次（从1开始计数）
 
-    return best_pipeline, best_params, best_score
+    return best_pipeline, best_params, best_score, best_trial
 
 
 def train_random_forest(
@@ -89,6 +92,7 @@ def train_random_forest(
     feature_columns: List[str],
     test_size: float = 0.3,
     param_ranges: Dict[str, Any] = None,
+    n_trials: int = 100,
 ) -> Dict[str, Any]:
     """
     训练随机森林模型并进行评估。
@@ -99,9 +103,10 @@ def train_random_forest(
         feature_columns: 特征列名列表
         test_size: 测试集占总数据的比例
         param_ranges: 参数搜索范围，如果为None则使用默认值
+        n_trials: Optuna优化的试验次数
 
     Returns:
-        包含模型、特征重要性、评估指标和最佳参数的字典
+        包含模型、特征重要性、评估指标、最佳参数和最佳轮次的字典
     """
     X_train, X_test, y_train, y_test, categorical_cols, numerical_cols = prepare_data(
         df, target_column, feature_columns, test_size
@@ -116,8 +121,8 @@ def train_random_forest(
     }
     param_ranges = param_ranges or default_param_ranges
 
-    best_pipeline, best_params, cv_mean_score = optimize_random_forest(
-        X_train, y_train, categorical_cols, numerical_cols, param_ranges
+    best_pipeline, best_params, cv_mean_score, best_trial = optimize_random_forest(
+        X_train, y_train, categorical_cols, numerical_cols, param_ranges, n_trials
     )
 
     test_metrics = evaluate_model(best_pipeline, X_test, y_test)
@@ -131,5 +136,6 @@ def train_random_forest(
         "feature_importance": feature_importance,
         "cv_mean_score": cv_mean_score,
         "best_params": best_params,
+        "best_trial": best_trial,
         **test_metrics,
     }

@@ -14,7 +14,7 @@ sys.path.append(project_root)
 from frontend.ui_components import show_sidebar, show_footer, apply_common_styles
 from backend.data_processing.analysis.random_forest_trainer import train_random_forest
 from backend.data_processing.analysis.decision_tree_trainer import train_decision_tree
-from backend.data_processing.analysis.xgboost_trainer import train_xgboost  # 新增导入
+from backend.data_processing.analysis.xgboost_trainer import train_xgboost
 from backend.data_processing.analysis.ml_explanations import (
     ML_TOOL_INFO,
     CONFUSION_MATRIX_EXPLANATION,
@@ -56,7 +56,7 @@ def initialize_session_state():
             "classifier__min_samples_leaf": [2, 5, 10, 15, 20, 25],
             "classifier__max_leaf_nodes": [10, 20, 25, 30, 35, 40, 45, None],
         },
-        "xgb_param_ranges": {  # 新增 XGBoost 参数范围
+        "xgb_param_ranges": {
             "n_estimators": (50, 500),
             "max_depth": (3, 10),
             "learning_rate": (0.01, 1.0),
@@ -75,8 +75,11 @@ def initialize_session_state():
                 "参数",
                 "交叉验证分数",
                 "测试集分数",
+                "最佳轮次",
             ]
         ),
+        "rf_n_trials": 100,
+        "xgb_n_trials": 200,
     }
 
     for key, value in default_states.items():
@@ -193,7 +196,9 @@ def display_model_training_and_advanced_settings():
     ):
         st.markdown('<h2 class="section-title">模型训练</h2>', unsafe_allow_html=True)
         with st.container(border=True):
-            with st.expander("高级设置"):
+            display_data_split_settings()
+
+            with st.expander("模型参数高级设置"):
                 if st.session_state.model_type == "随机森林":
                     display_random_forest_settings()
                 elif st.session_state.model_type == "决策树":
@@ -211,9 +216,44 @@ def display_model_training_and_advanced_settings():
                         else:  # XGBoost
                             train_xgboost_model()
 
-                        st.success("模型训练完成！")
+                        success_message = "模型训练完成！"
+                        if "best_trial" in st.session_state.model_results:
+                            success_message += f" 最佳参数在第 {st.session_state.model_results['best_trial']} 轮获得。"
+                        st.success(success_message)
                     except Exception as e:
                         st.error(f"模型训练过程中出错：{str(e)}")
+
+
+def display_data_split_settings():
+    with st.expander("数据划分设置", expanded=False):
+        st.markdown("#### 训练集和测试集划分")
+
+        # 使用会话状态来存储当前的test_size值和之前确认的值
+        if "current_test_size" not in st.session_state:
+            st.session_state.current_test_size = 0.3
+        if "confirmed_test_size" not in st.session_state:
+            st.session_state.confirmed_test_size = 0.3
+
+        # 滑块用于调整test_size
+        new_test_size = st.slider(
+            "测试集比例",
+            min_value=0.1,
+            max_value=0.5,
+            value=st.session_state.current_test_size,
+            step=0.05,
+            help="设置用于测试的数据比例。推荐范围：0.2 - 0.3",
+        )
+
+        # 更新当前的test_size值
+        st.session_state.current_test_size = new_test_size
+
+        # 添加确认按钮
+        if st.button("确认数据划分设置"):
+            st.session_state.confirmed_test_size = new_test_size
+            st.success(f"数据划分设置已更新。测试集比例：{new_test_size:.2f}")
+
+    # 确保其他部分使用确认后的test_size值
+    st.session_state.test_size = st.session_state.confirmed_test_size
 
 
 def display_random_forest_settings():
@@ -253,6 +293,15 @@ def display_random_forest_settings():
         default=st.session_state.param_ranges["max_features"],
     )
 
+    st.session_state.rf_n_trials = st.slider(
+        "优化迭代次数 (n_trials)",
+        min_value=50,
+        max_value=500,
+        value=st.session_state.rf_n_trials,
+        step=10,
+        help="增加迭代次数可能提高模型性能，但会显著增加训练时间。",
+    )
+
     if st.button("确认随机森林参数设置"):
         st.session_state.custom_param_ranges = {
             "n_estimators": n_estimators_range,
@@ -262,6 +311,9 @@ def display_random_forest_settings():
             "max_features": max_features_options,
         }
         st.success("随机森林参数设置已更新，将在下次模型训练时使用。")
+
+    if st.session_state.rf_n_trials > 300:
+        st.warning("注意：设置较大的迭代次数可能会显著增加训练时间。")
 
 
 def display_decision_tree_settings():
@@ -378,6 +430,15 @@ def display_xgboost_settings():
             value=st.session_state.xgb_param_ranges["min_child_weight"],
         )
 
+    st.session_state.xgb_n_trials = st.slider(
+        "优化迭代次数 (n_trials)",
+        min_value=100,
+        max_value=2000,
+        value=st.session_state.xgb_n_trials,
+        step=50,
+        help="增加迭代次数可能提高模型性能，但会显著增加训练时间。",
+    )
+
     if st.button("确认XGBoost参数设置"):
         st.session_state.xgb_param_ranges = {
             "n_estimators": n_estimators_range,
@@ -391,6 +452,9 @@ def display_xgboost_settings():
         }
         st.success("XGBoost参数设置已更新，将在下次模型训练时使用。")
 
+    if st.session_state.xgb_n_trials > 500:
+        st.warning("注意：设置较大的迭代次数可能会显著增加训练时间。")
+
 
 def train_random_forest_model():
     param_ranges = (
@@ -403,7 +467,9 @@ def train_random_forest_model():
         st.session_state.df,
         st.session_state.target_column,
         st.session_state.feature_columns,
+        test_size=st.session_state.test_size,  # 使用用户设置的测试集比例
         param_ranges=param_ranges,
+        n_trials=st.session_state.rf_n_trials,
     )
 
     add_model_record("随机森林")
@@ -414,6 +480,7 @@ def train_decision_tree_model():
         st.session_state.df,
         st.session_state.target_column,
         st.session_state.feature_columns,
+        test_size=st.session_state.test_size,  # 使用用户设置的测试集比例
         param_grid=st.session_state.dt_param_grid,
     )
 
@@ -425,25 +492,30 @@ def train_xgboost_model():
         st.session_state.df,
         st.session_state.target_column,
         st.session_state.feature_columns,
+        test_size=st.session_state.test_size,  # 使用用户设置的测试集比例
         param_ranges=st.session_state.xgb_param_ranges,
+        n_trials=st.session_state.xgb_n_trials,
     )
 
     add_model_record("XGBoost")
 
 
 def add_model_record(model_type):
-    new_record = pd.DataFrame(
-        {
-            "模型ID": [f"Model_{len(st.session_state.model_records) + 1}"],
-            "模型类型": [model_type],
-            "训练时间": [datetime.now().strftime("%Y-%m-%d %H:%M:%S")],
-            "参数": [str(st.session_state.model_results["best_params"])],
-            "交叉验证分数": [st.session_state.model_results["cv_mean_score"]],
-            "测试集分数": [st.session_state.model_results["test_roc_auc"]],
-        }
-    )
+    new_record = {
+        "模型ID": f"Model_{len(st.session_state.model_records) + 1}",
+        "模型类型": model_type,
+        "训练时间": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "参数": str(st.session_state.model_results["best_params"]),
+        "交叉验证分数": st.session_state.model_results["cv_mean_score"],
+        "测试集分数": st.session_state.model_results["test_roc_auc"],
+    }
+
+    # 只有在存在 'best_trial' 时才添加到记录中
+    if "best_trial" in st.session_state.model_results:
+        new_record["最佳轮次"] = st.session_state.model_results["best_trial"]
+
     st.session_state.model_records = pd.concat(
-        [st.session_state.model_records, new_record],
+        [st.session_state.model_records, pd.DataFrame([new_record])],
         ignore_index=True,
     )
 
@@ -506,10 +578,30 @@ def display_results():
             if st.session_state.model_type == "XGBoost":
                 label_encoding = st.session_state.model_results.get("label_encoding")
                 if label_encoding:
-                    st.info("标签编码信息:")
-                    for original, encoded in label_encoding.items():
-                        st.write(f"  - {original}: {encoded}")
-                    st.write("在解释结果时请参考上述标签编码。")
+                    with st.expander("查看目标变量编码信息", expanded=False):
+                        st.caption(
+                            """
+                                    ### 目标变量编码对照表
+
+                                    在 XGBoost 模型中，我们对目标变量进行了编码处理。这是因为 XGBoost 要求输入的目标变量为数值型。
+                                    下表展示了原始类别与其对应的编码值：
+                                    """
+                        )
+
+                        # 创建一个数据框来展示编码信息
+                        encoding_df = pd.DataFrame(
+                            list(label_encoding.items()), columns=["原始类别", "编码值"]
+                        )
+                        st.table(encoding_df)
+
+                        st.caption(
+                            """
+                                    #### 注意事项：
+                                    - 在解释模型输出时，请参考此对照表将数值结果转换回原始类别。
+                                    - 编码值的大小并不代表类别的优劣或重要性。
+                                    - 如果您计划使用此模型进行预测，请确保使用相同的编码方式处理新数据。
+                                    """
+                        )
 
             st.markdown("---")
             st.markdown("#### 混淆矩阵")
@@ -547,8 +639,8 @@ def display_confusion_matrix():
         title="混淆矩阵 (百分比和实际数量)",
         xaxis_title="预测类别",
         yaxis_title="实际类别",
-        width=500,
-        height=500,
+        width=400,
+        height=400,
     )
     st.plotly_chart(fig)
 
@@ -580,8 +672,8 @@ def display_feature_importance():
                 title="特征重要性",
                 xaxis_title="重要性得分",
                 yaxis_title="特征",
-                height=max(500, len(feature_importance) * 20),
-                width=800,
+                height=max(500, len(feature_importance) * 25),
+                width=600,
             )
             st.plotly_chart(fig)
 
