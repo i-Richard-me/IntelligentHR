@@ -85,10 +85,13 @@ class DataFrameWorkflow:
         )
         logger.info(f"AI response: {result}")
 
-        if result["next_step"] == "need_more_info":
+        # 注意：result 是一个字典，而不是 AssistantResponse 对象
+        next_step = result.get("next_step")
+
+        if next_step == "need_more_info":
             self._handle_need_more_info(result)
-        elif result["next_step"] == "tool_use":
-            self._handle_tool_use(result)
+        elif next_step == "execute_operation":
+            self._handle_execute_operation(result)
         else:  # out_of_scope
             self._handle_out_of_scope(result)
 
@@ -103,35 +106,47 @@ class DataFrameWorkflow:
         """
         self.current_state = "need_more_info"
         self.conversation_history.append(
-            {"role": "assistant", "content": result["message"]}
+            {"role": "assistant", "content": result.get("message", "")}
         )
 
-    def _handle_tool_use(self, result: Dict[str, Any]) -> None:
+    def _handle_execute_operation(self, result: Dict[str, Any]) -> None:
         """
-        处理使用工具的情况。
+        处理执行操作的情况。
 
         Args:
             result: AI 助手的响应结果。
         """
         self.current_state = "ready"
-        tool_name = result["operation"]["tool_name"]
-        tool_args = result["operation"]["tool_args"]
-        logger.info(f"Attempting to use tool: {tool_name} with args: {tool_args}")
+        operation_steps = result.get("operation", [])
 
-        self._replace_dataframe_names_with_objects(tool_args)
-        tool_function = self._get_tool_function(tool_name)
+        final_results = {}
+        for step in operation_steps:
+            tool_name = step.get("tool_name")
+            tool_args = step.get("tool_args", {})
+            output_df_names = step.get("output_df_names", [])
 
-        if tool_function:
-            try:
-                tool_result = tool_function.invoke(tool_args)
-                self._process_tool_result(result, tool_result)
-            except Exception as e:
-                logger.error(f"Error executing tool: {str(e)}")
-                result["error"] = str(e)
-        else:
-            error_msg = f"Unknown tool: {tool_name}"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
+            logger.info(f"Executing step: {tool_name} with args: {tool_args}")
+
+            self._replace_dataframe_names_with_objects(tool_args)
+            tool_function = self._get_tool_function(tool_name)
+
+            if tool_function:
+                try:
+                    step_result = tool_function.invoke(tool_args)
+                    self._process_step_result(step_result, output_df_names)
+
+                    # 如果是最后一步，保存结果
+                    if step == operation_steps[-1]:
+                        final_results = self._format_final_results(step_result, output_df_names)
+                except Exception as e:
+                    logger.error(f"Error executing tool: {str(e)}")
+                    raise ValueError(f"执行操作时发生错误: {str(e)}")
+            else:
+                error_msg = f"Unknown tool: {tool_name}"
+                logger.error(error_msg)
+                raise ValueError(error_msg)
+
+        result.update(final_results)
 
     def _handle_out_of_scope(self, result: Dict[str, Any]) -> None:
         """
@@ -142,7 +157,7 @@ class DataFrameWorkflow:
         """
         self.current_state = "out_of_scope"
         self.conversation_history.append(
-            {"role": "assistant", "content": result["message"]}
+            {"role": "assistant", "content": result.get("message", "")}
         )
 
     def _replace_dataframe_names_with_objects(self, tool_args: Dict[str, Any]) -> None:
@@ -174,30 +189,45 @@ class DataFrameWorkflow:
             (tool for tool in self.available_tools if tool.name == tool_name), None
         )
 
-    def _process_tool_result(self, result: Dict[str, Any], tool_result: Any) -> None:
+    def _process_step_result(self, step_result: Any, output_df_names: List[str]) -> None:
         """
-        处理工具执行的结果。
+        处理单个步骤的执行结果。
 
         Args:
-            result: 结果字典，用于存储处理后的结果。
-            tool_result: 工具执行的原始结果。
+            step_result: 步骤执行的结果。
+            output_df_names: 输出 DataFrame 的名称列表。
         """
-        if isinstance(tool_result, tuple) and len(tool_result) == 2:
-            result["result_df1"], result["result_df2"] = tool_result
-            logger.info(
-                f"Tool execution successful. Result 1 shape: {result['result_df1'].shape}, "
-                f"Result 2 shape: {result['result_df2'].shape}"
-            )
+        if isinstance(step_result, tuple) and len(step_result) == len(output_df_names):
+            for df, name in zip(step_result, output_df_names):
+                self.dataframes[name] = df
+                logger.info(f"Stored result DataFrame '{name}' with shape {df.shape}")
+        elif isinstance(step_result, pd.DataFrame) and len(output_df_names) == 1:
+            self.dataframes[output_df_names[0]] = step_result
+            logger.info(f"Stored result DataFrame '{output_df_names[0]}' with shape {step_result.shape}")
         else:
-            result["result_df"] = tool_result
-            logger.info(
-                f"Tool execution successful. Result shape: {result['result_df'].shape}"
-            )
+            logger.warning(f"Unexpected step result type or mismatch with output names: {type(step_result)}")
 
-        logger.info(
-            f"First few rows of result:\n"
-            f"{result['result_df'].head().to_string() if 'result_df' in result else result['result_df1'].head().to_string()}"
-        )
+    def _format_final_results(self, final_result: Any, output_df_names: List[str]) -> Dict[str, Any]:
+        """
+        格式化最终结果以供返回。
+
+        Args:
+            final_result: 最后一个步骤的执行结果。
+            output_df_names: 输出 DataFrame 的名称列表。
+
+        Returns:
+            格式化后的结果字典。
+        """
+        if isinstance(final_result, tuple) and len(final_result) == 2:
+            return {
+                "result_df1": final_result[0],
+                "result_df2": final_result[1]
+            }
+        elif isinstance(final_result, pd.DataFrame):
+            return {"result_df": final_result}
+        else:
+            logger.warning(f"Unexpected final result type: {type(final_result)}")
+            return {"result": final_result}
 
     def get_dataframe(self, name: str) -> pd.DataFrame:
         """
