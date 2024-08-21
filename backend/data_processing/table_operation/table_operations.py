@@ -12,43 +12,45 @@ logger = logging.getLogger(__name__)
 
 
 @tool
-def merge_dataframes(
-        left_df: Annotated[Any, "Left dataframe containing data to be merged"],
-        right_df: Annotated[Any, "Right dataframe to be merged with the left dataframe"],
-        how: Annotated[
-            str,
-            "Merge method: 'inner', 'outer', 'left', or 'right'",
-        ],
-        left_on: Annotated[
-            Union[str, List[str]], "Column name(s) from the left dataframe to use as merge key(s)"
-        ],
-        right_on: Annotated[
-            Union[str, List[str]], "Column name(s) from the right dataframe to use as merge key(s)"
-        ],
-        left_columns: Annotated[
-            Optional[List[str]],
-            "List of column names from the left dataframe to include in the result, if None all columns are included",
-        ] = None,
-        right_columns: Annotated[
-            Optional[List[str]],
-            "List of column names from the right dataframe to include in the result, if None all columns are included",
-        ] = None,
+def join_dataframes(
+    left_df: Annotated[Any, "Left dataframe for the join operation"],
+    right_df: Annotated[Any, "Right dataframe to be joined with the left dataframe"],
+    how: Annotated[
+        str,
+        "Join method: 'inner', 'outer', 'left', or 'right'",
+    ],
+    left_on: Annotated[
+        Union[str, List[str]],
+        "Column name(s) from the left dataframe to use as join key(s)",
+    ],
+    right_on: Annotated[
+        Union[str, List[str]],
+        "Column name(s) from the right dataframe to use as join key(s)",
+    ],
+    left_columns: Annotated[
+        Optional[List[str]],
+        "List of column names from the left dataframe to include in the result, if None all columns are included",
+    ] = None,
+    right_columns: Annotated[
+        Optional[List[str]],
+        "List of column names from the right dataframe to include in the result, if None all columns are included",
+    ] = None,
 ) -> pd.DataFrame:
     """
-    Merges two dataframes based on specified columns. This function allows for flexible selection of merge method and columns to include.
+    Joins two dataframes based on specified columns, similar to SQL JOIN operations.
 
     Use cases:
     - Combining two related datasets based on common information (e.g., ID or date).
-    - Integrating information from multiple data sources into a unified view.
+    - Enriching a primary dataset with additional information from a secondary dataset.
 
     Notes:
-    - Ensure that the columns used for merging exist in both dataframes.
-    - Choose the appropriate merge method ('how' parameter) to avoid unintended data loss.
+    - Ensure that the columns used for join operation exist in both dataframes.
+    - Choose the appropriate join method ('how' parameter) to avoid unintended data loss.
     - For left_columns and right_columns parameters:
       * If not explicitly specified by the user, all columns will be included by default.
 
     Output:
-    - Returns a pandas DataFrame containing the merged data according to the specified parameters.
+    - Returns a pandas DataFrame containing the result of the join operation.
     """
     try:
         # Ensure left_on and right_on are lists
@@ -81,19 +83,22 @@ def merge_dataframes(
 
 @tool
 def reshape_wide_to_long(
-        df: Annotated[
-            Any,
-            "Input wide-format dataframe where each row represents a unique entity with data for multiple time points or categories spread across different columns",
-        ],
-        columns_to_compress: Annotated[
-            List[
-                str], "List of column names to be compressed into long format, these columns will be converted into values in a single column"
-        ],
-        new_column_for_old_headers: Annotated[
-            str, "Name of the new column that will store the original column names (as identifiers)"
-        ],
-        new_column_for_values: Annotated[
-            str, "Name of the new column that will store the values from the original columns"],
+    df: Annotated[
+        Any,
+        "Input wide-format dataframe where each row represents a unique entity with data for multiple time points or categories spread across different columns",
+    ],
+    columns_to_compress: Annotated[
+        List[str],
+        "List of column names to be compressed into long format, these columns will be converted into values in a single column",
+    ],
+    new_column_for_old_headers: Annotated[
+        str,
+        "Name of the new column that will store the original column names (as identifiers)",
+    ],
+    new_column_for_values: Annotated[
+        str,
+        "Name of the new column that will store the values from the original columns",
+    ],
 ) -> pd.DataFrame:
     """
     Reshapes a wide-format dataframe into a long format. This process is often referred to as "melting" or "unpivoting".
@@ -138,16 +143,21 @@ def reshape_wide_to_long(
 
 @tool
 def reshape_long_to_wide(
-        df: Annotated[
-            Any, "Input long-format dataframe where one column contains values that will become new column names, and another column contains the values for these new columns"
-        ],
-        column_to_use_as_headers: Annotated[
-            str, "Name of the column containing values that will become new column names"],
-        column_with_values: Annotated[
-            str, "Name of the column containing the values that will populate the new columns"],
-        aggfunc: Annotated[
-            str, "Aggregation function to use when there are duplicate values, e.g., 'first', 'last', 'mean', 'sum', etc."
-        ] = "first",
+    df: Annotated[
+        Any,
+        "Input long-format dataframe where one column contains values that will become new column names, and another column contains the values for these new columns",
+    ],
+    column_to_use_as_headers: Annotated[
+        str, "Name of the column containing values that will become new column names"
+    ],
+    column_with_values: Annotated[
+        str,
+        "Name of the column containing the values that will populate the new columns",
+    ],
+    aggfunc: Annotated[
+        str,
+        "Aggregation function to use when there are duplicate values, e.g., 'first', 'last', 'mean', 'sum', etc.",
+    ] = "first",
 ) -> pd.DataFrame:
     """
     Reshapes a long-format dataframe into a wide format. This process is often referred to as "pivoting" or "casting".
@@ -194,12 +204,15 @@ def reshape_long_to_wide(
 
 @tool
 def compare_dataframes(
-        df1: Annotated[Any, "First dataframe, used as the base for comparison"],
-        df2: Annotated[Any, "Second dataframe, to be compared with the first dataframe"],
-        key_column_df1: Annotated[str, "Name of the key column in df1 used to identify unique records"],
-        key_column_df2: Annotated[
-            Union[str, None], "Name of the key column in df2, if different from df1. If None, assumes same as df1"
-        ] = None,
+    df1: Annotated[Any, "First dataframe, used as the base for comparison"],
+    df2: Annotated[Any, "Second dataframe, to be compared with the first dataframe"],
+    key_column_df1: Annotated[
+        str, "Name of the key column in df1 used to identify unique records"
+    ],
+    key_column_df2: Annotated[
+        Union[str, None],
+        "Name of the key column in df2, if different from df1. If None, assumes same as df1",
+    ] = None,
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
     Compares two dataframes based on specified key columns and identifies the differences between them.
@@ -221,9 +234,13 @@ def compare_dataframes(
 
         # Ensure both dataframes have the specified key columns
         if key_column_df1 not in df1.columns:
-            raise ValueError(f"Key column '{key_column_df1}' does not exist in the first dataframe")
+            raise ValueError(
+                f"Key column '{key_column_df1}' does not exist in the first dataframe"
+            )
         if key_column_df2 not in df2.columns:
-            raise ValueError(f"Key column '{key_column_df2}' does not exist in the second dataframe")
+            raise ValueError(
+                f"Key column '{key_column_df2}' does not exist in the second dataframe"
+            )
 
         # Get sets of unique values in the key columns of both dataframes
         set_df1 = set(df1[key_column_df1])
@@ -247,3 +264,50 @@ def compare_dataframes(
     except Exception as e:
         logger.error(f"Error in compare_dataframes: {str(e)}")
         raise
+
+
+@tool
+def stack_dataframes(
+    dataframes: Annotated[List[Any], "List of DataFrames to be vertically stacked"],
+    equivalent_columns: Annotated[
+        Optional[Dict[str, List[str]]],
+        "Optional: Dictionary of equivalent column names across different DataFrames",
+    ] = None,
+) -> pd.DataFrame:
+    """
+    Vertically concatenates multiple DataFrames, similar to a SQL UNION operation.
+
+    Use cases:
+    - Combining data from multiple periods or sources with similar structures, such as employee information tables from different years.
+
+    Note:
+    - equivalent_columns:
+      Keys are the standard column names, and values are lists of equivalent names.
+      This allows the function to identify and standardize columns with different names but the same semantic meaning across DataFrames.
+      If not provided or set to None, the function will use the original column names without any renaming.
+
+    Output:
+    Returns a pandas DataFrame containing the vertically stacked data from all input DataFrames.
+    """
+    if len(dataframes) < 2:
+        raise ValueError("至少需要两个 DataFrame 来执行叠加操作")
+
+    result_dfs = []
+
+    for df_name, df in dataframes:
+
+        temp_df = df.copy()
+
+        if equivalent_columns:
+            for standard_col, equiv_cols in equivalent_columns.items():
+                for equiv_col in equiv_cols:
+                    if equiv_col in temp_df.columns:
+                        temp_df.rename(columns={equiv_col: standard_col}, inplace=True)
+
+        temp_df["source_table"] = df_name
+
+        result_dfs.append(temp_df)
+
+    result_df = pd.concat(result_dfs, ignore_index=True)
+
+    return result_df

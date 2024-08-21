@@ -81,9 +81,7 @@ def display_workflow():
             col1, col2 = st.columns([1, 1])
 
             with col1:
-                image = Image.open(
-                    "frontend/assets/table_operation_workflow.png"
-                )
+                image = Image.open("frontend/assets/table_operation_workflow.png")
                 st.image(image, caption="智能数据整理流程图", use_column_width=True)
 
             with col2:
@@ -162,7 +160,7 @@ def display_loaded_dataframes():
         with st.expander(f"数据集: {name}"):
             st.write(f"形状: {info['shape']}")
             st.write("列名及数据类型:")
-            for col, dtype in info['dtypes'].items():
+            for col, dtype in info["dtypes"].items():
                 st.write(f"  - {col}: {dtype}")
 
 
@@ -229,8 +227,18 @@ def display_assistant_response(container, result):
                 st.session_state.operation_steps = result.get("operation", [])
                 for i, step in enumerate(st.session_state.operation_steps, 1):
                     st.markdown(f"步骤 {i}: {step['tool_name']}")
-                full_message = message + "\n" + "\n".join(
-                    [f"步骤 {i}: {step['tool_name']}" for i, step in enumerate(st.session_state.operation_steps, 1)])
+                full_message = (
+                    message
+                    + "\n"
+                    + "\n".join(
+                        [
+                            f"步骤 {i}: {step['tool_name']}"
+                            for i, step in enumerate(
+                                st.session_state.operation_steps, 1
+                            )
+                        ]
+                    )
+                )
                 st.session_state.conversation_history.append(
                     {"role": "assistant", "content": full_message}
                 )
@@ -250,7 +258,7 @@ def display_operation_result():
         st.markdown('<h2 class="section-title">操作结果</h2>', unsafe_allow_html=True)
         with st.container(border=True):
             for i, step in enumerate(st.session_state.operation_steps, 1):
-                output_df_names = step['output_df_names']
+                output_df_names = step["output_df_names"]
                 for df_name in output_df_names:
                     if df_name in st.session_state.workflow.dataframes:
                         df = st.session_state.workflow.dataframes[df_name]

@@ -9,12 +9,6 @@ from langchain_core.tools import tool
 from backend.data_processing.table_operation.table_operation_models import (
     AssistantResponse,
 )
-from backend.data_processing.table_operation.table_operations import (
-    merge_dataframes,
-    reshape_wide_to_long,
-    reshape_long_to_wide,
-    compare_dataframes,
-)
 from utils.llm_tools import LanguageModelChain, init_language_model
 
 # 初始化日志记录
@@ -48,7 +42,7 @@ SYSTEM_MESSAGE = """
 6. 在生成 tool_args 时，使用环境中的原始表格名称或前面步骤的输出作为输入。
 
 7. 对于 output_df_names：
-   a. output_df_names 应该提供有意义的名称，因为它可能用作用户下载时的文件名称一部分。
+   a. output_df_names 应该是能体现任务意图且用户友好的名称，因为它会作为用户下载时的文件名称。
    b. 某些工具（如 compare_dataframes）可能输出多个 DataFrame，因此使用列表来存储输出名称。
 
 8. 在选择操作和提供建议时，充分考虑每个表格的数据类型信息。
@@ -112,7 +106,7 @@ def get_tools_description(tools: List[tool]) -> str:
     return "\n".join(descriptions)
 
 
-def create_dataframe_assistant() -> LanguageModelChain:
+def create_dataframe_assistant():
     """
     创建 DataFrame 操作助手。
 
@@ -127,11 +121,11 @@ def create_dataframe_assistant() -> LanguageModelChain:
 
 
 def process_user_query(
-        assistant_chain: LanguageModelChain,
-        user_input: str,
-        dataframe_info: Dict[str, Dict],
-        tools: List[tool],
-        session_id: Optional[str] = None,
+    assistant_chain,
+    user_input: str,
+    dataframe_info: Dict[str, Dict],
+    tools: List[tool],
+    session_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     处理用户查询并返回结果。

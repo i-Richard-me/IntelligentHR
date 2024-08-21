@@ -8,12 +8,7 @@ from backend.data_processing.table_operation.table_operation_core import (
     process_user_query,
     create_langfuse_handler,
 )
-from backend.data_processing.table_operation.table_operations import (
-    merge_dataframes,
-    reshape_wide_to_long,
-    reshape_long_to_wide,
-    compare_dataframes,
-)
+from backend.data_processing.table_operation.table_operations import *
 
 # 配置日志
 logging.basicConfig(
@@ -34,10 +29,11 @@ class DataFrameWorkflow:
         self.assistant_chain = create_dataframe_assistant()
         self.dataframes: Dict[str, pd.DataFrame] = {}
         self.available_tools = [
-            merge_dataframes,
+            join_dataframes,
             reshape_wide_to_long,
             reshape_long_to_wide,
             compare_dataframes,
+            stack_dataframes,
         ]
         self.conversation_history: List[Dict[str, str]] = []
         self.current_state: str = "initial"
@@ -127,7 +123,18 @@ class DataFrameWorkflow:
 
             logger.info(f"Executing step: {tool_name} with args: {tool_args}")
 
-            self._replace_dataframe_names_with_objects(tool_args)
+            if tool_name == "stack_dataframes":
+                # 特殊处理 stack_dataframes
+                dataframes_with_names = []
+                for df_name in tool_args.get("dataframes", []):
+                    if df_name in self.dataframes:
+                        dataframes_with_names.append(
+                            (df_name, self.dataframes[df_name])
+                        )
+                tool_args["dataframes"] = dataframes_with_names
+            else:
+                self._replace_dataframe_names_with_objects(tool_args)
+
             tool_function = self._get_tool_function(tool_name)
 
             if tool_function:
@@ -137,7 +144,9 @@ class DataFrameWorkflow:
 
                     # 如果是最后一步，保存结果
                     if step == operation_steps[-1]:
-                        final_results = self._format_final_results(step_result, output_df_names)
+                        final_results = self._format_final_results(
+                            step_result, output_df_names
+                        )
                 except Exception as e:
                     logger.error(f"Error executing tool: {str(e)}")
                     raise ValueError(f"执行操作时发生错误: {str(e)}")
@@ -189,7 +198,9 @@ class DataFrameWorkflow:
             (tool for tool in self.available_tools if tool.name == tool_name), None
         )
 
-    def _process_step_result(self, step_result: Any, output_df_names: List[str]) -> None:
+    def _process_step_result(
+        self, step_result: Any, output_df_names: List[str]
+    ) -> None:
         """
         处理单个步骤的执行结果。
 
@@ -203,11 +214,17 @@ class DataFrameWorkflow:
                 logger.info(f"Stored result DataFrame '{name}' with shape {df.shape}")
         elif isinstance(step_result, pd.DataFrame) and len(output_df_names) == 1:
             self.dataframes[output_df_names[0]] = step_result
-            logger.info(f"Stored result DataFrame '{output_df_names[0]}' with shape {step_result.shape}")
+            logger.info(
+                f"Stored result DataFrame '{output_df_names[0]}' with shape {step_result.shape}"
+            )
         else:
-            logger.warning(f"Unexpected step result type or mismatch with output names: {type(step_result)}")
+            logger.warning(
+                f"Unexpected step result type or mismatch with output names: {type(step_result)}"
+            )
 
-    def _format_final_results(self, final_result: Any, output_df_names: List[str]) -> Dict[str, Any]:
+    def _format_final_results(
+        self, final_result: Any, output_df_names: List[str]
+    ) -> Dict[str, Any]:
         """
         格式化最终结果以供返回。
 
@@ -219,10 +236,7 @@ class DataFrameWorkflow:
             格式化后的结果字典。
         """
         if isinstance(final_result, tuple) and len(final_result) == 2:
-            return {
-                "result_df1": final_result[0],
-                "result_df2": final_result[1]
-            }
+            return {"result_df1": final_result[0], "result_df2": final_result[1]}
         elif isinstance(final_result, pd.DataFrame):
             return {"result_df": final_result}
         else:
