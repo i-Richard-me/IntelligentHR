@@ -21,23 +21,19 @@ def load_entity_data(file_path: str) -> pd.DataFrame:
     return pd.read_csv(file_path)
 
 
-def create_entity_documents(
-    entity_data: pd.DataFrame, entity_type: str
-) -> List[Document]:
+def create_entity_documents(entity_data: pd.DataFrame) -> List[Document]:
     """
     从实体数据创建文档列表。
 
     Args:
         entity_data (pd.DataFrame): 包含实体数据的DataFrame。
-        entity_type (str): 实体类型（如 "company" 或 "school"）。
 
     Returns:
         List[Document]: 实体文档列表。
     """
-    name_column = f"{entity_type}_name"
     return [
         Document(
-            page_content=str(row[name_column]),
+            page_content=str(row.iloc[0]),
             metadata={
                 "standard_name": str(row["standard_name"]),
             },
@@ -47,14 +43,14 @@ def create_entity_documents(
 
 
 def initialize_vector_store(
-    use_demo: bool, entity_type: str, collection_name: str
+    use_demo: bool, csv_path: str, collection_name: str
 ) -> Milvus:
     """
     初始化或加载向量存储。
 
     Args:
         use_demo (bool): 是否使用演示数据。
-        entity_type (str): 实体类型（如 "company" 或 "school"）。
+        csv_path (str): CSV文件的路径。
         collection_name (str): Milvus集合名称。
 
     Returns:
@@ -65,9 +61,8 @@ def initialize_vector_store(
     connection_args = {"host": "localhost", "port": "19530", "db_name": "data_cleaning"}
 
     if use_demo:
-        csv_path = f"data/datasets/{entity_type}.csv"
         entity_data = load_entity_data(csv_path)
-        documents = create_entity_documents(entity_data, entity_type)
+        documents = create_entity_documents(entity_data)
         return Milvus.from_documents(
             documents=documents,
             embedding=embedding_model,
