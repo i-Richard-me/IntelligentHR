@@ -31,7 +31,17 @@ class EntityVerificationWorkflow:
     实体验证工作流程类，用于处理和验证实体名称。
     """
 
-    def __init__(self, retriever, entity_type: str, validation_instructions: str, analysis_instructions: str, verification_instructions: str):
+    def __init__(
+        self,
+        retriever,
+        entity_type: str,
+        validation_instructions: str,
+        analysis_instructions: str,
+        verification_instructions: str,
+        skip_validation: bool = False,
+        skip_search: bool = False,
+        skip_retrieval: bool = False,
+    ):
         """
         初始化实体验证工作流程。
 
@@ -41,90 +51,75 @@ class EntityVerificationWorkflow:
             validation_instructions (str): 输入验证的补充说明。
             analysis_instructions (str): 搜索结果分析的补充说明。
             verification_instructions (str): 实体验证的补充说明。
+            skip_validation (bool): 是否跳过输入验证步骤。
+            skip_search (bool): 是否跳过网络搜索和搜索结果分析步骤。
+            skip_retrieval (bool): 是否跳过向量检索和名称匹配评估步骤。
         """
         self.retriever = retriever
         self.entity_type = entity_type
         self.validation_instructions = validation_instructions
         self.analysis_instructions = analysis_instructions
         self.verification_instructions = verification_instructions
+        self.skip_validation = skip_validation
+        self.skip_search = skip_search
+        self.skip_retrieval = skip_retrieval
         self.search_tools = SearchTools()
 
     def run(self, user_query: str, session_id: Optional[str] = None) -> Dict[str, Any]:
-        """
-        执行完整的实体验证工作流程。
-
-        Args:
-            user_query (str): 用户输入的实体名称查询。
-            session_id (Optional[str]): 会话ID，用于跟踪整个工作流程。
-
-        Returns:
-            Dict[str, Any]: 包含验证结果的字典。
-        """
         if session_id is None:
             session_id = str(uuid4())
 
         result = self._initialize_result()
 
-        # 步骤1: 验证输入
-        langfuse_handler = create_langfuse_handler(session_id, "input_validation")
-        result["is_valid"] = self._validate_input(user_query, langfuse_handler)
-        if not result["is_valid"]:
-            return self._generate_output(result, user_query)
+        if not self.skip_validation:
+            langfuse_handler = create_langfuse_handler(session_id, "input_validation")
+            result["is_valid"] = self._validate_input(user_query, langfuse_handler)
+            if not result["is_valid"]:
+                return self._generate_output(result, user_query)
+        else:
+            result["is_valid"] = True
 
-        # 步骤2和3: 网络搜索和分析搜索结果
-        search_results = self._perform_web_search(user_query)
-        langfuse_handler = create_langfuse_handler(session_id, "search_analysis")
-        identified_entity, recognition_status = self._analyze_search_results(
-            user_query, search_results, langfuse_handler
-        )
-        result["identified_entity_name"] = identified_entity
-        result["recognition_status"] = recognition_status
-
-        if recognition_status == "known":
-            # 步骤4和5: 直接检索和评估名称匹配
-            retrieval_results = self._direct_retrieve(identified_entity or user_query)
-            result["retrieved_entity_name"] = retrieval_results[0].page_content
-            langfuse_handler = create_langfuse_handler(session_id, "name_verification")
-            result["verification_status"] = self._evaluate_match(
-                user_query,
-                result["retrieved_entity_name"],
-                search_results,
-                langfuse_handler,
+        if not self.skip_search:
+            search_results = self._perform_web_search(user_query)
+            langfuse_handler = create_langfuse_handler(session_id, "search_analysis")
+            identified_entity, recognition_status = self._analyze_search_results(
+                user_query, search_results, langfuse_handler
             )
+            result["identified_entity_name"] = identified_entity
+            result["recognition_status"] = recognition_status
+        else:
+            result["identified_entity_name"] = user_query
+            result["recognition_status"] = "skipped"
 
-            if result["verification_status"] == "verified":
-                return self._generate_output(result, user_query, retrieval_results)
-
-        # 如果未验证或未知，进行替代搜索
-        alternative_results = self._perform_alternative_search(user_query)
-        langfuse_handler = create_langfuse_handler(
-            session_id, "alternative_search_analysis"
-        )
-        identified_entity, recognition_status = self._analyze_search_results(
-            user_query, alternative_results, langfuse_handler
-        )
-        result["identified_entity_name"] = identified_entity
-        result["recognition_status"] = recognition_status
-
-        if recognition_status == "known":
-            retrieval_results = self._direct_retrieve(identified_entity or user_query)
-            result["retrieved_entity_name"] = retrieval_results[0].page_content
-            langfuse_handler = create_langfuse_handler(
-                session_id, "final_name_verification"
+        if not self.skip_retrieval and result["recognition_status"] in [
+            "known",
+            "skipped",
+        ]:
+            retrieval_results = self._direct_retrieve(
+                result["identified_entity_name"] or user_query
             )
-            result["verification_status"] = self._evaluate_match(
-                user_query,
-                result["retrieved_entity_name"],
-                alternative_results,
-                langfuse_handler,
-            )
+            if retrieval_results:
+                result["retrieved_entity_name"] = retrieval_results[0].page_content
+                langfuse_handler = create_langfuse_handler(
+                    session_id, "name_verification"
+                )
+                result["verification_status"] = self._evaluate_match(
+                    user_query,
+                    result["retrieved_entity_name"],
+                    search_results if not self.skip_search else "",
+                    langfuse_handler,
+                )
+            else:
+                result["verification_status"] = "unverified"
+        else:
+            result["verification_status"] = "not_applicable"
 
-        return self._generate_output(result, user_query, retrieval_results)
+        return self._generate_output(result, user_query)
 
     def _initialize_result(self) -> Dict[str, Any]:
         """初始化结果字典"""
         return {
-            "is_valid": False,
+            "is_valid": True if self.skip_validation else False,
             "identified_entity_name": None,
             "recognition_status": "",
             "retrieved_entity_name": "",
@@ -141,9 +136,9 @@ class EntityVerificationWorkflow:
             {
                 "user_query": user_query,
                 "entity_type": self.entity_type,
-                "validation_instructions": self.validation_instructions
+                "validation_instructions": self.validation_instructions,
             },
-            config={"callbacks": [langfuse_handler]}
+            config={"callbacks": [langfuse_handler]},
         )
         return validation_result["is_valid"]
 
@@ -162,12 +157,16 @@ class EntityVerificationWorkflow:
                 "user_query": user_query,
                 "snippets": search_results,
                 "entity_type": self.entity_type,
-                "analysis_instructions": self.analysis_instructions
+                "analysis_instructions": self.analysis_instructions,
             },
             config={"callbacks": [langfuse_handler]},
         )
         return (
-            analysis_result["identified_entity"] if analysis_result["recognition_status"] == "known" else None,
+            (
+                analysis_result["identified_entity"]
+                if analysis_result["recognition_status"] == "known"
+                else None
+            ),
             analysis_result["recognition_status"],
         )
 
@@ -191,16 +190,11 @@ class EntityVerificationWorkflow:
                 "retrieved_name": retrieved_name,
                 "search_results": search_results,
                 "entity_type": self.entity_type,
-                "verification_instructions": self.verification_instructions
+                "verification_instructions": self.verification_instructions,
             },
             config={"callbacks": [langfuse_handler]},
         )
         return verified_result["verification_status"]
-
-    def _perform_alternative_search(self, user_query: str) -> str:
-        """执行替代搜索"""
-        print(f"---执行替代搜索（{self.entity_type}）---")
-        return self.search_tools.tavily_search(user_query)
 
     def _generate_output(
         self,
@@ -210,18 +204,16 @@ class EntityVerificationWorkflow:
     ) -> Dict[str, Any]:
         """生成最终输出结果"""
         print(f"---生成最终输出（{self.entity_type}）---")
-        if (
-            result["is_valid"]
-            and retrieval_results
-            and result["verification_status"] == "verified"
-        ):
-            result["final_entity_name"] = retrieval_results[0].metadata.get(
-                "standard_name",
-                retrieval_results[0].page_content
-            )
-        elif not result["is_valid"]:
+        if not result["is_valid"]:
             result["final_entity_name"] = "无效输入"
+        elif retrieval_results and result["verification_status"] == "verified":
+            result["final_entity_name"] = retrieval_results[0].metadata.get(
+                "standard_name", retrieval_results[0].page_content
+            )
+        elif result["identified_entity_name"]:
+            result["final_entity_name"] = result["identified_entity_name"]
         else:
-            result["final_entity_name"] = "未知"
+            result["final_entity_name"] = user_query
+
         print(f"---最终{self.entity_type}：{result['final_entity_name']}---")
         return result
