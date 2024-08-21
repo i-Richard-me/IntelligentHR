@@ -37,6 +37,8 @@ if "conversation_history" not in st.session_state:
     st.session_state.conversation_history = []
 if "session_id" not in st.session_state:
     st.session_state.session_id = str(uuid.uuid4())
+if "operation_steps" not in st.session_state:
+    st.session_state.operation_steps = []
 
 
 def main():
@@ -61,11 +63,9 @@ def display_info_message():
     """
     st.info(
         """
-    **🧮 智能数据整理**
+    智能数据整理工具利用大模型的语义理解能力，通过自然语言交互实现复杂的表格操作，简化数据处理流程。
 
-    智能数据整理是一个智能化的数据处理工具，利用大模型的语义理解能力，通过自然语言交互实现复杂的表格操作。
-
-    它能够理解并执行用户的自然语言指令，支持表格合并、数据重塑（宽转长、长转宽）和数据集比较等核心功能。同时提供实时结果预览和便捷的导出功能，大大简化了数据处理流程。
+    系统能够理解并执行用户的自然语言指令，支持表格合并、数据重塑（宽转长、长转宽）和数据集比较等功能，还能够处理需要多个步骤才能完成的复杂数据处理需求。
     
     适用于各类需要灵活处理和分析表格数据的场景，无需编程知识即可完成高级数据操作。
     """
@@ -77,7 +77,6 @@ def display_workflow():
     显示智能数据整理的工作流程。
     """
     with st.expander("📋 查看智能数据整理工作流程", expanded=False):
-
         with st.container(border=True):
             col1, col2 = st.columns([1, 1])
 
@@ -90,23 +89,28 @@ def display_workflow():
             with col2:
                 st.markdown(
                     """
-                    **1. 数据上传**
-                    支持CSV文件上传，自动识别和处理文件内容。
+                    1. **数据上传**
+                        
+                        支持CSV和Excel文件上传
                     
-                    **2. 自然语言指令输入**
-                    用户以对话方式输入数据处理需求，系统实时理解和反馈。
+                    2. **自然语言指令输入**
+                    
+                        用户以对话方式输入数据处理需求，支持描述复杂的多步骤操作需求
         
-                    **3. 智能操作执行**
-                    基于用户指令，自动选择并执行适当的数据处理工具函数。
-                    - 表格合并
-                    - 数据重塑（宽转长、长转宽）
-                    - 数据集比较
+                    3. **智能操作规划与执行**
+                    
+                        理解用户需求，自动规划所需操作步骤
+                        
+                        核心功能包括：
+                          * 表格合并
+                          * 数据重塑（宽转长、长转宽）
+                          * 数据集比较
+                        
+                        支持多步骤复杂操作的顺序执行
         
-                    **4. 结果预览与反馈**
-                    实时展示处理结果，支持进一步的修改和优化请求。
-        
-                    **5. 结果导出**
-                    提供Excel格式的导出选项。
+                    4. **结果预览与导出**
+                    
+                        实时展示每个处理步骤的结果，支持导出每个处理步骤的结果
                 """
                 )
 
@@ -158,7 +162,7 @@ def display_loaded_dataframes():
         with st.expander(f"数据集: {name}"):
             st.write(f"形状: {info['shape']}")
             st.write("列名及数据类型:")
-            for col, dtype in info["dtypes"].items():
+            for col, dtype in info['dtypes'].items():
                 st.write(f"  - {col}: {dtype}")
 
 
@@ -213,21 +217,26 @@ def display_assistant_response(container, result):
     """显示助手的响应并保存到对话历史。"""
     with container:
         with st.chat_message("assistant"):
-            if st.session_state.workflow.current_state == "need_more_info":
-                message = st.session_state.workflow.get_last_message()
+            if result["next_step"] == "need_more_info":
+                message = result.get("message", "需要更多信息来处理您的请求。")
                 st.markdown(message)
                 st.session_state.conversation_history.append(
                     {"role": "assistant", "content": message}
                 )
-            elif st.session_state.workflow.current_state == "ready":
-                message = "操作执行成功！"
+            elif result["next_step"] == "execute_operation":
+                message = "操作执行成功！以下是执行的步骤：\n"
                 st.markdown(message)
+                st.session_state.operation_steps = result.get("operation", [])
+                for i, step in enumerate(st.session_state.operation_steps, 1):
+                    st.markdown(f"步骤 {i}: {step['tool_name']}")
+                full_message = message + "\n" + "\n".join(
+                    [f"步骤 {i}: {step['tool_name']}" for i, step in enumerate(st.session_state.operation_steps, 1)])
                 st.session_state.conversation_history.append(
-                    {"role": "assistant", "content": message}
+                    {"role": "assistant", "content": full_message}
                 )
                 st.session_state.operation_result = result
-            elif st.session_state.workflow.current_state == "out_of_scope":
-                message = st.session_state.workflow.get_last_message()
+            elif result["next_step"] == "out_of_scope":
+                message = result.get("message", "抱歉，您的请求超出了我的处理范围。")
                 st.markdown(message)
                 st.session_state.conversation_history.append(
                     {"role": "assistant", "content": message}
@@ -240,42 +249,26 @@ def display_operation_result():
         result = st.session_state.operation_result
         st.markdown('<h2 class="section-title">操作结果</h2>', unsafe_allow_html=True)
         with st.container(border=True):
-            if "result_df1" in result and "result_df2" in result:
-                display_dual_dataframe_result(result)
-            elif "result_df" in result:
-                display_single_dataframe_result(result)
+            for i, step in enumerate(st.session_state.operation_steps, 1):
+                output_df_names = step['output_df_names']
+                for df_name in output_df_names:
+                    if df_name in st.session_state.workflow.dataframes:
+                        df = st.session_state.workflow.dataframes[df_name]
+                        st.markdown(f"#### {df_name}")
+                        st.caption(f"*由步骤 {i}: {step['tool_name']} 生成*")
+                        st.dataframe(df)
+                        provide_csv_download(df, df_name)
+                st.markdown("---")
 
 
-def display_dual_dataframe_result(result):
-    """显示双数据框结果。"""
-    tab1, tab2 = st.tabs(["结果1", "结果2"])
-    with tab1:
-        st.dataframe(result["result_df1"])
-    with tab2:
-        st.dataframe(result["result_df2"])
-
-    provide_excel_download(result["result_df1"], result["result_df2"])
-
-
-def display_single_dataframe_result(result):
-    """显示单数据框结果。"""
-    st.dataframe(result["result_df"])
-    provide_excel_download(result["result_df"])
-
-
-def provide_excel_download(*dataframes):
-    """提供Excel格式下载选项。"""
-    buffer = io.BytesIO()
-    with pd.ExcelWriter(buffer, engine="xlsxwriter") as writer:
-        for i, df in enumerate(dataframes, 1):
-            df.to_excel(writer, sheet_name=f"结果{i}", index=False)
-    buffer.seek(0)
-
+def provide_csv_download(df: pd.DataFrame, df_name: str):
+    """为单个DataFrame提供CSV格式下载选项。"""
+    csv = df.to_csv(index=False)
     st.download_button(
-        label="下载结果Excel",
-        data=buffer,
-        file_name="operation_result.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        label=f"下载 {df_name} (CSV)",
+        data=csv,
+        file_name=f"{df_name}.csv",
+        mime="text/csv",
     )
 
 
