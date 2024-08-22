@@ -16,7 +16,7 @@ from backend.data_processing.data_cleaning.data_processor import (
     get_entity_retriever,
 )
 from backend.data_processing.data_cleaning.verification_workflow import (
-    EntityVerificationWorkflow,
+    EntityVerificationWorkflow, ProcessingStatus
 )
 
 # Streamlit 页面配置
@@ -84,11 +84,11 @@ ENTITY_TYPES = {
 
 
 def initialize_workflow(
-    use_demo: bool,
-    entity_type: str,
-    skip_validation: bool,
-    skip_search: bool,
-    skip_retrieval: bool,
+        use_demo: bool,
+        entity_type: str,
+        skip_validation: bool,
+        skip_search: bool,
+        skip_retrieval: bool,
 ) -> EntityVerificationWorkflow:
     """
     初始化实体验证工作流。
@@ -130,41 +130,63 @@ def main():
     # 显示工作流程
     display_workflow()
 
-    use_demo = st.checkbox(
-        "使用演示数据",
-        value=False,
-        help="勾选此项将使用预设的演示数据，否则将使用已存在的数据库数据。",
-    )
+    # 任务设置部分
+    st.markdown('<h2 class="section-title">任务设置</h2>', unsafe_allow_html=True)
 
-    # 选择实体类型
-    entity_type = st.selectbox("选择实体类型", list(ENTITY_TYPES.keys()))
+    with st.container(border=True):
+        st.markdown("##### 数据清洗设置")
 
-    # 新增：工作流程选项
-    st.subheader("工作流程选项")
-    skip_validation = st.checkbox(
-        "跳过输入验证", value=False, help="如果确信输入数据有效，可以跳过验证步骤。"
-    )
-    skip_search = st.checkbox(
-        "跳过网络搜索",
-        value=False,
-        help="对于知名实体，可以直接进行向量检索，跳过网络搜索步骤。",
-    )
-    skip_retrieval = st.checkbox(
-        "跳过向量检索",
-        value=False,
-        help="如果没有历史数据或处理新实体，可以跳过向量检索步骤。",
-    )
+        # 使用更友好的业务语言
+        entity_type = st.radio(
+            "选择要清洗的数据类型",
+            ["公司名称", "学校名称"],
+            help="选择您需要标准化的数据类型。"
+        )
+
+        # 工作流程选项
+        st.markdown("##### 清洗流程设置")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            skip_validation = st.checkbox(
+                "跳过输入验证",
+                value=False,
+                help="如果确信输入数据有效，可以跳过验证步骤。"
+            )
+        with col2:
+            skip_search = st.checkbox(
+                "跳过网络搜索",
+                value=False,
+                help="对于知名实体，可以直接进行数据库匹配，跳过网络搜索步骤。"
+            )
+        with col3:
+            skip_retrieval = st.checkbox(
+                "跳过数据库匹配",
+                value=False,
+                help="如果处理全新数据，可以跳过与已有数据库的匹配步骤。"
+            )
+
+        # 将演示数据选项放在最后
+        use_demo = st.checkbox(
+            "使用演示数据",
+            value=False,
+            help="勾选此项将使用预设的示例数据，否则将使用实际数据库数据。"
+        )
 
     # 初始化工作流
     workflow = initialize_workflow(
         use_demo, entity_type, skip_validation, skip_search, skip_retrieval
     )
 
-    # 单个实体验证
-    single_entity_verification(workflow, entity_type)
+    st.markdown('<h2 class="section-title">数据清洗</h2>', unsafe_allow_html=True)
 
-    # 批量处理
-    batch_processing(workflow, entity_type)
+    with st.container(border=True):
+        tab1, tab2 = st.tabs(["单个样本测试", "批量数据清洗"])
+
+        with tab1:
+            single_entity_verification(workflow, entity_type)
+
+        with tab2:
+            batch_processing(workflow, entity_type)
 
     # 页脚
     show_footer()
@@ -189,7 +211,6 @@ def display_workflow():
     显示自动化数据清洗工具的工作流程。
     """
     with st.expander("🏢 查看自动化数据清洗工作流程", expanded=False):
-
         with st.container(border=True):
             col1, col2 = st.columns([1, 1])
 
@@ -230,10 +251,6 @@ def single_entity_verification(workflow: EntityVerificationWorkflow, entity_type
         workflow (EntityVerificationWorkflow): 实体名称标准化的工作流对象。
         entity_type (str): 实体类型。
     """
-    st.markdown(
-        f'<h2 class="section-title">单个{entity_type}标准化</h2>',
-        unsafe_allow_html=True,
-    )
     with st.form(key="single_entity_form"):
         entity_name = st.text_input(
             f"输入{entity_type}",
@@ -248,46 +265,30 @@ def single_entity_verification(workflow: EntityVerificationWorkflow, entity_type
 
 
 def display_single_result(result: Dict[str, Any], entity_type: str):
-    """
-    显示单个实体名称标准化的结果。
-
-    Args:
-        result (Dict[str, Any]): 标准化结果字典。
-        entity_type (str): 实体类型。
-    """
     st.success("数据处理完成！")
     col1, col2 = st.columns(2)
     with col1:
         st.metric(f"最终{entity_type}", result["final_entity_name"])
     with col2:
-        if not result["is_valid"]:
-            status = "无效输入"
-        elif result["verification_status"] != "not_applicable":
-            if result["verification_status"] == "verified":
-                status = "已验证"
-            elif result["verification_status"] == "unverified":
-                status = "未验证"
-            else:
-                status = "验证失败"
-        elif result["recognition_status"] == "known":
-            status = "已识别"
-        elif result["recognition_status"] == "unknown":
-            status = "未识别"
-        elif result["recognition_status"] == "skipped":
-            status = "跳过识别"
-        else:
-            status = "未知"
-        st.metric("标准化状态", status)
+        st.metric("标准化状态", result["status"].value)
 
     with st.expander("查看详细信息"):
-        st.json(result)
+        display_info = {
+            "原始输入": result["original_input"],
+            "最终实体名称": result["final_entity_name"],
+            "标准化状态": result["status"].value,
+            "是否有效输入": result["is_valid"],
+            "识别的实体名称": result.get("identified_entity_name"),
+            "检索的实体名称": result.get("retrieved_entity_name"),
+        }
+        st.json(display_info)
 
-    if status == "无效输入":
+    if result["status"] == ProcessingStatus.INVALID_INPUT:
         st.error("输入被判定为无效，请检查并重新输入。")
-    elif status in ["未验证", "验证失败", "未识别", "未知"]:
+    elif result["status"] in [ProcessingStatus.UNIDENTIFIED, ProcessingStatus.UNVERIFIED]:
         st.warning("此结果可能需要进一步确认。")
-    elif status == "跳过识别":
-        st.info("网络搜索步骤被跳过。如需更高准确度，请考虑启用完整识别流程。")
+    elif result["status"] == ProcessingStatus.VALID_INPUT:
+        st.info("输入被判定为有效，但未进行进一步处理。如需更高准确度，请考虑启用搜索和检索步骤。")
 
 
 def batch_processing(workflow: EntityVerificationWorkflow, entity_type: str):
@@ -298,28 +299,23 @@ def batch_processing(workflow: EntityVerificationWorkflow, entity_type: str):
         workflow (EntityVerificationWorkflow): 实体名称标准化工作流对象。
         entity_type (str): 实体类型。
     """
-    st.markdown(
-        f'<h2 class="section-title">批量{entity_type}标准化</h2>',
-        unsafe_allow_html=True,
+    uploaded_file = st.file_uploader(
+        f"上传CSV文件（包含{entity_type}列）", type="csv"
     )
-    with st.container(border=True):
-        uploaded_file = st.file_uploader(
-            f"上传CSV文件（包含{entity_type}列）", type="csv"
-        )
-        if uploaded_file is not None:
-            df = pd.read_csv(uploaded_file)
-            st.write("预览上传的数据：")
-            st.dataframe(df.head())
-            if st.button("开始批量处理"):
-                process_batch(df, workflow, entity_type)
+    if uploaded_file is not None:
+        df = pd.read_csv(uploaded_file)
+        st.write("预览上传的数据：")
+        st.dataframe(df.head())
+        if st.button("开始批量处理"):
+            process_batch(df, workflow, entity_type)
 
-        # 显示处理结果（如果有）
-        if st.session_state.batch_results_df is not None:
-            display_batch_results(st.session_state.batch_results_df, entity_type)
+    # 显示处理结果（如果有）
+    if st.session_state.batch_results_df is not None:
+        display_batch_results(st.session_state.batch_results_df, entity_type)
 
 
 def process_batch(
-    df: pd.DataFrame, workflow: EntityVerificationWorkflow, entity_type: str
+        df: pd.DataFrame, workflow: EntityVerificationWorkflow, entity_type: str
 ):
     """
     处理批量实体数据。
@@ -349,83 +345,31 @@ def process_batch(
 
 
 def display_batch_results(result_df: pd.DataFrame, entity_type: str):
-    """
-    显示批量处理结果。
-
-    Args:
-        result_df (pd.DataFrame): 包含处理结果的DataFrame。
-        entity_type (str): 实体类型。
-    """
     st.success("批量处理完成！")
 
     # 计算统计数据
-    total_count = len(result_df)
-    verified_count = (result_df["verification_status"] == "verified").sum()
-    unverified_count = (result_df["verification_status"] == "unverified").sum()
-    identified_count = (
-        (result_df["recognition_status"] == "known")
-        & (result_df["verification_status"] == "not_applicable")
-    ).sum()
-    unidentified_count = (
-        (result_df["recognition_status"] == "unknown")
-        & (result_df["verification_status"] == "not_applicable")
-    ).sum()
-    skipped_recognition_count = (result_df["recognition_status"] == "skipped").sum()
-    invalid_count = (~result_df["is_valid"]).sum()
+    status_counts = result_df["status"].value_counts()
 
     # 显示简化的结果统计
     st.subheader("处理结果统计")
-    stats_df = pd.DataFrame(
-        {
-            "类别": [
-                "总数",
-                "已验证",
-                "未验证",
-                "已识别（未验证）",
-                "未识别",
-                "跳过识别",
-                "无效输入",
-            ],
-            "数量": [
-                total_count,
-                verified_count,
-                unverified_count,
-                identified_count,
-                unidentified_count,
-                skipped_recognition_count,
-                invalid_count,
-            ],
-        }
-    )
+    stats_df = pd.DataFrame({
+        "类别": [status.value for status in ProcessingStatus],
+        "数量": [status_counts.get(status, 0) for status in ProcessingStatus]
+    })
+    stats_df["占比"] = (stats_df["数量"] / len(result_df) * 100).round(2).astype(str) + '%'
     st.table(stats_df.set_index("类别"))
 
     # 显示结果表格
     st.subheader("详细结果")
-    st.dataframe(
-        result_df[
-            [
-                "原始输入",
-                "final_entity_name",
-                "recognition_status",
-                "verification_status",
-                "is_valid",
-            ]
-        ]
-    )
+    st.dataframe(result_df[["原始输入", "final_entity_name", "status"]])
 
     # 提供建议
-    if unverified_count > 0 or unidentified_count > 0 or invalid_count > 0:
+    if ProcessingStatus.UNVERIFIED in status_counts or ProcessingStatus.UNIDENTIFIED in status_counts:
         st.warning(
-            f"有 {unverified_count} 个实体未验证，{unidentified_count} 个未识别，{invalid_count} 个无效输入。建议手动检查这些结果。"
-        )
-    if skipped_recognition_count > 0:
+            f"有 {status_counts.get(ProcessingStatus.UNVERIFIED, 0) + status_counts.get(ProcessingStatus.UNIDENTIFIED, 0)} 个实体未能完全验证。建议手动检查这些结果。")
+    if ProcessingStatus.VALID_INPUT in status_counts:
         st.info(
-            f"有 {skipped_recognition_count} 个实体跳过了识别步骤。如需更高准确度，请考虑启用完整识别流程。"
-        )
-    if identified_count > 0:
-        st.info(
-            f"有 {identified_count} 个实体已识别但未经过验证。如需更高准确度，请考虑启用向量检索验证步骤。"
-        )
+            f"有 {status_counts.get(ProcessingStatus.VALID_INPUT, 0)} 个实体仅进行了输入验证。如需更高准确度，请考虑启用完整识别流程。")
 
     # 提供下载选项
     csv = result_df.to_csv(index=False)
