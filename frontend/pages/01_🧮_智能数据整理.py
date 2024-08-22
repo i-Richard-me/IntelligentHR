@@ -48,6 +48,7 @@ def main():
 
     display_info_message()
     display_workflow()
+    display_user_guide()
 
     handle_file_upload()
     if st.session_state.files_uploaded:
@@ -111,6 +112,86 @@ def display_workflow():
                         实时展示每个处理步骤的结果，支持导出每个处理步骤的结果
                 """
                 )
+
+
+def display_user_guide():
+    """
+    使用选项卡展示用户指南，介绍支持的操作和如何描述需求。
+    """
+    with st.expander("📘 功能介绍与需求描述指南", expanded=False):
+        st.markdown("""
+        本工具支持多种数据处理操作。描述需求时，尽量指明操作的表格、期望的操作类型和关键信息，以提供AI处理的成功率。
+
+        每个选项卡包含了特定操作类型的说明和示例。
+        """)
+
+        tab1, tab2, tab3, tab4, tab5 = st.tabs([
+            "信息匹配", "数据转置", "数据对比", "垂直合并", "复杂分析"
+        ])
+
+        with tab1:
+            st.markdown("""
+            ### 信息匹配
+            将两个或多个相关的表格中的信息进行匹配，类似于Excel中的VLOOKUP函数。
+
+            **功能说明：**
+            这个功能允许您将不同表格中的信息基于共同字段（如员工ID）进行匹配和合并，从而创建一个更全面的数据视图。
+
+            **示例查询：**
+            - "将员工薪资匹配到基本信息表"
+            - "把培训记录表中的信息添加到员工主表中"
+            """)
+
+        with tab2:
+            st.markdown("""
+            ### 数据转置
+            调整数据的结构，包括将宽表格转为长表格（多列转一列），或将长表格转为宽表格（一列转多列）
+
+            **功能说明：**
+            这个功能帮助您重新组织数据结构，使其更适合特定的分析需求或报告格式。
+
+            **示例查询：**
+            - "将员工月度考勤表从每月一列的格式转换为每个月份单独一行的格式"
+            - "把多年绩效结果变成一列"
+            """)
+
+        with tab3:
+            st.markdown("""
+            ### 数据对比
+            比较两个表格中指定信息的一致性或差异。
+
+            **功能说明：**
+            这个功能允许您对比两个表格中的特定字段，找出不一致或有差异的记录。
+
+            **示例查询：**
+            - "找出培训表中哪些员工不在在职花名册中"
+            - "对比两个表中员工是否一致"
+            """)
+
+        with tab4:
+            st.markdown("""
+            ### 垂直合并
+            将多个结构相似的表格垂直合并成一个大表。
+
+            **功能说明：**
+            这个功能帮助您将多个独立但结构相似的表格（如不同部门的报表或不同时期的数据）合并成一个综合表格。
+
+            **示例查询：**
+            - "垂直合并三个部门的员工名单"
+            """)
+
+        with tab5:
+            st.markdown("""
+            ### 复杂分析
+            涉及多个步骤或多种操作类型的复杂数据处理需求。
+
+            **功能说明：**
+            这个功能允许您组合多个基本操作，执行更复杂的数据分析任务。系统将引导您逐步完成整个过程。
+
+            **示例查询：**
+            - "首先把考勤信息匹配到员工信息表，然后将结果按月份转置为每个员工一行的格式"
+            - "先垂直合并各部门的员工信息表，然后再匹配上员工绩效"
+            """)
 
 
 def handle_file_upload():
@@ -241,16 +322,16 @@ def display_assistant_response(container, result):
                 for i, step in enumerate(st.session_state.operation_steps, 1):
                     st.markdown(f"步骤 {i}: {step['tool_name']}")
                 full_message = (
-                    message
-                    + "\n"
-                    + "\n".join(
-                        [
-                            f"步骤 {i}: {step['tool_name']}"
-                            for i, step in enumerate(
-                                st.session_state.operation_steps, 1
-                            )
-                        ]
+                        message
+                        + "\n"
+                        + "\n".join(
+                    [
+                        f"步骤 {i}: {step['tool_name']}"
+                        for i, step in enumerate(
+                        st.session_state.operation_steps, 1
                     )
+                    ]
+                )
                 )
                 st.session_state.conversation_history.append(
                     {"role": "assistant", "content": full_message}
