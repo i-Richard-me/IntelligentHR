@@ -128,7 +128,6 @@ def handle_file_upload():
                 if file_extension == "csv":
                     df = pd.read_csv(uploaded_file)
                 elif file_extension in ["xlsx", "xls"]:
-                    # 读取Excel文件的所有sheet
                     xls = pd.ExcelFile(uploaded_file)
                     sheet_names = xls.sheet_names
                     if len(sheet_names) > 1:
@@ -145,23 +144,37 @@ def handle_file_upload():
 
                 df_name = uploaded_file.name.split(".")[0]
                 st.session_state.workflow.load_dataframe(df_name, df)
-                st.success(f"成功加载数据集: {df_name}")
 
             st.session_state.files_uploaded = True
 
+        # 在文件上传的 container 中显示数据预览
+        if st.session_state.files_uploaded:
+            st.markdown("---")
+            st.markdown("#### 上传的数据集预览")
             display_loaded_dataframes()
 
 
 def display_loaded_dataframes():
-    """显示已加载的数据集信息。"""
-    st.markdown("### 已加载的数据集")
-    dataframe_info = st.session_state.workflow.get_dataframe_info()
-    for name, info in dataframe_info.items():
-        with st.expander(f"数据集: {name}"):
-            st.write(f"形状: {info['shape']}")
-            st.write("列名及数据类型:")
-            for col, dtype in info["dtypes"].items():
-                st.write(f"  - {col}: {dtype}")
+    """使用标签页显示已加载的原始数据集预览。"""
+    original_dataframes = st.session_state.workflow.get_original_dataframe_info()
+
+    if not original_dataframes:
+        st.info("还没有上传任何数据集。请先上传数据文件。")
+        return
+
+    # 创建标签页
+    tabs = st.tabs(list(original_dataframes.keys()))
+
+    # 为每个原始数据集创建一个标签页
+    for tab, (name, info) in zip(tabs, original_dataframes.items()):
+        with tab:
+            df = st.session_state.workflow.get_dataframe(name)
+
+            # 显示数据预览
+            st.dataframe(df.head(5), use_container_width=True)
+
+            # 显示简要信息
+            st.caption(f"行数: {info['shape'][0]}, 列数: {info['shape'][1]}")
 
 
 def process_user_query():

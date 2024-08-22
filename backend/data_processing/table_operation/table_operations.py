@@ -17,7 +17,7 @@ def join_dataframes(
     right_df: Annotated[Any, "Right dataframe to be joined with the left dataframe"],
     how: Annotated[
         str,
-        "Join method: 'inner', 'outer', 'left', or 'right'",
+        "Join method: 'left', or 'right'",
     ],
     left_on: Annotated[
         Union[str, List[str]],
@@ -45,7 +45,6 @@ def join_dataframes(
 
     Notes:
     - Ensure that the columns used for join operation exist in both dataframes.
-    - Choose the appropriate join method ('how' parameter) to avoid unintended data loss.
     - For left_columns and right_columns parameters:
       * If not explicitly specified by the user, all columns will be included by default.
 

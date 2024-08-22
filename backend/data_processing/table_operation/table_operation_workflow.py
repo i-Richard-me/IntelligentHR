@@ -38,16 +38,14 @@ class DataFrameWorkflow:
         self.conversation_history: List[Dict[str, str]] = []
         self.current_state: str = "initial"
         self.session_id: Optional[str] = None
+        self.original_dataframes = set()
 
     def load_dataframe(self, name: str, df: pd.DataFrame) -> None:
         """
-        将 DataFrame 加载到工作流中。
-
-        Args:
-            name: DataFrame 的名称。
-            df: 要加载的 DataFrame。
+        将 DataFrame 加载到工作流中，并标记为原始数据集。
         """
         self.dataframes[name] = df
+        self.original_dataframes.add(name)  # 添加到原始数据集集合
         logger.info(f"Loaded DataFrame '{name}' with shape {df.shape}")
 
     def process_query(self, query: str) -> Dict[str, Any]:
@@ -242,6 +240,14 @@ class DataFrameWorkflow:
         else:
             logger.warning(f"Unexpected final result type: {type(final_result)}")
             return {"result": final_result}
+
+    def get_original_dataframe_info(self) -> Dict[str, Dict]:
+        """
+        获取原始上传的数据集信息。
+        """
+        return {
+            name: self.get_dataframe_info()[name] for name in self.original_dataframes
+        }
 
     def get_dataframe(self, name: str) -> pd.DataFrame:
         """
