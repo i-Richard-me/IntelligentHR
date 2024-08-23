@@ -1,8 +1,10 @@
 import io
 import os
+import re
 import sys
 from typing import Dict, List, Tuple
 import uuid
+from unicodedata import category
 
 import pandas as pd
 import streamlit as st
@@ -54,6 +56,7 @@ def main():
     if st.session_state.files_uploaded:
         process_user_query()
         display_operation_result()
+        display_feedback()
 
     show_footer()
 
@@ -119,18 +122,21 @@ def display_user_guide():
     使用选项卡展示用户指南，介绍支持的操作和如何描述需求。
     """
     with st.expander("📘 功能介绍与需求描述指南", expanded=False):
-        st.markdown("""
+        st.markdown(
+            """
         本工具支持多种数据处理操作。描述需求时，尽量指明操作的表格、期望的操作类型和关键信息，以提供AI处理的成功率。
 
         每个选项卡包含了特定操作类型的说明和示例。
-        """)
+        """
+        )
 
-        tab1, tab2, tab3, tab4, tab5 = st.tabs([
-            "信息匹配", "数据转置", "数据对比", "垂直合并", "复杂分析"
-        ])
+        tab1, tab2, tab3, tab4, tab5 = st.tabs(
+            ["信息匹配", "数据转置", "数据对比", "垂直合并", "复杂分析"]
+        )
 
         with tab1:
-            st.markdown("""
+            st.markdown(
+                """
             ### 信息匹配
             将两个或多个相关的表格中的信息进行匹配，类似于Excel中的VLOOKUP函数。
 
@@ -140,10 +146,12 @@ def display_user_guide():
             **示例查询：**
             - "将员工薪资匹配到基本信息表"
             - "把培训记录表中的信息添加到员工主表中"
-            """)
+            """
+            )
 
         with tab2:
-            st.markdown("""
+            st.markdown(
+                """
             ### 数据转置
             调整数据的结构，包括将宽表格转为长表格（多列转一列），或将长表格转为宽表格（一列转多列）
 
@@ -153,10 +161,12 @@ def display_user_guide():
             **示例查询：**
             - "将员工月度考勤表从每月一列的格式转换为每个月份单独一行的格式"
             - "把多年绩效结果变成一列"
-            """)
+            """
+            )
 
         with tab3:
-            st.markdown("""
+            st.markdown(
+                """
             ### 数据对比
             比较两个表格中指定信息的一致性或差异。
 
@@ -166,10 +176,12 @@ def display_user_guide():
             **示例查询：**
             - "找出培训表中哪些员工不在在职花名册中"
             - "对比两个表中员工是否一致"
-            """)
+            """
+            )
 
         with tab4:
-            st.markdown("""
+            st.markdown(
+                """
             ### 垂直合并
             将多个结构相似的表格垂直合并成一个大表。
 
@@ -178,10 +190,12 @@ def display_user_guide():
 
             **示例查询：**
             - "垂直合并三个部门的员工名单"
-            """)
+            """
+            )
 
         with tab5:
-            st.markdown("""
+            st.markdown(
+                """
             ### 复杂分析
             涉及多个步骤或多种操作类型的复杂数据处理需求。
 
@@ -191,7 +205,16 @@ def display_user_guide():
             **示例查询：**
             - "首先把考勤信息匹配到员工信息表，然后将结果按月份转置为每个员工一行的格式"
             - "先垂直合并各部门的员工信息表，然后再匹配上员工绩效"
-            """)
+            """
+            )
+
+
+def clean_filename(filename: str) -> str:
+    # 移除文件扩展名
+    name_without_extension = os.path.splitext(filename)[0]
+    # 只保留中英文字符和数字
+    cleaned_name = re.sub(r"[^\w\u4e00-\u9fff]+", "", name_without_extension)
+    return cleaned_name if cleaned_name else "unnamed_file"
 
 
 def handle_file_upload():
@@ -205,10 +228,10 @@ def handle_file_upload():
         )
         if uploaded_files:
             for uploaded_file in uploaded_files:
-                file_extension = uploaded_file.name.split(".")[-1].lower()
-                if file_extension == "csv":
+                file_extension = os.path.splitext(uploaded_file.name)[1].lower()
+                if file_extension == ".csv":
                     df = pd.read_csv(uploaded_file)
-                elif file_extension in ["xlsx", "xls"]:
+                elif file_extension in [".xlsx", ".xls"]:
                     xls = pd.ExcelFile(uploaded_file)
                     sheet_names = xls.sheet_names
                     if len(sheet_names) > 1:
@@ -223,7 +246,7 @@ def handle_file_upload():
                     st.error(f"不支持的文件格式：{file_extension}")
                     continue
 
-                df_name = uploaded_file.name.split(".")[0]
+                df_name = clean_filename(uploaded_file.name)
                 st.session_state.workflow.load_dataframe(df_name, df)
 
             st.session_state.files_uploaded = True
@@ -304,6 +327,57 @@ def process_and_display_response(container, user_query):
 
     display_assistant_response(container, result)
 
+    # 保存 trace_id 到 session_state
+    if "trace_id" in result:
+        st.session_state.current_trace_id = result["trace_id"]
+
+
+def display_feedback():
+    """显示简约的反馈元素并处理用户反馈，确保用户只能评价一次。"""
+    if "current_trace_id" in st.session_state:
+        st.markdown("---")
+        st.markdown("##### 这次操作是否满足了您的需求？")
+
+        # 初始化反馈状态
+        if "feedback_given" not in st.session_state:
+            st.session_state.feedback_given = False
+
+        col1, col2, col3 = st.columns([1, 1, 3])
+
+        with col1:
+            yes_button = st.button(
+                "👍 是",
+                key="feedback_yes",
+                use_container_width=True,
+                disabled=st.session_state.feedback_given,
+            )
+            if yes_button and not st.session_state.feedback_given:
+                st.session_state.workflow.record_feedback(
+                    trace_id=st.session_state.current_trace_id, is_useful=True
+                )
+                st.session_state.feedback_given = True
+                st.rerun()  # 重新运行以更新UI
+
+        with col2:
+            no_button = st.button(
+                "👎 否",
+                key="feedback_no",
+                use_container_width=True,
+                disabled=st.session_state.feedback_given,
+            )
+            if no_button and not st.session_state.feedback_given:
+                st.session_state.workflow.record_feedback(
+                    trace_id=st.session_state.current_trace_id, is_useful=False
+                )
+                st.session_state.feedback_given = True
+
+        with col3:
+            if st.session_state.feedback_given:
+                st.success("感谢您的反馈！")
+
+        if st.session_state.feedback_given:
+            del st.session_state.current_trace_id
+
 
 def display_assistant_response(container, result):
     """显示助手的响应并保存到对话历史。"""
@@ -322,16 +396,16 @@ def display_assistant_response(container, result):
                 for i, step in enumerate(st.session_state.operation_steps, 1):
                     st.markdown(f"步骤 {i}: {step['tool_name']}")
                 full_message = (
-                        message
-                        + "\n"
-                        + "\n".join(
-                    [
-                        f"步骤 {i}: {step['tool_name']}"
-                        for i, step in enumerate(
-                        st.session_state.operation_steps, 1
+                    message
+                    + "\n"
+                    + "\n".join(
+                        [
+                            f"步骤 {i}: {step['tool_name']}"
+                            for i, step in enumerate(
+                                st.session_state.operation_steps, 1
+                            )
+                        ]
                     )
-                    ]
-                )
                 )
                 st.session_state.conversation_history.append(
                     {"role": "assistant", "content": full_message}

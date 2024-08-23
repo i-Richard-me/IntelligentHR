@@ -7,6 +7,7 @@ from backend.data_processing.table_operation.table_operation_core import (
     create_dataframe_assistant,
     process_user_query,
     create_langfuse_handler,
+    record_user_feedback,
 )
 from backend.data_processing.table_operation.table_operations import *
 
@@ -90,6 +91,10 @@ class DataFrameWorkflow:
             self._handle_out_of_scope(result)
 
         return result
+
+    def record_feedback(self, trace_id: str, is_useful: bool):
+        # 调用 table_operation_core.py 中的函数
+        record_user_feedback(trace_id, is_useful)
 
     def _handle_need_more_info(self, result: Dict[str, Any]) -> None:
         """

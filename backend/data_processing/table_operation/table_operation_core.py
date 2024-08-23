@@ -2,6 +2,7 @@ import logging
 from typing import List, Dict, Any, Optional
 
 import uuid
+from langfuse import Langfuse
 from langfuse.callback import CallbackHandler
 
 from langchain_core.tools import tool
@@ -16,6 +17,8 @@ logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
+
+langfuse_client = Langfuse()
 
 # 初始化语言模型
 language_model = init_language_model()
@@ -85,6 +88,12 @@ def create_langfuse_handler(session_id: str, step: str) -> CallbackHandler:
     """
     return CallbackHandler(
         tags=["table_operation"], session_id=session_id, metadata={"step": step}
+    )
+
+
+def record_user_feedback(trace_id: str, is_useful: bool):
+    langfuse_client.score(
+        trace_id=trace_id, name="feedback", value=is_useful, data_type="BOOLEAN"
     )
 
 
@@ -159,6 +168,10 @@ def process_user_query(
         result = assistant_chain.invoke(
             input_data, config={"callbacks": [langfuse_handler]}
         )
+
+        trace_id = langfuse_handler.get_trace_id()
+        result["trace_id"] = trace_id
+
         logger.info(f"Query processed successfully. Result: {result}")
 
         return result
@@ -168,7 +181,7 @@ def process_user_query(
         raise ValueError(f"处理查询时发生错误: {str(e)}")
 
 
-def format_dataframe_info(dataframe_info: Dict[str, Dict]) -> str:
+def format_dataframe_info(dataframe_info: Dict[str, Dict]):
     """
     格式化DataFrame信息为字符串。
 
@@ -178,12 +191,4 @@ def format_dataframe_info(dataframe_info: Dict[str, Dict]) -> str:
     Returns:
         格式化后的DataFrame信息字符串。
     """
-    info_str = ""
-    for name, info in dataframe_info.items():
-        info_str += f"{name}:\n"
-        info_str += f"  形状: {info['shape']}\n"
-        info_str += "  列及其数据类型:\n"
-        for col, dtype in info["dtypes"].items():
-            info_str += f"    {col}: {dtype}\n"
-        info_str += "\n"
-    return info_str
+    return dataframe_info.items()
