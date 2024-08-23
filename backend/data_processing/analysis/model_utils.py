@@ -69,7 +69,7 @@ def create_preprocessor(
     numeric_transformer = Pipeline(steps=[("scaler", StandardScaler())])
 
     categorical_transformer = Pipeline(
-        steps=[("onehot", OneHotEncoder(handle_unknown="ignore"))]
+        steps=[("onehot", OneHotEncoder(handle_unknown="ignore", drop="if_binary"))]
     )
 
     preprocessor = ColumnTransformer(
@@ -183,13 +183,28 @@ def train_model(
             train_decision_tree,
         )
 
+        # 移除决策树不使用的参数
+        if param_ranges:
+            dt_param_ranges = {
+                k: v
+                for k, v in param_ranges.items()
+                if k
+                in [
+                    "max_depth",
+                    "min_samples_split",
+                    "min_samples_leaf",
+                    "max_leaf_nodes",
+                ]
+            }
+        else:
+            dt_param_ranges = None
         results = train_decision_tree(
             df,
             target_column,
             feature_columns,
             problem_type,
             test_size,
-            param_grid=param_ranges,
+            param_grid=dt_param_ranges,
         )
     elif model_type == "XGBoost":
         from backend.data_processing.analysis.xgboost_trainer import train_xgboost
@@ -335,6 +350,7 @@ def initialize_session_state():
         "probabilities": None,
         "data_validated": False,
         "mode": "train",
+        "do_model_interpretation": False,
     }
 
     return default_states
