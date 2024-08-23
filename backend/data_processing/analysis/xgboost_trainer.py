@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from xgboost import XGBClassifier
+from xgboost import XGBClassifier, XGBRegressor
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler, LabelEncoder
 from sklearn.model_selection import cross_val_score
@@ -21,6 +21,7 @@ def optimize_xgboost(
     categorical_cols: List[str],
     numerical_cols: List[str],
     param_ranges: Dict[str, Any],
+    problem_type: str,
     n_trials: int = 100,
 ) -> Tuple[Pipeline, Dict[str, Any], float, int]:
     """
@@ -32,6 +33,7 @@ def optimize_xgboost(
         categorical_cols: 分类特征列名列表
         numerical_cols: 数值特征列名列表
         param_ranges: 超参数搜索范围的字典
+        problem_type: 问题类型 ("classification" 或 "regression")
         n_trials: Optuna优化的试验次数
 
     Returns:
@@ -78,10 +80,16 @@ def optimize_xgboost(
             ),
         }
 
-        xgb = XGBClassifier(**params, random_state=42, eval_metric="logloss")
+        if problem_type == "classification":
+            xgb = XGBClassifier(**params, random_state=42, eval_metric="logloss")
+            scoring = "roc_auc"
+        else:
+            xgb = XGBRegressor(**params, random_state=42, eval_metric="rmse")
+            scoring = "neg_mean_squared_error"
+
         pipeline = Pipeline(steps=[("preprocessor", preprocessor), ("classifier", xgb)])
         scores = cross_val_score(
-            pipeline, X_train, y_train, cv=5, scoring="roc_auc", n_jobs=-1
+            pipeline, X_train, y_train, cv=5, scoring=scoring, n_jobs=-1
         )
         return np.mean(scores)
 
@@ -89,7 +97,11 @@ def optimize_xgboost(
     study.optimize(objective, n_trials=n_trials, n_jobs=-1)
 
     best_params = study.best_params
-    best_xgb = XGBClassifier(**best_params, random_state=42, eval_metric="logloss")
+    if problem_type == "classification":
+        best_xgb = XGBClassifier(**best_params, random_state=42, eval_metric="logloss")
+    else:
+        best_xgb = XGBRegressor(**best_params, random_state=42, eval_metric="rmse")
+
     best_pipeline = Pipeline(
         steps=[("preprocessor", preprocessor), ("classifier", best_xgb)]
     )
@@ -104,6 +116,7 @@ def train_xgboost(
     df: pd.DataFrame,
     target_column: str,
     feature_columns: List[str],
+    problem_type: str,
     test_size: float = 0.3,
     param_ranges: Dict[str, Any] = None,
     n_trials: int = 100,
@@ -115,6 +128,7 @@ def train_xgboost(
         df: 输入数据框
         target_column: 目标变量的列名
         feature_columns: 特征列名列表
+        problem_type: 问题类型 ("classification" 或 "regression")
         test_size: 测试集占总数据的比例
         param_ranges: 参数搜索范围，如果为None则使用默认值
         n_trials: Optuna优化的试验次数
@@ -126,13 +140,17 @@ def train_xgboost(
         df, target_column, feature_columns, test_size
     )
 
-    # 使用 LabelEncoder 对目标变量进行编码
-    le = LabelEncoder()
-    y_train_encoded = le.fit_transform(y_train)
-    y_test_encoded = le.transform(y_test)
-
-    # 保存标签编码信息
-    label_encoding = dict(zip(le.classes_, le.transform(le.classes_)))
+    label_encoding = None
+    if problem_type == "classification":
+        # 使用 LabelEncoder 对目标变量进行编码
+        le = LabelEncoder()
+        y_train_encoded = le.fit_transform(y_train)
+        y_test_encoded = le.transform(y_test)
+        # 保存标签编码信息
+        label_encoding = dict(zip(le.classes_, le.transform(le.classes_)))
+    else:
+        y_train_encoded = y_train
+        y_test_encoded = y_test
 
     default_param_ranges = {
         "n_estimators": (50, 500),
@@ -144,7 +162,12 @@ def train_xgboost(
         "reg_alpha": (0, 10),
         "reg_lambda": (0, 10),
     }
-    param_ranges = param_ranges or default_param_ranges
+
+    # 如果提供了param_ranges，更新默认值
+    if param_ranges:
+        default_param_ranges.update(param_ranges)
+
+    param_ranges = default_param_ranges
 
     best_pipeline, best_params, cv_mean_score, best_trial = optimize_xgboost(
         X_train,
@@ -152,21 +175,29 @@ def train_xgboost(
         categorical_cols,
         numerical_cols,
         param_ranges,
+        problem_type,
         n_trials,
     )
 
-    test_metrics = evaluate_model(best_pipeline, X_test, y_test_encoded)
+    test_metrics = evaluate_model(best_pipeline, X_test, y_test_encoded, problem_type)
     feature_importance = get_feature_importance(
         best_pipeline.named_steps["classifier"],
         best_pipeline.named_steps["preprocessor"],
     )
 
-    return {
+    results = {
         "model": best_pipeline,
         "feature_importance": feature_importance,
         "cv_mean_score": cv_mean_score,
         "best_params": best_params,
         "best_trial": best_trial,
-        "label_encoding": label_encoding,
         **test_metrics,
     }
+
+    if problem_type == "classification":
+        results["label_encoding"] = label_encoding
+    else:
+        # 对于回归问题，CV分数是负的MSE，我们需要取其绝对值
+        results["cv_mean_score"] = abs(results["cv_mean_score"])
+
+    return results
