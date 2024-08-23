@@ -38,6 +38,12 @@ from backend.data_processing.analysis.ml_components import (
     display_decision_tree_settings,
     display_xgboost_settings,
 )
+from backend.data_processing.analysis.shap_analysis import (
+    calculate_shap_values,
+    create_shap_summary_plot,
+    create_shap_importance_plot,
+    create_shap_dependence_plot,
+)
 
 # Streamlit 页面配置
 st.set_page_config(
@@ -109,7 +115,18 @@ def main():
 
         if st.session_state.model_results:
             display_results()
-            display_model_interpretation()
+
+            do_model_interpretation = st.checkbox(
+                "进行模型解释", value=st.session_state.do_model_interpretation
+            )
+
+            if do_model_interpretation != st.session_state.do_model_interpretation:
+                st.session_state.do_model_interpretation = do_model_interpretation
+                if not do_model_interpretation and "shap_results" in st.session_state:
+                    del st.session_state.shap_results
+
+            if st.session_state.do_model_interpretation:
+                display_model_interpretation()
     else:
         display_saved_model_selection()
         display_data_upload_and_preview(for_prediction=True)
@@ -324,6 +341,12 @@ def display_model_training_and_advanced_settings():
                         if "best_trial" in st.session_state.model_results:
                             success_message += f" 最佳参数在第 {st.session_state.model_results['best_trial']} 轮获得。"
                         st.success(success_message)
+
+                        if st.session_state.do_model_interpretation:
+                            with st.spinner("正在计算模型解释..."):
+                                calculate_and_store_shap_values()
+                                st.success("模型解释计算完成！")
+
                     except Exception as e:
                         st.error(f"模型训练过程中出错：{str(e)}")
 
@@ -482,11 +505,93 @@ def display_model_interpretation():
         st.markdown("## 模型解释")
 
         with st.container(border=True):
-            (tab1,) = st.tabs(["特征重要性"])
+            tab1, tab2, tab3 = st.tabs(["特征重要性", "SHAP分析", "SHAP依赖图"])
 
             with tab1:
                 st.markdown("### 模型特征重要性")
                 display_feature_importance()
+
+            with tab2:
+                st.markdown("### SHAP特征重要性分析")
+                if "shap_results" not in st.session_state:
+                    calculate_and_store_shap_values()
+
+                if "shap_results" in st.session_state:
+                    fig = create_shap_importance_plot(
+                        st.session_state.shap_results["feature_importance"]
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+
+                    with st.expander("SHAP特征重要性解释", expanded=False):
+                        st.markdown(
+                            """
+                        SHAP (SHapley Additive exPlanations) 特征重要性图展示了每个特征对模型预测的平均绝对贡献。
+
+                        - 每个条形代表一个特征。
+                        - 条形的长度表示该特征的平均绝对SHAP值，即该特征对模型预测的平均影响程度。
+                        - 特征按重要性从上到下排序，最上面的特征对模型预测的影响最大。
+
+                        通过这个图，我们可以直观地看出哪些特征对模型的预测结果影响最大。这有助于我们理解模型的决策依据，
+                        并可能为进一步的特征工程或模型优化提供指导。
+                        """
+                        )
+
+            with tab3:
+                st.markdown("### SHAP依赖图")
+                if "shap_results" in st.session_state:
+                    processed_feature_names = st.session_state.shap_results[
+                        "processed_feature_names"
+                    ]
+                    selected_feature = st.selectbox(
+                        "选择特征", options=processed_feature_names
+                    )
+
+                    fig = create_shap_dependence_plot(
+                        st.session_state.shap_results["shap_values"],
+                        st.session_state.shap_results["X_processed"],
+                        np.array(processed_feature_names),
+                        selected_feature,
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+
+                    with st.expander("SHAP依赖图解释", expanded=False):
+                        st.markdown(
+                            """
+                        SHAP依赖图展示了选定特征的值如何影响其SHAP值（即对模型预测的影响）。
+
+                        - X轴表示特征的实际值。
+                        - Y轴表示该特征的SHAP值。
+                        - 每个点代表一个样本。
+                        - 点的颜色表示特征值的大小，红色表示较大的值，蓝色表示较小的值。
+
+                        通过这个图，我们可以观察到：
+                        1. 特征值与SHAP值之间的关系是否线性、单调或更复杂。
+                        2. 特征值的哪些范围对预测结果有正面或负面影响。
+                        3. 是否存在特征值的临界点，在该点附近预测结果发生显著变化。
+
+                        这有助于我们深入理解特定特征是如何影响模型预测的，对模型的解释和改进都很有价值。
+                        """
+                        )
+
+
+def calculate_and_store_shap_values():
+
+    if "shap_results" in st.session_state:
+        del st.session_state.shap_results
+
+    with st.spinner("正在计算SHAP值，这可能需要一些时间..."):
+        try:
+            shap_results = calculate_shap_values(
+                st.session_state.model_results["model"].named_steps["classifier"],
+                st.session_state.df[st.session_state.feature_columns],
+                st.session_state.model_results["model"].named_steps["preprocessor"],
+                st.session_state.feature_columns,
+                st.session_state.problem_type,
+            )
+            st.session_state.shap_results = shap_results
+        except Exception as e:
+            st.error(f"计算SHAP值时出错：{str(e)}")
+            st.error("请检查模型类型和数据是否兼容，或尝试使用其他解释方法。")
 
 
 def display_feature_importance():
