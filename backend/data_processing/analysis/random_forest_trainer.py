@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 from sklearn.model_selection import cross_val_score
 from sklearn.pipeline import Pipeline
 import optuna
@@ -21,6 +21,7 @@ def optimize_random_forest(
     categorical_cols: List[str],
     numerical_cols: List[str],
     param_ranges: Dict[str, Any],
+    problem_type: str,
     n_trials: int = 100,
 ) -> Tuple[Pipeline, Dict[str, Any], float, int]:
     """
@@ -32,6 +33,7 @@ def optimize_random_forest(
         categorical_cols: 分类特征列名列表
         numerical_cols: 数值特征列名列表
         param_ranges: 超参数搜索范围的字典
+        problem_type: 问题类型 ("classification" 或 "regression")
         n_trials: Optuna优化的试验次数
 
     Returns:
@@ -64,10 +66,16 @@ def optimize_random_forest(
             ),
         }
 
-        rf = RandomForestClassifier(**params, random_state=42)
+        if problem_type == "classification":
+            rf = RandomForestClassifier(**params, random_state=42)
+            scoring = "roc_auc"
+        else:
+            rf = RandomForestRegressor(**params, random_state=42)
+            scoring = "neg_mean_squared_error"
+
         pipeline = Pipeline(steps=[("preprocessor", preprocessor), ("classifier", rf)])
         scores = cross_val_score(
-            pipeline, X_train, y_train, cv=5, scoring="roc_auc", n_jobs=-1
+            pipeline, X_train, y_train, cv=5, scoring=scoring, n_jobs=-1
         )
         return np.mean(scores)
 
@@ -75,7 +83,11 @@ def optimize_random_forest(
     study.optimize(objective, n_trials=n_trials, n_jobs=-1)
 
     best_params = study.best_params
-    best_rf = RandomForestClassifier(**best_params, random_state=42)
+    if problem_type == "classification":
+        best_rf = RandomForestClassifier(**best_params, random_state=42)
+    else:
+        best_rf = RandomForestRegressor(**best_params, random_state=42)
+
     best_pipeline = Pipeline(
         steps=[("preprocessor", preprocessor), ("classifier", best_rf)]
     )
@@ -90,6 +102,7 @@ def train_random_forest(
     df: pd.DataFrame,
     target_column: str,
     feature_columns: List[str],
+    problem_type: str,
     test_size: float = 0.3,
     param_ranges: Dict[str, Any] = None,
     n_trials: int = 100,
@@ -101,6 +114,7 @@ def train_random_forest(
         df: 输入数据框
         target_column: 目标变量的列名
         feature_columns: 特征列名列表
+        problem_type: 问题类型 ("classification" 或 "regression")
         test_size: 测试集占总数据的比例
         param_ranges: 参数搜索范围，如果为None则使用默认值
         n_trials: Optuna优化的试验次数
@@ -122,16 +136,22 @@ def train_random_forest(
     param_ranges = param_ranges or default_param_ranges
 
     best_pipeline, best_params, cv_mean_score, best_trial = optimize_random_forest(
-        X_train, y_train, categorical_cols, numerical_cols, param_ranges, n_trials
+        X_train,
+        y_train,
+        categorical_cols,
+        numerical_cols,
+        param_ranges,
+        problem_type,
+        n_trials,
     )
 
-    test_metrics = evaluate_model(best_pipeline, X_test, y_test)
+    test_metrics = evaluate_model(best_pipeline, X_test, y_test, problem_type)
     feature_importance = get_feature_importance(
         best_pipeline.named_steps["classifier"],
         best_pipeline.named_steps["preprocessor"],
     )
 
-    return {
+    results = {
         "model": best_pipeline,
         "feature_importance": feature_importance,
         "cv_mean_score": cv_mean_score,
@@ -139,3 +159,9 @@ def train_random_forest(
         "best_trial": best_trial,
         **test_metrics,
     }
+
+    # 对于回归问题，CV分数是负的MSE，我们需要取其绝对值
+    if problem_type == "regression":
+        results["cv_mean_score"] = abs(results["cv_mean_score"])
+
+    return results
