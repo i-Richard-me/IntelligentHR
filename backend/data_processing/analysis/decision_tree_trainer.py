@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from sklearn.tree import DecisionTreeClassifier
+from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
 from sklearn.pipeline import Pipeline
 from sklearn.model_selection import GridSearchCV
 from typing import List, Dict, Any, Tuple
@@ -19,6 +19,7 @@ def optimize_decision_tree(
     categorical_cols: List[str],
     numerical_cols: List[str],
     param_grid: Dict[str, Any],
+    problem_type: str,
 ) -> Tuple[Pipeline, Dict[str, Any], float]:
     """
     使用GridSearchCV优化决策树模型的超参数。
@@ -29,15 +30,23 @@ def optimize_decision_tree(
         categorical_cols: 分类特征列名列表
         numerical_cols: 数值特征列名列表
         param_grid: 参数网格
+        problem_type: 问题类型 ("classification" 或 "regression")
 
     Returns:
         优化后的决策树模型管道、最佳参数字典和最佳交叉验证分数
     """
     preprocessor = create_preprocessor(categorical_cols, numerical_cols)
-    dt = DecisionTreeClassifier(random_state=42)
+
+    if problem_type == "classification":
+        dt = DecisionTreeClassifier(random_state=42)
+        scoring = "roc_auc"
+    else:
+        dt = DecisionTreeRegressor(random_state=42)
+        scoring = "neg_mean_squared_error"
+
     pipeline = Pipeline(steps=[("preprocessor", preprocessor), ("classifier", dt)])
 
-    grid_search = GridSearchCV(pipeline, param_grid, cv=5, scoring="roc_auc", n_jobs=-1)
+    grid_search = GridSearchCV(pipeline, param_grid, cv=5, scoring=scoring, n_jobs=-1)
     grid_search.fit(X_train, y_train)
 
     return (
@@ -51,6 +60,7 @@ def train_decision_tree(
     df: pd.DataFrame,
     target_column: str,
     feature_columns: List[str],
+    problem_type: str,
     test_size: float = 0.3,
     param_grid: Dict[str, Any] = None,
 ) -> Dict[str, Any]:
@@ -61,6 +71,7 @@ def train_decision_tree(
         df: 输入数据框
         target_column: 目标变量的列名
         feature_columns: 特征列名列表
+        problem_type: 问题类型 ("classification" 或 "regression")
         test_size: 测试集占总数据的比例
         param_grid: 参数网格，如果为None则使用默认值
 
@@ -72,27 +83,40 @@ def train_decision_tree(
     )
 
     default_param_grid = {
-        "classifier__max_depth": [2, 4, 5, 6, 7, None],
-        "classifier__min_samples_split": [2, 3, 4, 5, 8],
-        "classifier__min_samples_leaf": [2, 5, 10, 15, 20, 25],
-        "classifier__max_leaf_nodes": [10, 20, 25, 30, 35, 40, 45, None],
+        "classifier__max_depth": [2, 4, 6, 8, 10, None],
+        "classifier__min_samples_split": [2, 5, 10],
+        "classifier__min_samples_leaf": [1, 2, 4],
+        "classifier__max_leaf_nodes": [10, 20, 30, None],
     }
-    param_grid = param_grid or default_param_grid
+
+    # 如果提供了param_grid，更新默认值
+    if param_grid:
+        default_param_grid.update(
+            {f"classifier__{k}": v for k, v in param_grid.items()}
+        )
+
+    param_grid = default_param_grid
 
     best_pipeline, best_params, cv_mean_score = optimize_decision_tree(
-        X_train, y_train, categorical_cols, numerical_cols, param_grid
+        X_train, y_train, categorical_cols, numerical_cols, param_grid, problem_type
     )
 
-    test_metrics = evaluate_model(best_pipeline, X_test, y_test)
+    test_metrics = evaluate_model(best_pipeline, X_test, y_test, problem_type)
     feature_importance = get_feature_importance(
         best_pipeline.named_steps["classifier"],
         best_pipeline.named_steps["preprocessor"],
     )
 
-    return {
+    results = {
         "model": best_pipeline,
         "feature_importance": feature_importance,
         "cv_mean_score": cv_mean_score,
         "best_params": best_params,
         **test_metrics,
     }
+
+    # 对于回归问题，CV分数是负的MSE，我们需要取其绝对值
+    if problem_type == "regression":
+        results["cv_mean_score"] = abs(results["cv_mean_score"])
+
+    return results
