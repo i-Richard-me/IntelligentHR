@@ -41,6 +41,8 @@ if "session_id" not in st.session_state:
     st.session_state.session_id = str(uuid.uuid4())
 if "operation_steps" not in st.session_state:
     st.session_state.operation_steps = []
+if "operation_result" not in st.session_state:
+    st.session_state.operation_result = None
 
 
 def main():
@@ -55,8 +57,10 @@ def main():
     handle_file_upload()
     if st.session_state.files_uploaded:
         process_user_query()
-        display_operation_result()
-        display_feedback()
+
+        if st.session_state.get('operation_result'):
+            display_operation_result()
+            display_feedback()
 
     show_footer()
 
@@ -331,6 +335,12 @@ def process_and_display_response(container, user_query):
     if "trace_id" in result:
         st.session_state.current_trace_id = result["trace_id"]
 
+    # 新增：只有在执行操作时才设置 operation_result
+    if result["next_step"] == "execute_operation":
+        st.session_state.operation_result = result
+    else:
+        st.session_state.operation_result = None
+
 
 def display_feedback():
     """显示简约的反馈元素并处理用户反馈，确保用户只能评价一次。"""
@@ -356,7 +366,6 @@ def display_feedback():
                     trace_id=st.session_state.current_trace_id, is_useful=True
                 )
                 st.session_state.feedback_given = True
-                st.rerun()  # 重新运行以更新UI
 
         with col2:
             no_button = st.button(
@@ -396,16 +405,16 @@ def display_assistant_response(container, result):
                 for i, step in enumerate(st.session_state.operation_steps, 1):
                     st.markdown(f"步骤 {i}: {step['tool_name']}")
                 full_message = (
-                    message
-                    + "\n"
-                    + "\n".join(
-                        [
-                            f"步骤 {i}: {step['tool_name']}"
-                            for i, step in enumerate(
-                                st.session_state.operation_steps, 1
-                            )
-                        ]
+                        message
+                        + "\n"
+                        + "\n".join(
+                    [
+                        f"步骤 {i}: {step['tool_name']}"
+                        for i, step in enumerate(
+                        st.session_state.operation_steps, 1
                     )
+                    ]
+                )
                 )
                 st.session_state.conversation_history.append(
                     {"role": "assistant", "content": full_message}
