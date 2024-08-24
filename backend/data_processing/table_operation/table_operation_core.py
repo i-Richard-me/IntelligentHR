@@ -1,7 +1,9 @@
 import logging
+import os
 from typing import List, Dict, Any, Optional
 
 import uuid
+import json
 from langfuse import Langfuse
 from langfuse.callback import CallbackHandler
 
@@ -10,7 +12,8 @@ from langchain_core.tools import tool
 from backend.data_processing.table_operation.table_operation_models import (
     AssistantResponse,
 )
-from utils.llm_tools import LanguageModelChain, init_language_model
+from pymilvus import connections, Collection
+from utils.llm_tools import LanguageModelChain, init_language_model, CustomEmbeddings
 
 # 初始化日志记录
 logging.basicConfig(
@@ -56,6 +59,10 @@ SYSTEM_MESSAGE = """
 
 11. 在回答中，先重述你对用户需求的理解，然后再给出建议或请求更多信息。
 
+以下是一个示例，你可以参考这个示例的处理方式：
+
+{example}
+
 请根据这些指导原则，仔细分析用户的输入并提供相应的响应。你的目标是尽可能帮助用户完成他们的表格操作需求，即使这可能需要多次交互来澄清和细化需求。只有在确定无法提供任何有用帮助时，才考虑使用 "out_of_scope"。
 """
 
@@ -65,7 +72,7 @@ HUMAN_MESSAGE_TEMPLATE = """
 
 {tools_description}
 
-当前环境中可用的 DataFrame 变量及其信息：
+当前用户上传的表格及其信息：
 {dataframe_info}
 
 用户输入：
@@ -129,6 +136,56 @@ def create_dataframe_assistant():
     return assistant_chain
 
 
+def get_similar_example(
+    query: str, collection_name: str = "data_operation_examples"
+) -> Dict[str, str]:
+    """
+    从Milvus检索与用户查询最相似的示例
+    """
+    connections.connect(
+        alias="default", host="localhost", port="19530", db_name="examples"
+    )
+
+    collection = Collection(collection_name)
+    collection.load()
+
+    embeddings = CustomEmbeddings(api_key=os.getenv("OPENAI_API_KEY_SILICONCLOUD"))
+    query_vector = embeddings.embed_query(query)
+
+    search_params = {"metric_type": "L2", "params": {"nprobe": 10}}
+    results = collection.search(
+        data=[query_vector],
+        anns_field="embedding",
+        param=search_params,
+        limit=1,
+        output_fields=["user_tables", "user_query", "output"],
+    )
+
+    if results[0]:
+        similar_example = {
+            "用户上传的表格": results[0][0].entity.get("user_tables"),
+            "用户查询": results[0][0].entity.get("user_query"),
+            "输出": results[0][0].entity.get("output"),
+        }
+        return similar_example
+    else:
+        return {}  # 返回空的示例，如果没找到相似的
+
+
+def format_example(example: Dict[str, str]) -> str:
+    """
+    将示例格式化为易读的文本格式。
+    """
+    if not example:
+        return "{}"
+
+    formatted = "{\n"
+    for key, value in example.items():
+        formatted += f"{key}: \n{value}\n\n"
+    formatted += "}"
+    return formatted
+
+
 def process_user_query(
     assistant_chain,
     user_input: str,
@@ -138,16 +195,6 @@ def process_user_query(
 ) -> Dict[str, Any]:
     """
     处理用户查询并返回结果。
-
-    Args:
-        assistant_chain: 语言模型链。
-        user_input: 用户输入的查询。
-        dataframe_info: DataFrame 信息字典。
-        tools: 可用的工具函数列表。
-        session_id: 会话ID，如果没有提供则生成新的。
-
-    Returns:
-        处理结果字典。
     """
     try:
         if session_id is None:
@@ -158,8 +205,13 @@ def process_user_query(
         tools_description = get_tools_description(tools)
         dataframe_info_str = format_dataframe_info(dataframe_info)
 
+        # 获取相似的示例
+        similar_example = get_similar_example(user_input)
+        example_str = format_example(similar_example)
+
         input_data = {
             "user_input": user_input,
+            "example": example_str,
             "tools_description": tools_description,
             "dataframe_info": dataframe_info_str,
         }
