@@ -1,7 +1,7 @@
 import io
 import os
 import sys
-import csv
+import json
 from typing import List, Dict
 
 import streamlit as st
@@ -35,10 +35,10 @@ show_sidebar()
 MILVUS_HOST = "localhost"
 MILVUS_PORT = "19530"
 MILVUS_DB = "examples"
-COLLECTION_NAME = "data_operation_examples"
 
-# 所需的列名
-REQUIRED_COLUMNS = ["用户上传的表格", "用户查询", "输出"]
+# 加载配置文件
+with open("data/config/collections_config.json", "r", encoding="utf-8") as f:
+    CONFIG = json.load(f)
 
 
 def connect_to_milvus():
@@ -48,45 +48,44 @@ def connect_to_milvus():
     )
 
 
-def create_milvus_collection(collection_name: str, dim: int):
+def create_milvus_collection(collection_config: Dict, dim: int):
     """创建Milvus集合"""
     fields = [
         FieldSchema(name="id", dtype=DataType.INT64, is_primary=True, auto_id=True),
-        FieldSchema(name="user_tables", dtype=DataType.VARCHAR, max_length=65535),
-        FieldSchema(name="user_query", dtype=DataType.VARCHAR, max_length=65535),
-        FieldSchema(name="output", dtype=DataType.VARCHAR, max_length=65535),
-        FieldSchema(name="embedding", dtype=DataType.FLOAT_VECTOR, dim=dim),
     ]
-    schema = CollectionSchema(fields, "Example collection")
-    collection = Collection(collection_name, schema)
+    for field in collection_config["fields"]:
+        fields.append(
+            FieldSchema(name=field["name"], dtype=DataType.VARCHAR, max_length=65535)
+        )
+    fields.append(FieldSchema(name="embedding", dtype=DataType.FLOAT_VECTOR, dim=dim))
+
+    schema = CollectionSchema(fields, collection_config["description"])
+    collection = Collection(collection_config["name"], schema)
     return collection
 
 
-def insert_examples_to_milvus(examples: List[Dict], collection_name: str):
+def insert_examples_to_milvus(examples: List[Dict], collection_config: Dict):
     """将示例插入到Milvus数据库"""
     connect_to_milvus()
 
     embeddings = CustomEmbeddings(api_key=os.getenv("OPENAI_API_KEY_SILICONCLOUD"))
 
-    user_tables = []
-    user_queries = []
-    outputs = []
+    data = {field["name"]: [] for field in collection_config["fields"]}
     vectors = []
 
     for example in examples:
-        user_tables.append(example["用户上传的表格"])
-        user_query = example["用户查询"]
-        user_queries.append(user_query)
-        outputs.append(example["输出"])
-        vector = embeddings.embed_query(user_query)
+        for field in collection_config["fields"]:
+            data[field["name"]].append(example[field["name"]])
+        vector = embeddings.embed_query(example[collection_config["embedding_field"]])
         vectors.append(vector)
 
-    if not utility.has_collection(collection_name):
-        collection = create_milvus_collection(collection_name, len(vectors[0]))
+    if not utility.has_collection(collection_config["name"]):
+        collection = create_milvus_collection(collection_config, len(vectors[0]))
     else:
-        collection = Collection(collection_name)
+        collection = Collection(collection_config["name"])
 
-    collection.insert([user_tables, user_queries, outputs, vectors])
+    insert_data = list(data.values()) + [vectors]
+    collection.insert(insert_data)
 
     index_params = {
         "metric_type": "L2",
@@ -100,19 +99,21 @@ def insert_examples_to_milvus(examples: List[Dict], collection_name: str):
     return len(examples)
 
 
-def process_csv_file(file):
+def process_csv_file(file, collection_config: Dict):
     """处理上传的CSV文件"""
     examples = []
     csv_file = io.StringIO(file.getvalue().decode("utf-8"))
     df = pd.read_csv(csv_file)
 
+    required_columns = [field["name"] for field in collection_config["fields"]]
+
     # 检查是否包含所有必需的列
-    missing_columns = set(REQUIRED_COLUMNS) - set(df.columns)
+    missing_columns = set(required_columns) - set(df.columns)
     if missing_columns:
         raise ValueError(f"CSV文件缺少以下列: {', '.join(missing_columns)}")
 
     for _, row in df.iterrows():
-        example = {col: row[col] for col in REQUIRED_COLUMNS}
+        example = {col: row[col] for col in required_columns}
         examples.append(example)
 
     return examples
@@ -122,10 +123,17 @@ def main():
     st.title("🗄️ Milvus数据库管理")
     st.markdown("---")
 
+    # Collection 选择
+    collection_names = list(CONFIG["collections"].keys())
+    selected_collection = st.selectbox("选择要操作的Collection", collection_names)
+    collection_config = CONFIG["collections"][selected_collection]
+
     st.info(
         f"""
+    当前选择的Collection: {collection_config['name']}
+    描述: {collection_config['description']}
     这个工具允许您上传CSV文件来更新Milvus数据库中的examples。
-    CSV文件必须包含以下列：{', '.join(REQUIRED_COLUMNS)}
+    CSV文件必须包含以下列：{', '.join([field['name'] for field in collection_config['fields']])}
     """
     )
 
@@ -134,7 +142,7 @@ def main():
 
     if uploaded_file is not None:
         try:
-            examples = process_csv_file(uploaded_file)
+            examples = process_csv_file(uploaded_file, collection_config)
             st.success(f"成功读取 {len(examples)} 条记录")
 
             # 显示数据预览
@@ -145,7 +153,7 @@ def main():
             if st.button("插入到Milvus数据库"):
                 with st.spinner("正在插入数据..."):
                     inserted_count = insert_examples_to_milvus(
-                        examples, COLLECTION_NAME
+                        examples, collection_config
                     )
                 st.success(f"成功插入 {inserted_count} 条记录到Milvus数据库")
         except ValueError as ve:

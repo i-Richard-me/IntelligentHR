@@ -1,0 +1,48 @@
+{
+    "collections": {
+        "data_operation_examples": {
+            "name": "data_operation_examples",
+            "description": "Examples for data operation tasks",
+            "fields": [
+                {
+                    "name": "user_tables",
+                    "type": "str",
+                    "description": "User uploaded tables information"
+                },
+                {
+                    "name": "user_query",
+                    "type": "str",
+                    "description": "User query"
+                },
+                {
+                    "name": "output",
+                    "type": "str",
+                    "description": "Output of the operation"
+                }
+            ],
+            "embedding_field": "user_query"
+        },
+        "another_collection_example": {
+            "name": "another_collection_example",
+            "description": "Another example collection",
+            "fields": [
+                {
+                    "name": "field1",
+                    "type": "str",
+                    "description": "Description of field1"
+                },
+                {
+                    "name": "field2",
+                    "type": "str",
+                    "description": "Description of field2"
+                },
+                {
+                    "name": "field3",
+                    "type": "str",
+                    "description": "Description of field3"
+                }
+            ],
+            "embedding_field": "field2"
+        }
+    }
+}
