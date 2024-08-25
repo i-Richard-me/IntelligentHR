@@ -105,12 +105,18 @@ def initialize_workflow(
         EntityVerificationWorkflow: 初始化后的工作流对象。
     """
     entity_info = ENTITY_TYPES[entity_type]
-    collection = initialize_vector_store(entity_info["collection_name"])
+    try:
+        collection = initialize_vector_store(entity_info["collection_name"])
+    except ValueError as e:
+        st.error(f"初始化向量存储时出错：{str(e)}")
+        st.error("请确保已通过数据库管理界面创建并导入数据到相应的集合。")
+        return None
+
     retriever = get_entity_retriever(collection, entity_type)
     return EntityVerificationWorkflow(
         retriever=retriever,
         entity_type=entity_type,
-        original_field=entity_info["original_field"],
+        original_field="original_name",
         standard_field="standard_name",
         validation_instructions=entity_info["validation_instructions"],
         analysis_instructions=entity_info["analysis_instructions"],
