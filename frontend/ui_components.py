@@ -1,7 +1,7 @@
 import streamlit as st
 
 # 版本号
-VERSION = "0.0.2"
+VERSION = "0.0.3"
 
 
 def show_sidebar():
@@ -184,12 +184,26 @@ def _get_common_styles():
     .stProgress > div > div > div > div {
         background-color: #4F8BF9;
     }
-    .section-title {
-        color: #4F8BF9;
-        font-size: 1.8rem;
-        margin-bottom: 1rem;
-        border-bottom: 2px solid #4F8BF9;
+    h2, h3, h4 {
+        border-bottom: 2px solid;
         padding-bottom: 0.5rem;
+        margin-top: 1.5rem;
+        margin-bottom: 1rem;
+    }
+    h2 {
+        color: #1E90FF;  /* 道奇蓝，较浅的深蓝色 */
+        border-bottom-color: #1E90FF;
+        font-size: 1.8rem;
+    }
+    h3 {
+        color: #16A085;  /* 绿松石色 */
+        border-bottom-color: #16A085;
+        font-size: 1.5rem;
+    }
+    h4 {
+        color: #E67E22;  /* 橙色 */
+        border-bottom-color: #E67E22;
+        font-size: 1.3rem;
     }
     .workflow-container {
         background-color: rgba(248, 249, 250, 0.05);
@@ -199,11 +213,23 @@ def _get_common_styles():
         border: 1px solid rgba(0, 0, 0, 0.125);
         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
     }
-    
+
     @media (prefers-color-scheme: dark) {
         .workflow-container {
             background-color: rgba(33, 37, 41, 0.05);
             border-color: rgba(255, 255, 255, 0.125);
+        }
+        h2 {
+            color: #3498DB;  /* 亮蓝色，适合深色模式 */
+            border-bottom-color: #3498DB;
+        }
+        h3 {
+            color: #2ECC71;  /* 亮绿色，适合深色模式 */
+            border-bottom-color: #2ECC71;
+        }
+        h4 {
+            color: #F39C12;  /* 亮橙色，适合深色模式 */
+            border-bottom-color: #F39C12;
         }
     }
     .workflow-step {

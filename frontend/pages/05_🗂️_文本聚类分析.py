@@ -126,9 +126,8 @@ def handle_data_input_and_clustering():
     """
     处理数据输入和初始聚类过程
     """
-    st.markdown(
-        '<h2 class="section-title">数据输入和初始聚类</h2>', unsafe_allow_html=True
-    )
+    st.markdown("## 数据输入和初始聚类")
+
     with st.container(border=True):
         st.session_state.text_topic = st.text_input(
             "请输入文本主题或背景",
@@ -225,9 +224,8 @@ def review_clustering_results():
     """
     if st.session_state.categories is not None:
         st.markdown("---")
-        st.markdown(
-            '<h2 class="section-title">聚类结果审核</h2>', unsafe_allow_html=True
-        )
+        st.markdown("## 聚类结果审核")
+
         with st.container(border=True):
             st.markdown("请审核并根据需要修改、添加或删除类别：")
 
@@ -283,9 +281,8 @@ def display_classification_results():
     """
     if st.session_state.df_result is not None:
         st.markdown("---")
-        st.markdown(
-            '<h2 class="section-title">分类结果展示</h2>', unsafe_allow_html=True
-        )
+        st.markdown("## 分类结果展示")
+
         with st.container(border=True):
             st.dataframe(st.session_state.df_result)
 

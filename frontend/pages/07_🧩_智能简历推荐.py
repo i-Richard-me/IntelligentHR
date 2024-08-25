@@ -57,9 +57,6 @@ def display_workflow():
     显示智能简历推荐系统的工作流程。
     """
     with st.expander("👥 查看简历推荐工作流程", expanded=False):
-        st.markdown(
-            '<h2 class="section-title">简历推荐工作流程</h2>', unsafe_allow_html=True
-        )
 
         col1, col2 = st.columns([1, 1])
 
@@ -117,7 +114,7 @@ display_workflow()
 
 st.markdown("---")
 
-st.markdown('<h2 class="section-title">简历推荐</h2>', unsafe_allow_html=True)
+st.markdown("## 简历推荐")
 
 # 添加高级设置
 with st.expander("高级设置", expanded=False):

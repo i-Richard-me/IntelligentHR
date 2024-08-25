@@ -14,7 +14,7 @@ from frontend.ui_components import show_sidebar, show_footer, apply_common_style
 from backend.text_processing.translation.translator import Translator
 
 # 设置页面配置
-st.set_page_config(page_title="智能HR助手 - AI翻译助手", page_icon="🌐")
+st.set_page_config(page_title="智能HR助手 - 智能语境翻译", page_icon="🌐")
 
 # 应用自定义样式
 apply_common_styles()
@@ -69,21 +69,18 @@ async def batch_translate(
 def display_translation_info():
     st.info(
         """
-    **🌐 AI翻译助手**
+    **🌐 智能语境翻译**
 
-    AI翻译助手是一个高效的多语言翻译工具，专为批量处理文本设计。它支持单条文本和CSV文件的翻译，
+    智能语境翻译是一个高效的多语言翻译工具，专为批量处理文本设计。它支持单条文本和CSV文件的翻译，
     通过上下文理解提高翻译准确性。该工具利用异步处理功能，确保大规模翻译任务的稳定性。
-    AI翻译助手适用于需要快速、准确翻译大量文本的各类场景，如国际化文档处理或多语言数据分析。
+    智能语境翻译适用于需要快速、准确翻译大量文本的各类场景，如国际化文档处理或多语言数据分析。
     """
     )
 
 
 def display_translation_workflow():
-    with st.expander("📋 查看AI翻译助手工作流程", expanded=False):
-        st.markdown(
-            '<h2 class="section-title">AI翻译助手工作流程</h2>',
-            unsafe_allow_html=True,
-        )
+    with st.expander("📋 查看智能语境翻译工作流程", expanded=False):
+
         with st.container(border=True):
             col1, col2 = st.columns([1, 1])
 
@@ -157,7 +154,7 @@ def display_translation_results(translation_results: Any) -> None:
     Args:
         translation_results (Any): 翻译结果，可能是字典或DataFrame。
     """
-    st.markdown('<h2 class="section-title">翻译结果</h2>', unsafe_allow_html=True)
+    st.markdown("## 翻译结果")
     with st.container(border=True):
         if isinstance(translation_results, dict):
             with st.expander("查看翻译结果", expanded=True):
@@ -180,8 +177,8 @@ def display_translation_results(translation_results: Any) -> None:
 
 
 def main():
-    """主函数，包含AI翻译助手的整个流程。"""
-    st.title("🌐 AI翻译助手")
+    """主函数，包含智能语境翻译的整个流程。"""
+    st.title("🌐 智能语境翻译")
     st.markdown("---")
 
     # 显示功能介绍
@@ -192,7 +189,7 @@ def main():
     display_translation_workflow()
     st.markdown("---")
 
-    st.markdown('<h2 class="section-title">文本翻译</h2>', unsafe_allow_html=True)
+    st.markdown("## 文本翻译")
 
     with st.container(border=True):
         text_topic = st.text_input(

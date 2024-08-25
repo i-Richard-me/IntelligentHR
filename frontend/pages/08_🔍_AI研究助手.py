@@ -66,9 +66,7 @@ def display_workflow():
     显示AI研究助手的工作流程。
     """
     with st.expander("🔍 查看AI研究助手工作流程", expanded=False):
-        st.markdown(
-            '<h2 class="section-title">AI 研究助手工作流程</h2>', unsafe_allow_html=True
-        )
+
         with st.container(border=True):
             col1, col2 = st.columns([1, 1])
 
@@ -98,7 +96,7 @@ def display_workflow():
 
 
 def display_research_settings():
-    st.markdown('<h2 class="section-title">研究设置</h2>', unsafe_allow_html=True)
+    st.markdown("## 研究设置")
     with st.container(border=True):
         query = st.text_input("请输入您的研究主题：")
 
@@ -182,7 +180,7 @@ def display_research_settings():
 
 def display_report():
     if st.session_state.generated_report:
-        st.markdown('<h2 class="section-title">研究报告</h2>', unsafe_allow_html=True)
+        st.markdown("## 研究报告")
         with st.container(border=True):
             st.markdown(st.session_state.generated_report)
 

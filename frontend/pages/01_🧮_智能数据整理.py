@@ -223,7 +223,7 @@ def clean_filename(filename: str) -> str:
 
 def handle_file_upload():
     """处理文件上传逻辑。"""
-    st.markdown('<h2 class="section-title">数据上传</h2>', unsafe_allow_html=True)
+    st.markdown("## 数据上传")
     with st.container(border=True):
         uploaded_files = st.file_uploader(
             "选择CSV或Excel文件（可多选）",
@@ -287,7 +287,7 @@ def display_loaded_dataframes():
 
 def process_user_query():
     """处理用户查询并显示结果。"""
-    st.markdown('<h2 class="section-title">数据集操作</h2>', unsafe_allow_html=True)
+    st.markdown("## 数据集操作")
 
     chat_container = st.container(border=True)
     input_placeholder = st.empty()
@@ -432,7 +432,10 @@ def display_operation_result():
     """显示操作结果。"""
     if st.session_state.operation_result:
         result = st.session_state.operation_result
-        st.markdown('<h2 class="section-title">操作结果</h2>', unsafe_allow_html=True)
+        
+        st.markdown("---")
+        st.markdown("## 操作结果")
+
         with st.container(border=True):
             for i, step in enumerate(st.session_state.operation_steps, 1):
                 output_df_names = step["output_df_names"]

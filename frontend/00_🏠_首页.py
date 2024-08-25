@@ -57,7 +57,7 @@ def display_project_intro():
 
 
 def display_feature_overview():
-    st.markdown('<h2 class="section-title">功能概览</h2>', unsafe_allow_html=True)
+    st.markdown("## 功能概览")
 
     features = [
         ("🧮 智能数据整理", "以自然语言交互实现表格数据的智能化处理"),
@@ -82,7 +82,7 @@ def display_feature_overview():
 
 
 def display_project_highlights():
-    st.markdown('<h2 class="section-title">项目亮点</h2>', unsafe_allow_html=True)
+    st.markdown("## 项目亮点")
     st.markdown(
         """
         - **实际场景应用**: 将大模型能力融入HR实际工作流程，解决真实痛点
@@ -94,7 +94,7 @@ def display_project_highlights():
 
 
 def display_documentation_link():
-    st.markdown('<h2 class="section-title">产品文档</h2>', unsafe_allow_html=True)
+    st.markdown("## 产品文档")
 
     st.markdown("探索完整功能、使用指南和最佳实践")
     st.link_button(

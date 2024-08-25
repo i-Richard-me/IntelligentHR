@@ -140,7 +140,7 @@ def main():
 
 
 def display_data_upload_and_preview(for_prediction=False):
-    st.markdown('<h2 class="section-title">数据上传与预览</h2>', unsafe_allow_html=True)
+    st.markdown("## 数据上传与预览")
     with st.container(border=True):
         uploaded_file = st.file_uploader(
             "上传CSV或Excel文件", type=["csv", "xlsx", "xls"]
@@ -199,7 +199,7 @@ def display_data_upload_and_preview(for_prediction=False):
 
 def display_column_selection():
     if st.session_state.df is not None:
-        st.markdown('<h2 class="section-title">变量选择</h2>', unsafe_allow_html=True)
+        st.markdown("## 变量选择")
         with st.container(border=True):
             st.session_state.target_column = st.selectbox(
                 "选择目标变量",
@@ -249,7 +249,7 @@ def display_model_training_and_advanced_settings():
             and st.session_state.target_column
             and st.session_state.feature_columns
     ):
-        st.markdown('<h2 class="section-title">模型训练</h2>', unsafe_allow_html=True)
+        st.markdown("## 模型训练")
         with st.container(border=True):
             display_data_split_settings()
 
@@ -292,7 +292,7 @@ def display_model_training_and_advanced_settings():
 
 def display_model_records():
     if not st.session_state.model_records.empty:
-        st.markdown('<h2 class="section-title">模型记录</h2>', unsafe_allow_html=True)
+        st.markdown("## 模型记录")
         with st.container(border=True):
             columns_order = [
                 "模型ID",
@@ -674,9 +674,7 @@ def display_feature_importance():
 
 
 def display_saved_model_selection():
-    st.markdown(
-        '<h2 class="section-title">选择已保存的模型</h2>', unsafe_allow_html=True
-    )
+    st.markdown("## 选择已保存的模型")
     with st.container(border=True):
         problem_type = (
             "classification"
@@ -737,7 +735,7 @@ def display_saved_model_selection():
 
 def display_prediction_execution():
     if st.session_state.data_validated:
-        st.markdown('<h2 class="section-title">执行预测</h2>', unsafe_allow_html=True)
+        st.markdown("## 执行预测")
         with st.container(border=True):
             if st.button("执行预测", type="primary"):
                 with st.spinner("正在执行预测..."):

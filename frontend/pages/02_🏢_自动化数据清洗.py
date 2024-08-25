@@ -131,7 +131,7 @@ def main():
     display_workflow()
 
     # 任务设置部分
-    st.markdown('<h2 class="section-title">任务设置</h2>', unsafe_allow_html=True)
+    st.markdown("## 任务设置")
 
     with st.container(border=True):
         st.markdown("##### 数据清洗设置")
@@ -177,7 +177,7 @@ def main():
         use_demo, entity_type, skip_validation, skip_search, skip_retrieval
     )
 
-    st.markdown('<h2 class="section-title">数据清洗</h2>', unsafe_allow_html=True)
+    st.markdown("## 数据清洗")
 
     with st.container(border=True):
         tab1, tab2 = st.tabs(["单个样本测试", "批量数据清洗"])

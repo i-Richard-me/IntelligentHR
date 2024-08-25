@@ -20,7 +20,7 @@ from backend.text_processing.classification.classification_core import (
 
 # 设置页面配置
 st.set_page_config(
-    page_title="智能HR助手 - 文本分类与标注",
+    page_title="智能HR助手 - 情感分析与文本标注",
     page_icon="🏷️",
 )
 
@@ -84,9 +84,7 @@ def display_info_message():
     """显示文本分类与标注工具的信息消息。"""
     st.info(
         """
-    **🏷️ 文本分类与标注工具**
-
-    文本分类与标注功能使用先进的自然语言处理技术，帮助用户快速分析和分类大量文本数据。
+    情感分析与文本标注功能使用先进的自然语言处理技术，帮助用户快速分析和分类大量文本数据。
     
     主要功能包括：
     - 文本有效性判断
@@ -103,10 +101,7 @@ def display_info_message():
 def display_workflow():
     """显示文本分类与标注的工作流程。"""
     with st.expander("📋 查看文本分类与标注工作流程", expanded=False):
-        st.markdown(
-            '<h2 class="section-title">文本分类与标注工作流程</h2>',
-            unsafe_allow_html=True,
-        )
+
         with st.container(border=True):
             st.markdown(
                 """
@@ -143,7 +138,7 @@ def main():
     display_info_message()
     display_workflow()
 
-    st.markdown('<h2 class="section-title">文本分类</h2>', unsafe_allow_html=True)
+    st.markdown("## 文本分类")
     with st.container(border=True):
         st.session_state.context = st.text_input(
             "请输入文本上下文或主题",
@@ -215,9 +210,7 @@ def main():
                     st.error(f"处理CSV文件时出错：{str(e)}")
 
     if st.session_state.is_processing:
-        st.markdown(
-            '<h2 class="section-title">批量分类进度</h2>', unsafe_allow_html=True
-        )
+        st.markdown("## 批量分类进度")
         with st.container(border=True):
             total_rows = st.session_state.total_rows
             start_index = st.session_state.current_batch_index * BATCH_SIZE
@@ -263,7 +256,7 @@ def main():
 
     # 显示分类结果
     if st.session_state.classification_results is not None:
-        st.markdown('<h2 class="section-title">分类结果</h2>', unsafe_allow_html=True)
+        st.markdown("## 分类结果")
         with st.container(border=True):
             if isinstance(
                 st.session_state.classification_results, ClassificationResult

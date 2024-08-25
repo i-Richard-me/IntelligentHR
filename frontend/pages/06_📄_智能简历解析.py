@@ -63,7 +63,7 @@ def display_resume_info(resume_data):
     if not resume_data:
         return
 
-    st.markdown('<h2 class="section-title">提取的简历信息</h2>', unsafe_allow_html=True)
+    st.markdown("## 提取的简历信息")
 
     with st.container(border=True):
         # 简历概述
@@ -142,10 +142,6 @@ def display_workflow():
     显示智能简历解析系统的工作流程。
     """
     with st.expander("📄 查看智能简历解析工作流程", expanded=False):
-        st.markdown(
-            '<h2 class="section-title">智能简历解析工作流程</h2>',
-            unsafe_allow_html=True,
-        )
 
         col1, col2 = st.columns([1, 1])
 
@@ -196,7 +192,7 @@ def main():
 
     st.markdown("---")
 
-    st.markdown('<h2 class="section-title">简历提取</h2>', unsafe_allow_html=True)
+    st.markdown("## 简历提取")
 
     with st.container(border=True):
         uploaded_file = st.file_uploader("上传简历文件", type=["html", "pdf"])
