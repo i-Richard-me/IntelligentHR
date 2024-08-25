@@ -1,6 +1,7 @@
 import streamlit as st
 import numpy as np
 
+
 def display_info_message():
     st.info(
         """
@@ -16,6 +17,7 @@ def display_info_message():
     - 结果可视化和下载
     """
     )
+
 
 def display_data_split_settings():
     with st.expander("数据划分设置", expanded=False):
@@ -247,3 +249,43 @@ def display_xgboost_settings():
 
     if st.session_state.xgb_n_trials > 500:
         st.warning("注意：设置较大的迭代次数可能会显著增加训练时间。")
+
+
+def display_linear_regression_settings():
+    st.markdown("#### 线性回归设置")
+
+    use_cv = st.checkbox(
+        "使用交叉验证",
+        value=st.session_state.use_cv_for_linear_regression,
+        help="启用交叉验证可以提供更稳定的模型评估，但会增加训练时间。",
+    )
+
+    if st.button("确认线性回归设置"):
+        st.session_state.use_cv_for_linear_regression = use_cv
+        st.success("线性回归设置已更新，将在下次模型训练时使用。")
+
+    st.info("线性回归模型不需要额外的参数设置。它将自动找到最佳的系数值。")
+
+
+def display_model_selection():
+    st.markdown("## 模型选择")
+    with st.container(border=True):
+        model_options = ["随机森林", "决策树", "XGBoost", "线性回归"]
+
+        if st.session_state.problem_type == "classification":
+            model_options.remove("线性回归")
+
+        st.session_state.model_type = st.radio(
+            "选择模型类型",
+            model_options,
+            key="model_type_radio",
+        )
+
+        if st.session_state.model_type == "线性回归":
+            display_linear_regression_settings()
+        elif st.session_state.model_type == "随机森林":
+            display_random_forest_settings()
+        elif st.session_state.model_type == "决策树":
+            display_decision_tree_settings()
+        else:  # XGBoost
+            display_xgboost_settings()
