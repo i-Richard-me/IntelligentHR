@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.preprocessing import StandardScaler, OneHotEncoder, LabelEncoder
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
@@ -13,6 +13,7 @@ from sklearn.metrics import (
 )
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 from sklearn.tree import DecisionTreeClassifier
+from sklearn.linear_model import LinearRegression
 from xgboost import XGBClassifier, XGBRegressor
 from typing import List, Dict, Any, Tuple
 import joblib
@@ -107,12 +108,15 @@ def evaluate_model(
             "test_classification_report": classification_report(y_test, y_test_pred),
         }
     else:  # regression
+        mse = mean_squared_error(y_test, y_test_pred)
+        r2 = r2_score(y_test, y_test_pred)
         return {
-            "test_mse": mean_squared_error(y_test, y_test_pred),
-            "test_r2": r2_score(y_test, y_test_pred),
+            "test_mse": mse,
+            "test_r2": r2,
             "y_test": y_test,
             "y_pred": y_test_pred,
         }
+
 
 
 def get_feature_importance(model: Any, preprocessor: ColumnTransformer) -> pd.Series:
@@ -127,10 +131,18 @@ def get_feature_importance(model: Any, preprocessor: ColumnTransformer) -> pd.Se
         特征重要性系列
     """
     feature_names = preprocessor.get_feature_names_out()
-    feature_importance = pd.Series(
-        model.feature_importances_,
-        index=feature_names,
-    ).sort_values(ascending=False)
+    if hasattr(model, "feature_importances_"):
+        feature_importance = pd.Series(
+            model.feature_importances_,
+            index=feature_names,
+        ).sort_values(ascending=False)
+    elif hasattr(model, "coef_"):
+        feature_importance = pd.Series(
+            np.abs(model.coef_),
+            index=feature_names,
+        ).sort_values(ascending=False)
+    else:
+        raise ValueError("模型不支持特征重要性计算")
     return feature_importance
 
 
@@ -143,6 +155,7 @@ def train_model(
     test_size: float = 0.3,
     param_ranges: Dict[str, Any] = None,
     n_trials: int = 100,
+    use_cv: bool = True,
 ) -> Dict[str, Any]:
     """
     训练指定类型的模型并进行评估。
@@ -151,11 +164,12 @@ def train_model(
         df: 输入数据框
         target_column: 目标变量的列名
         feature_columns: 特征列名列表
-        model_type: 模型类型 ("随机森林", "决策树", "XGBoost")
+        model_type: 模型类型 ("随机森林", "决策树", "XGBoost", "线性回归")
         problem_type: 问题类型 ("classification" 或 "regression")
         test_size: 测试集占总数据的比例
         param_ranges: 参数搜索范围，如果为None则使用默认值
         n_trials: Optuna优化的试验次数 (仅用于随机森林和XGBoost)
+        use_cv: 是否使用交叉验证 (仅用于线性回归)
 
     Returns:
         包含模型、特征重要性、评估指标、最佳参数和最佳轮次的字典
@@ -218,8 +232,82 @@ def train_model(
             param_ranges,
             n_trials,
         )
+    elif model_type == "线性回归":
+        results = train_linear_regression(
+            df,
+            target_column,
+            feature_columns,
+            test_size,
+            use_cv,
+        )
     else:
         raise ValueError(f"不支持的模型类型: {model_type}")
+
+    return results
+
+
+def train_linear_regression(
+        df: pd.DataFrame,
+        target_column: str,
+        feature_columns: List[str],
+        test_size: float = 0.3,
+        use_cv: bool = False,
+) -> Dict[str, Any]:
+    """
+    训练线性回归模型并进行评估。
+
+    Args:
+        df: 输入数据框
+        target_column: 目标变量的列名
+        feature_columns: 特征列名列表
+        test_size: 测试集占总数据的比例
+        use_cv: 是否使用交叉验证
+
+    Returns:
+        包含模型、特征重要性、评估指标的字典
+    """
+    X_train, X_test, y_train, y_test, categorical_cols, numerical_cols = prepare_data(
+        df, target_column, feature_columns, test_size
+    )
+
+    preprocessor = create_preprocessor(categorical_cols, numerical_cols)
+    model = LinearRegression()
+    pipeline = Pipeline(steps=[("preprocessor", preprocessor), ("regressor", model)])
+
+    pipeline.fit(X_train, y_train)
+
+    # 计算训练集 MSE 和 R²
+    y_train_pred = pipeline.predict(X_train)
+    train_mse = mean_squared_error(y_train, y_train_pred)
+    train_r2 = r2_score(y_train, y_train_pred)
+
+    # 计算测试集 MSE 和其他指标
+    test_metrics = evaluate_model(pipeline, X_test, y_test, "regression")
+
+    feature_importance = get_feature_importance(model, preprocessor)
+
+    results = {
+        "model": pipeline,
+        "feature_importance": feature_importance,
+        "train_mse": train_mse,
+        "train_r2": train_r2,
+        **test_metrics,
+    }
+
+    if use_cv:
+        cv_mse_scores = cross_val_score(pipeline, X_train, y_train, cv=5, scoring="neg_mean_squared_error")
+        cv_r2_scores = cross_val_score(pipeline, X_train, y_train, cv=5, scoring="r2")
+        results["cv_mean_score"] = -np.mean(cv_mse_scores)  # 转换为正的MSE
+        results["cv_mean_r2"] = np.mean(cv_r2_scores)
+    else:
+        results["cv_mean_score"] = train_mse  # 使用训练集MSE作为CV分数
+        results["cv_mean_r2"] = train_r2  # 使用训练集R²
+
+    # 添加系数和截距
+    results["coefficients"] = pd.Series(
+        model.coef_, index=preprocessor.get_feature_names_out()
+    )
+    results["intercept"] = model.intercept_
 
     return results
 
@@ -280,7 +368,6 @@ def add_model_record(
         "模型类型": model_type,
         "问题类型": "分类" if problem_type == "classification" else "回归",
         "训练时间": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "参数": str(model_results["best_params"]),
         "交叉验证分数": model_results["cv_mean_score"],
         "测试集分数": (
             model_results["test_roc_auc"]
@@ -289,8 +376,17 @@ def add_model_record(
         ),
     }
 
+    if "best_params" in model_results:
+        new_record["参数"] = str(model_results["best_params"])
+    elif model_type == "线性回归":
+        new_record["参数"] = "N/A (线性回归无需参数优化)"
+    else:
+        new_record["参数"] = "未知"
+
     if "best_trial" in model_results:
         new_record["最佳轮次"] = model_results["best_trial"]
+    else:
+        new_record["最佳轮次"] = "N/A"
 
     return pd.concat([model_records, pd.DataFrame([new_record])], ignore_index=True)
 
@@ -351,6 +447,7 @@ def initialize_session_state():
         "data_validated": False,
         "mode": "train",
         "do_model_interpretation": False,
+        "use_cv_for_linear_regression": False,  # 新增：是否对线性回归使用交叉验证
     }
 
     return default_states
