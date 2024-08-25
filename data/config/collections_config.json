@@ -1,5 +1,39 @@
 {
     "collections": {
+        "company_data": {
+            "name": "company_data",
+            "description": "Collection for company name standardization",
+            "fields": [
+                {
+                    "name": "company_name",
+                    "type": "str",
+                    "description": "Original company name"
+                },
+                {
+                    "name": "standard_name",
+                    "type": "str",
+                    "description": "Standardized company name"
+                }
+            ],
+            "embedding_field": "company_name"
+        },
+        "school_data": {
+            "name": "school_data",
+            "description": "Collection for school name standardization",
+            "fields": [
+                {
+                    "name": "school_name",
+                    "type": "str",
+                    "description": "Original school name"
+                },
+                {
+                    "name": "standard_name",
+                    "type": "str",
+                    "description": "Standardized school name"
+                }
+            ],
+            "embedding_field": "school_name"
+        },
         "data_operation_examples": {
             "name": "data_operation_examples",
             "description": "Examples for data operation tasks",
@@ -21,28 +55,6 @@
                 }
             ],
             "embedding_field": "user_query"
-        },
-        "another_collection_example": {
-            "name": "another_collection_example",
-            "description": "Another example collection",
-            "fields": [
-                {
-                    "name": "field1",
-                    "type": "str",
-                    "description": "Description of field1"
-                },
-                {
-                    "name": "field2",
-                    "type": "str",
-                    "description": "Description of field2"
-                },
-                {
-                    "name": "field3",
-                    "type": "str",
-                    "description": "Description of field3"
-                }
-            ],
-            "embedding_field": "field2"
         }
     }
 }
