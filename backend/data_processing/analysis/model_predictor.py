@@ -7,7 +7,6 @@ from sklearn.base import BaseEstimator
 from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
 
-
 class ModelPredictor:
     def __init__(self, models_dir: str = "data/ml_models"):
         self.models_dir = models_dir
@@ -31,12 +30,23 @@ class ModelPredictor:
         self.original_features = self.get_original_feature_names()
         self.problem_type = problem_type
 
+        # 获取模型实例
+        model_instance = self.get_model_instance()
+        model_type = type(model_instance).__name__
+
         self.model_info = {
             "filename": model_filename,
-            "type": type(self.model.named_steps["classifier"]).__name__,
+            "type": model_type,
             "problem_type": problem_type,
             "features": self.original_features,
         }
+
+    def get_model_instance(self) -> BaseEstimator:
+        """获取模型实例，无论它被命名为什么"""
+        for step_name, step_instance in self.model.named_steps.items():
+            if step_name != "preprocessor":
+                return step_instance
+        raise ValueError("无法在管道中找到模型实例")
 
     def get_original_feature_names(self) -> List[str]:
         if not isinstance(self.preprocessor, ColumnTransformer):
@@ -80,7 +90,6 @@ class ModelPredictor:
 
     def get_model_info(self) -> Dict[str, Any]:
         return self.model_info
-
 
 def list_available_models(
     models_dir: str = "data/ml_models", problem_type: str = "classification"
