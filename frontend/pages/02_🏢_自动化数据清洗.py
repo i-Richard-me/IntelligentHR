@@ -16,7 +16,8 @@ from backend.data_processing.data_cleaning.data_processor import (
     get_entity_retriever,
 )
 from backend.data_processing.data_cleaning.verification_workflow import (
-    EntityVerificationWorkflow, ProcessingStatus
+    EntityVerificationWorkflow,
+    ProcessingStatus,
 )
 
 # Streamlit 页面配置
@@ -42,8 +43,9 @@ if "batch_results_df" not in st.session_state:
 # 定义实体类型选项
 ENTITY_TYPES = {
     "公司名称": {
-        "csv_path": "data/datasets/company.csv",
         "collection_name": "company_data",
+        "original_field": "company_name",
+        "standard_field": "standard_name",
         "validation_instructions": """
         请特别注意，有效的公司名称应该是具体的、可识别的企业实体。
         例如，"科技公司"这样的泛称应被视为无效，而"阿里巴巴"则是有效的。
@@ -62,8 +64,9 @@ ENTITY_TYPES = {
         """,
     },
     "学校名称": {
-        "csv_path": "data/datasets/school.csv",
         "collection_name": "school_data",
+        "original_field": "school_name",
+        "standard_field": "standard_name",
         "validation_instructions": """
         有效的学校名称应该是具体的教育机构名称。
         例如，"大学"这样的泛称应被视为无效，而"北京大学"则是有效的。
@@ -84,17 +87,15 @@ ENTITY_TYPES = {
 
 
 def initialize_workflow(
-        use_demo: bool,
-        entity_type: str,
-        skip_validation: bool,
-        skip_search: bool,
-        skip_retrieval: bool,
+    entity_type: str,
+    skip_validation: bool,
+    skip_search: bool,
+    skip_retrieval: bool,
 ) -> EntityVerificationWorkflow:
     """
     初始化实体验证工作流。
 
     Args:
-        use_demo (bool): 是否使用演示数据。
         entity_type (str): 实体类型。
         skip_validation (bool): 是否跳过输入验证。
         skip_search (bool): 是否跳过网络搜索和分析。
@@ -104,13 +105,13 @@ def initialize_workflow(
         EntityVerificationWorkflow: 初始化后的工作流对象。
     """
     entity_info = ENTITY_TYPES[entity_type]
-    vector_store = initialize_vector_store(
-        use_demo, entity_info["csv_path"], entity_info["collection_name"]
-    )
-    retriever = get_entity_retriever(vector_store)
+    collection = initialize_vector_store(entity_info["collection_name"])
+    retriever = get_entity_retriever(collection, entity_type)
     return EntityVerificationWorkflow(
         retriever=retriever,
         entity_type=entity_type,
+        original_field=entity_info["original_field"],
+        standard_field="standard_name",
         validation_instructions=entity_info["validation_instructions"],
         analysis_instructions=entity_info["analysis_instructions"],
         verification_instructions=entity_info["verification_instructions"],
@@ -140,7 +141,7 @@ def main():
         entity_type = st.radio(
             "选择要清洗的数据类型",
             ["公司名称", "学校名称"],
-            help="选择您需要标准化的数据类型。"
+            help="选择您需要标准化的数据类型。",
         )
 
         # 工作流程选项
@@ -150,31 +151,24 @@ def main():
             skip_validation = st.checkbox(
                 "跳过输入验证",
                 value=False,
-                help="如果确信输入数据有效，可以跳过验证步骤。"
+                help="如果确信输入数据有效，可以跳过验证步骤。",
             )
         with col2:
             skip_search = st.checkbox(
                 "跳过网络搜索",
                 value=False,
-                help="对于知名实体，可以直接进行数据库匹配，跳过网络搜索步骤。"
+                help="对于知名实体，可以直接进行数据库匹配，跳过网络搜索步骤。",
             )
         with col3:
             skip_retrieval = st.checkbox(
                 "跳过数据库匹配",
                 value=False,
-                help="如果处理全新数据，可以跳过与已有数据库的匹配步骤。"
+                help="如果处理全新数据，可以跳过与已有数据库的匹配步骤。",
             )
-
-        # 将演示数据选项放在最后
-        use_demo = st.checkbox(
-            "使用演示数据",
-            value=False,
-            help="勾选此项将使用预设的示例数据，否则将使用实际数据库数据。"
-        )
 
     # 初始化工作流
     workflow = initialize_workflow(
-        use_demo, entity_type, skip_validation, skip_search, skip_retrieval
+        entity_type, skip_validation, skip_search, skip_retrieval
     )
 
     st.markdown("## 数据清洗")
@@ -285,10 +279,15 @@ def display_single_result(result: Dict[str, Any], entity_type: str):
 
     if result["status"] == ProcessingStatus.INVALID_INPUT:
         st.error("输入被判定为无效，请检查并重新输入。")
-    elif result["status"] in [ProcessingStatus.UNIDENTIFIED, ProcessingStatus.UNVERIFIED]:
+    elif result["status"] in [
+        ProcessingStatus.UNIDENTIFIED,
+        ProcessingStatus.UNVERIFIED,
+    ]:
         st.warning("此结果可能需要进一步确认。")
     elif result["status"] == ProcessingStatus.VALID_INPUT:
-        st.info("输入被判定为有效，但未进行进一步处理。如需更高准确度，请考虑启用搜索和检索步骤。")
+        st.info(
+            "输入被判定为有效，但未进行进一步处理。如需更高准确度，请考虑启用搜索和检索步骤。"
+        )
 
 
 def batch_processing(workflow: EntityVerificationWorkflow, entity_type: str):
@@ -299,9 +298,7 @@ def batch_processing(workflow: EntityVerificationWorkflow, entity_type: str):
         workflow (EntityVerificationWorkflow): 实体名称标准化工作流对象。
         entity_type (str): 实体类型。
     """
-    uploaded_file = st.file_uploader(
-        f"上传CSV文件（包含{entity_type}列）", type="csv"
-    )
+    uploaded_file = st.file_uploader(f"上传CSV文件（包含{entity_type}列）", type="csv")
     if uploaded_file is not None:
         df = pd.read_csv(uploaded_file)
         st.write("预览上传的数据：")
@@ -315,7 +312,7 @@ def batch_processing(workflow: EntityVerificationWorkflow, entity_type: str):
 
 
 def process_batch(
-        df: pd.DataFrame, workflow: EntityVerificationWorkflow, entity_type: str
+    df: pd.DataFrame, workflow: EntityVerificationWorkflow, entity_type: str
 ):
     """
     处理批量实体数据。
@@ -352,11 +349,15 @@ def display_batch_results(result_df: pd.DataFrame, entity_type: str):
 
     # 显示简化的结果统计
     st.subheader("处理结果统计")
-    stats_df = pd.DataFrame({
-        "类别": [status.value for status in ProcessingStatus],
-        "数量": [status_counts.get(status, 0) for status in ProcessingStatus]
-    })
-    stats_df["占比"] = (stats_df["数量"] / len(result_df) * 100).round(2).astype(str) + '%'
+    stats_df = pd.DataFrame(
+        {
+            "类别": [status.value for status in ProcessingStatus],
+            "数量": [status_counts.get(status, 0) for status in ProcessingStatus],
+        }
+    )
+    stats_df["占比"] = (stats_df["数量"] / len(result_df) * 100).round(2).astype(
+        str
+    ) + "%"
     st.table(stats_df.set_index("类别"))
 
     # 显示结果表格
@@ -364,12 +365,17 @@ def display_batch_results(result_df: pd.DataFrame, entity_type: str):
     st.dataframe(result_df[["原始输入", "final_entity_name", "status"]])
 
     # 提供建议
-    if ProcessingStatus.UNVERIFIED in status_counts or ProcessingStatus.UNIDENTIFIED in status_counts:
+    if (
+        ProcessingStatus.UNVERIFIED in status_counts
+        or ProcessingStatus.UNIDENTIFIED in status_counts
+    ):
         st.warning(
-            f"有 {status_counts.get(ProcessingStatus.UNVERIFIED, 0) + status_counts.get(ProcessingStatus.UNIDENTIFIED, 0)} 个实体未能完全验证。建议手动检查这些结果。")
+            f"有 {status_counts.get(ProcessingStatus.UNVERIFIED, 0) + status_counts.get(ProcessingStatus.UNIDENTIFIED, 0)} 个实体未能完全验证。建议手动检查这些结果。"
+        )
     if ProcessingStatus.VALID_INPUT in status_counts:
         st.info(
-            f"有 {status_counts.get(ProcessingStatus.VALID_INPUT, 0)} 个实体仅进行了输入验证。如需更高准确度，请考虑启用完整识别流程。")
+            f"有 {status_counts.get(ProcessingStatus.VALID_INPUT, 0)} 个实体仅进行了输入验证。如需更高准确度，请考虑启用完整识别流程。"
+        )
 
     # 提供下载选项
     csv = result_df.to_csv(index=False)
