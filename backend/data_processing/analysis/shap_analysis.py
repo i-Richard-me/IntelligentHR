@@ -6,11 +6,11 @@ from typing import Any, Dict, List, Tuple
 
 
 def calculate_shap_values(
-    model: Any,
-    X: pd.DataFrame,
-    preprocessor: Any,
-    feature_names: List[str],
-    problem_type: str,
+        model: Any,
+        X: pd.DataFrame,
+        preprocessor: Any,
+        feature_names: List[str],
+        problem_type: str,
 ) -> Dict[str, Any]:
     """
     计算SHAP值并生成SHAP摘要图。
@@ -39,16 +39,16 @@ def calculate_shap_values(
         explainer = shap.TreeExplainer(model)
         shap_values = explainer.shap_values(X_processed)
         if isinstance(shap_values, list):
-            shap_values = shap_values[
-                1
-            ]  # For binary classification, we use the positive class
+            shap_values = shap_values[1]  # For binary classification, we use the positive class
         elif shap_values.ndim == 3:
-            shap_values = shap_values[
-                :, :, 1
-            ]  # For binary classification with 3D output
+            shap_values = shap_values[:, :, 1]  # For binary classification with 3D output
     else:
-        explainer = shap.TreeExplainer(model)
-        shap_values = explainer.shap_values(X_processed)
+        if hasattr(model, "coef_"):  # Linear models
+            explainer = shap.LinearExplainer(model, X_processed)
+            shap_values = explainer.shap_values(X_processed)
+        else:  # Tree-based models
+            explainer = shap.TreeExplainer(model)
+            shap_values = explainer.shap_values(X_processed)
 
     # 确保shap_values是二维的
     if shap_values.ndim != 2:
@@ -82,7 +82,7 @@ def calculate_shap_values(
 
 
 def create_shap_summary_plot(
-    summary_data: List[Dict[str, Any]], max_display: int = 10
+        summary_data: List[Dict[str, Any]], max_display: int = 10
 ) -> go.Figure:
     """
     创建SHAP摘要图。
@@ -95,8 +95,8 @@ def create_shap_summary_plot(
         plotly Figure对象
     """
     summary_data = sorted(summary_data, key=lambda x: x["importance"], reverse=True)[
-        :max_display
-    ]
+                   :max_display
+                   ]
 
     fig = go.Figure()
 
@@ -126,7 +126,7 @@ def create_shap_summary_plot(
 
 
 def create_shap_importance_plot(
-    feature_importance: pd.Series, max_display: int = 20
+        feature_importance: pd.Series, max_display: int = 20
 ) -> go.Figure:
     """
     创建SHAP特征重要性图。
@@ -157,14 +157,11 @@ def create_shap_importance_plot(
     return fig
 
 
-import numpy as np
-
-
 def create_shap_dependence_plot(
-    shap_values: np.ndarray,
-    features: np.ndarray,
-    feature_names: np.ndarray,
-    selected_feature: str,
+        shap_values: np.ndarray,
+        features: np.ndarray,
+        feature_names: np.ndarray,
+        selected_feature: str,
 ) -> go.Figure:
     """
     为选定的特征创建SHAP依赖图。

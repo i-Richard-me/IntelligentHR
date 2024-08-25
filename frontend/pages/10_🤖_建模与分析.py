@@ -37,6 +37,8 @@ from backend.data_processing.analysis.ml_components import (
     display_random_forest_settings,
     display_decision_tree_settings,
     display_xgboost_settings,
+    display_linear_regression_settings,
+    display_model_selection,
 )
 from backend.data_processing.analysis.shap_analysis import (
     calculate_shap_values,
@@ -135,61 +137,6 @@ def main():
             display_prediction_results()
 
     show_footer()
-
-
-def display_model_selection():
-    st.markdown("## 模型选择")
-    with st.container(border=True):
-        model_options = ["随机森林", "决策树", "XGBoost"]
-
-        st.session_state.model_type = st.radio(
-            "选择模型类型",
-            model_options,
-            key="model_type_radio",
-        )
-
-
-def display_saved_model_selection():
-    st.markdown(
-        '<h2 class="section-title">选择已保存的模型</h2>', unsafe_allow_html=True
-    )
-    with st.container(border=True):
-        problem_type = (
-            "classification"
-            if st.session_state.problem_type == "classification"
-            else "regression"
-        )
-        available_models = list_available_models(problem_type=problem_type)
-        selected_model = st.selectbox("选择模型", available_models)
-
-        if selected_model:
-            try:
-                st.session_state.predictor.load_model(selected_model, problem_type)
-                st.success(f"成功加载模型: {selected_model}")
-
-                model_info = st.session_state.predictor.get_model_info()
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.metric("模型类型", model_info["type"])
-                with col2:
-                    st.metric("所需特征数量", len(model_info["features"]))
-
-                with st.expander("查看所需特征列表"):
-                    features_df = pd.DataFrame(
-                        model_info["features"], columns=["特征名称"]
-                    )
-                    st.dataframe(features_df, use_container_width=True)
-
-                # 可以添加一个提示，说明当前正在使用的模型类型
-                st.info(
-                    f"当前使用的是{'分类' if problem_type == 'classification' else '回归'}模型。"
-                )
-
-            except Exception as e:
-                st.error(f"加载模型时出错: {str(e)}")
-                st.warning(
-                    "这可能是因为选择的模型与当前版本不兼容。请尝试重新训练模型。"
-                )
 
 
 def display_data_upload_and_preview(for_prediction=False):
@@ -298,21 +245,13 @@ def display_column_selection():
 
 def display_model_training_and_advanced_settings():
     if (
-        st.session_state.df is not None
-        and st.session_state.target_column
-        and st.session_state.feature_columns
+            st.session_state.df is not None
+            and st.session_state.target_column
+            and st.session_state.feature_columns
     ):
         st.markdown('<h2 class="section-title">模型训练</h2>', unsafe_allow_html=True)
         with st.container(border=True):
             display_data_split_settings()
-
-            with st.expander("模型参数高级设置"):
-                if st.session_state.model_type == "随机森林":
-                    display_random_forest_settings()
-                elif st.session_state.model_type == "决策树":
-                    display_decision_tree_settings()
-                else:  # XGBoost
-                    display_xgboost_settings()
 
             if st.button("开始训练模型"):
                 with st.spinner("正在训练模型，请稍候..."):
@@ -330,6 +269,7 @@ def display_model_training_and_advanced_settings():
                                 if st.session_state.model_type == "随机森林"
                                 else st.session_state.xgb_n_trials
                             ),
+                            use_cv=st.session_state.use_cv_for_linear_regression,
                         )
                         st.session_state.model_records = add_model_record(
                             st.session_state.model_records,
@@ -350,6 +290,97 @@ def display_model_training_and_advanced_settings():
                     except Exception as e:
                         st.error(f"模型训练过程中出错：{str(e)}")
 
+def display_model_records():
+    if not st.session_state.model_records.empty:
+        st.markdown('<h2 class="section-title">模型记录</h2>', unsafe_allow_html=True)
+        with st.container(border=True):
+            columns_order = [
+                "模型ID",
+                "模型类型",
+                "问题类型",
+                "交叉验证分数",
+                "测试集分数",
+                "最佳模型",
+                "保存",
+                "训练时间",
+                "参数",
+            ]
+            temp_df = st.session_state.model_records.reindex(columns=columns_order)
+            temp_df["保存"] = False
+            temp_df["最佳模型"] = False
+
+            # 根据问题类型选择最佳模型
+            if st.session_state.problem_type == "classification":
+                best_model_index = temp_df["交叉验证分数"].idxmax()
+            else:  # regression
+                best_model_index = temp_df["测试集分数"].idxmin()  # 使用 MSE，越低越好
+
+            temp_df.loc[best_model_index, "最佳模型"] = True
+
+            edited_df = st.data_editor(
+                temp_df,
+                column_config={
+                    "保存": st.column_config.CheckboxColumn(
+                        "保存",
+                        help="选择要保存的模型",
+                        default=False,
+                    ),
+                    "最佳模型": st.column_config.CheckboxColumn(
+                        "最佳模型",
+                        help="表现最好的模型",
+                        default=False,
+                    ),
+                    "交叉验证分数": st.column_config.NumberColumn(
+                        "交叉验证分数",
+                        format="%.4f",
+                        help="对于线性回归模型不使用交叉验证时，此值为训练集 MSE。"
+                    ),
+                    "测试集分数": st.column_config.NumberColumn(
+                        "测试集分数",
+                        format="%.4f",
+                    ),
+                },
+                disabled=[
+                    "模型ID",
+                    "模型类型",
+                    "问题类型",
+                    "训练时间",
+                    "参数",
+                    "交叉验证分数",
+                    "测试集分数",
+                    "最佳模型",
+                ],
+                hide_index=True,
+                column_order=columns_order,
+                use_container_width=True,
+            )
+
+            save_selected_models(edited_df)
+
+def save_selected_models(edited_df):
+    models_to_save = edited_df[edited_df["保存"]]
+    if not models_to_save.empty:
+        for _, row in models_to_save.iterrows():
+            model_type = row["模型类型"]
+            problem_type = (
+                "classification" if row["问题类型"] == "分类" else "regression"
+            )
+            timestamp = datetime.strptime(row["训练时间"], "%Y-%m-%d %H:%M:%S")
+            if (
+                st.session_state.model_results
+                and st.session_state.model_results["model"]
+            ):
+                file_path = save_model(
+                    st.session_state.model_results["model"],
+                    model_type,
+                    problem_type,
+                    timestamp,
+                )
+                st.success(
+                    f"模型 {model_type} ({problem_type}) 已成功保存到 {file_path}"
+                )
+            else:
+                st.warning(f"无法保存模型 {model_type}，模型对象不存在。")
 
 def display_results():
     if st.session_state.model_results:
@@ -387,6 +418,7 @@ def display_model_performance_overview():
             st.metric(
                 label="交叉验证平均 MSE",
                 value=f"{st.session_state.model_results['cv_mean_score']:.4f}",
+                help="对于线性回归模型不使用交叉验证时，此值为训练集 MSE。"
             )
     with col2:
         if st.session_state.problem_type == "classification":
@@ -400,14 +432,20 @@ def display_model_performance_overview():
                 value=f"{st.session_state.model_results['test_mse']:.4f}",
             )
 
-    with st.expander("查看最佳模型参数", expanded=False):
-        st.json(st.session_state.model_results["best_params"])
-
-    if (
-        st.session_state.model_type == "XGBoost"
-        and st.session_state.problem_type == "classification"
-    ):
-        display_xgboost_label_encoding()
+    # 为线性回归模型添加 R² 显示
+    if st.session_state.problem_type == "regression" and st.session_state.model_type == "线性回归":
+        col3, col4 = st.columns(2)
+        with col3:
+            st.metric(
+                label="交叉验证平均 R²",
+                value=f"{st.session_state.model_results['cv_mean_r2']:.4f}",
+                help="对于不使用交叉验证时，此值为训练集 R²。"
+            )
+        with col4:
+            st.metric(
+                label="测试集 R²",
+                value=f"{st.session_state.model_results['test_r2']:.4f}",
+            )
 
 
 def display_confusion_matrix():
@@ -499,8 +537,8 @@ def display_xgboost_label_encoding():
 
 def display_model_interpretation():
     if (
-        st.session_state.model_results
-        and "feature_importance" in st.session_state.model_results
+            st.session_state.model_results
+            and "feature_importance" in st.session_state.model_results
     ):
         st.markdown("## 模型解释")
 
@@ -533,6 +571,9 @@ def display_model_interpretation():
 
                         通过这个图，我们可以直观地看出哪些特征对模型的预测结果影响最大。这有助于我们理解模型的决策依据，
                         并可能为进一步的特征工程或模型优化提供指导。
+
+                        对于线性回归模型，SHAP值直接对应于特征的系数（考虑了特征的尺度）。正的SHAP值表示该特征
+                        增加了预测值，而负的SHAP值表示该特征减少了预测值。
                         """
                         )
 
@@ -569,20 +610,23 @@ def display_model_interpretation():
                         2. 特征值的哪些范围对预测结果有正面或负面影响。
                         3. 是否存在特征值的临界点，在该点附近预测结果发生显著变化。
 
+                        对于线性回归模型，SHAP依赖图通常会显示为一条直线，斜率对应于该特征的系数。
+                        这反映了线性回归模型中特征与目标变量之间的线性关系。
+
                         这有助于我们深入理解特定特征是如何影响模型预测的，对模型的解释和改进都很有价值。
                         """
                         )
 
 
 def calculate_and_store_shap_values():
-
     if "shap_results" in st.session_state:
         del st.session_state.shap_results
 
     with st.spinner("正在计算SHAP值，这可能需要一些时间..."):
         try:
+            model_step = "regressor" if st.session_state.model_type == "线性回归" else "classifier"
             shap_results = calculate_shap_values(
-                st.session_state.model_results["model"].named_steps["classifier"],
+                st.session_state.model_results["model"].named_steps[model_step],
                 st.session_state.df[st.session_state.feature_columns],
                 st.session_state.model_results["model"].named_steps["preprocessor"],
                 st.session_state.feature_columns,
@@ -617,7 +661,78 @@ def display_feature_importance():
     st.plotly_chart(fig)
 
     with st.expander("特征重要性解释", expanded=False):
-        st.caption(FEATURE_IMPORTANCE_EXPLANATION)
+        if st.session_state.model_type == "线性回归":
+            st.caption(
+                """
+                对于线性回归模型，特征重要性是基于各个特征的系数的绝对值计算的。
+                系数的绝对值越大，表示该特征对预测结果的影响越大。
+                请注意，这种方法没有考虑特征的尺度，因此在解释时应当结合特征的实际含义和尺度来理解其重要性。
+                """
+            )
+        else:
+            st.caption(FEATURE_IMPORTANCE_EXPLANATION)
+
+
+def display_saved_model_selection():
+    st.markdown(
+        '<h2 class="section-title">选择已保存的模型</h2>', unsafe_allow_html=True
+    )
+    with st.container(border=True):
+        problem_type = (
+            "classification"
+            if st.session_state.problem_type == "classification"
+            else "regression"
+        )
+        available_models = list_available_models(problem_type=problem_type)
+        selected_model = st.selectbox("选择模型", available_models)
+
+        if selected_model:
+            try:
+                st.session_state.predictor.load_model(selected_model, problem_type)
+                st.success(f"成功加载模型: {selected_model}")
+
+                model_info = st.session_state.predictor.get_model_info()
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("模型类型", model_info["type"])
+                with col2:
+                    st.metric("问题类型", "分类" if problem_type == "classification" else "回归")
+                with col3:
+                    st.metric("所需特征数量", len(model_info["features"]))
+
+                with st.expander("查看所需特征列表"):
+                    features_df = pd.DataFrame(
+                        model_info["features"], columns=["特征名称"]
+                    )
+                    st.dataframe(features_df, use_container_width=True)
+
+                # 显示模型性能指标（如果有的话）
+                if "performance" in model_info:
+                    st.markdown("### 模型性能")
+                    performance = model_info["performance"]
+                    if problem_type == "classification":
+                        st.metric("测试集 ROC AUC", f"{performance['test_roc_auc']:.4f}")
+                    else:
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.metric("测试集 MSE", f"{performance['test_mse']:.4f}")
+                        with col2:
+                            if "test_r2" in performance:
+                                st.metric("测试集 R²", f"{performance['test_r2']:.4f}")
+
+                # 可以添加一个提示，说明当前正在使用的模型类型
+                st.info(
+                    f"当前使用的是{'分类' if problem_type == 'classification' else '回归'}模型。"
+                )
+
+            except Exception as e:
+                st.error(f"加载模型时出错: {str(e)}")
+                st.error(f"错误类型: {type(e).__name__}")
+                st.error(f"模型文件: {selected_model}")
+                st.error(f"问题类型: {problem_type}")
+                st.warning(
+                    "这可能是因为选择的模型与当前版本不兼容，或模型文件已损坏。请尝试重新训练模型。"
+                )
 
 
 def display_prediction_execution():
@@ -696,94 +811,6 @@ def display_prediction_results():
                 file_name="prediction_results.csv",
                 mime="text/csv",
             )
-
-
-def display_model_records():
-    if not st.session_state.model_records.empty:
-        st.markdown('<h2 class="section-title">模型记录</h2>', unsafe_allow_html=True)
-        with st.container(border=True):
-            columns_order = [
-                "模型ID",
-                "模型类型",
-                "问题类型",
-                "交叉验证分数",
-                "测试集分数",
-                "最佳模型",
-                "保存",
-                "训练时间",
-                "参数",
-            ]
-            temp_df = st.session_state.model_records.reindex(columns=columns_order)
-            temp_df["保存"] = False
-            temp_df["最佳模型"] = False
-
-            best_model_index = temp_df["交叉验证分数"].idxmax()
-            temp_df.loc[best_model_index, "最佳模型"] = True
-
-            edited_df = st.data_editor(
-                temp_df,
-                column_config={
-                    "保存": st.column_config.CheckboxColumn(
-                        "保存",
-                        help="选择要保存的模型",
-                        default=False,
-                    ),
-                    "最佳模型": st.column_config.CheckboxColumn(
-                        "最佳模型",
-                        help="交叉验证分数最高的模型",
-                        default=False,
-                    ),
-                    "交叉验证分数": st.column_config.NumberColumn(
-                        "交叉验证分数",
-                        format="%.4f",
-                    ),
-                    "测试集分数": st.column_config.NumberColumn(
-                        "测试集分数",
-                        format="%.4f",
-                    ),
-                },
-                disabled=[
-                    "模型ID",
-                    "模型类型",
-                    "问题类型",
-                    "训练时间",
-                    "参数",
-                    "交叉验证分数",
-                    "测试集分数",
-                    "最佳模型",
-                ],
-                hide_index=True,
-                column_order=columns_order,
-                use_container_width=True,
-            )
-
-            save_selected_models(edited_df)
-
-
-def save_selected_models(edited_df):
-    models_to_save = edited_df[edited_df["保存"]]
-    if not models_to_save.empty:
-        for _, row in models_to_save.iterrows():
-            model_type = row["模型类型"]
-            problem_type = (
-                "classification" if row["问题类型"] == "分类" else "regression"
-            )
-            timestamp = datetime.strptime(row["训练时间"], "%Y-%m-%d %H:%M:%S")
-            if (
-                st.session_state.model_results
-                and st.session_state.model_results["model"]
-            ):
-                file_path = save_model(
-                    st.session_state.model_results["model"],
-                    model_type,
-                    problem_type,
-                    timestamp,
-                )
-                st.success(
-                    f"模型 {model_type} ({problem_type}) 已成功保存到 {file_path}"
-                )
-            else:
-                st.warning(f"无法保存模型 {model_type}，模型对象不存在。")
 
 
 if __name__ == "__main__":
