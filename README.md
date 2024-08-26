@@ -6,21 +6,22 @@ Intelligent HR solutions for the data-driven enterprise.
 
 ## 快速开始
 
-1. 克隆仓库并安装依赖：
+1. 克隆仓库:
    ```
    git clone https://github.com/i-Richard-me/IntelligentHR
    cd IntelligentHR
-   pip install -r requirements.txt
    ```
 
-2. 配置环境变量：
+2. 配置环境变量:
    复制 `.env.example` 为 `.env` 并填写必要的 API 密钥。
 
-3. 启动服务：
+3. 使用Docker启动服务:
    ```
-   uvicorn backend.main:app --reload
-   streamlit run frontend/00_🏠_首页.py
+   docker-compose up --build
    ```
+
+4. 访问应用:
+   打开浏览器,访问 `http://localhost:8510` 即可使用智能HR助手。
 
 ## 贡献
 
