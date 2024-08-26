@@ -2,8 +2,7 @@ import io
 import os
 import sys
 import json
-import time
-from typing import List, Dict
+from typing import List, Dict, Tuple
 
 import streamlit as st
 import pandas as pd
@@ -24,7 +23,9 @@ from utils.llm_tools import CustomEmbeddings
 from frontend.ui_components import show_sidebar, show_footer, apply_common_styles
 
 # 设置页面配置
-st.set_page_config(page_title="智能HR助手 - Milvus数据库管理", page_icon="🗄️", layout="wide")
+st.set_page_config(
+    page_title="智能HR助手 - Milvus数据库管理", page_icon="🗄️", layout="wide"
+)
 
 # 应用自定义样式
 apply_common_styles()
@@ -41,11 +42,13 @@ MILVUS_DB = "examples"
 with open("data/config/collections_config.json", "r", encoding="utf-8") as f:
     CONFIG = json.load(f)
 
+
 def connect_to_milvus():
     """连接到Milvus数据库"""
     connections.connect(
         alias="default", host=MILVUS_HOST, port=MILVUS_PORT, db_name=MILVUS_DB
     )
+
 
 def create_milvus_collection(collection_config: Dict, dim: int):
     """创建Milvus集合"""
@@ -62,11 +65,16 @@ def create_milvus_collection(collection_config: Dict, dim: int):
     collection = Collection(collection_config["name"], schema)
     return collection
 
+
 def insert_examples_to_milvus(examples: List[Dict], collection_config: Dict):
     """将示例插入到Milvus数据库"""
     connect_to_milvus()
 
-    embeddings = CustomEmbeddings(api_key=os.getenv("OPENAI_API_KEY_SILICONCLOUD"))
+    embeddings = CustomEmbeddings(
+        api_key=os.getenv("EMBEDDING_API_KEY"),
+        api_base=os.getenv("EMBEDDING_API_BASE"),
+        model=os.getenv("EMBEDDING_MODEL"),
+    )
 
     data = {field["name"]: [] for field in collection_config["fields"]}
     vectors = []
@@ -96,6 +104,7 @@ def insert_examples_to_milvus(examples: List[Dict], collection_config: Dict):
     connections.disconnect("default")
     return len(examples)
 
+
 def process_csv_file(file, collection_config: Dict):
     """处理上传的CSV文件"""
     examples = []
@@ -115,42 +124,48 @@ def process_csv_file(file, collection_config: Dict):
 
     return examples
 
+
 def get_collection_stats(collection_name: str) -> Dict:
     """获取集合的统计信息"""
     connect_to_milvus()
     collection = Collection(collection_name)
     collection.load()
-    
+
     stats = {
         "实体数量": collection.num_entities,
         "字段数量": len(collection.schema.fields) - 1,  # 减去自动生成的 id 字段
         "索引类型": collection.index().params.get("index_type", "未知"),
     }
-    
+
     connections.disconnect("default")
     return stats
 
+
 def display_db_management_info():
-    st.info("""
+    st.info(
+        """
     **🗄️ Milvus数据库管理**
 
     Milvus数据库管理工具用于高效管理和更新向量数据库中的示例数据。
     它支持CSV文件上传、数据预览和批量插入功能，便于维护和扩展向量数据集。
     通过这个工具，您可以轻松地将结构化数据转换为向量表示并存储在Milvus中，
     为后续的相似度搜索和智能匹配提供基础。
-    """)
+    """
+    )
+
 
 def display_workflow():
     with st.expander("📋 查看Milvus数据库管理工作流程", expanded=False):
-        st.markdown("""
+        st.markdown(
+            """
         **1. 选择Collection**
         从配置中选择要操作的数据集合。
 
         **2. 上传CSV文件**
         上传包含示例数据的CSV文件。
 
-        **3. 数据预览**
-        预览上传的数据，确保格式正确。
+        **3. 数据预览和去重**
+        预览上传的数据，确保格式正确，并进行去重处理。
 
         **4. 向量化处理**
         将文本数据转换为向量表示。
@@ -160,7 +175,55 @@ def display_workflow():
 
         **6. 索引创建**
         为插入的数据创建索引，优化检索性能。
-        """)
+        """
+        )
+
+
+def get_existing_records(collection_config: Dict) -> pd.DataFrame:
+    """获取已存在的记录"""
+    connect_to_milvus()
+    collection = Collection(collection_config["name"])
+    collection.load()
+
+    # 获取所有字段名
+    field_names = [field["name"] for field in collection_config["fields"]]
+
+    # 查询所有记录
+    results = collection.query(expr="id >= 0", output_fields=field_names)
+
+    connections.disconnect("default")
+
+    return pd.DataFrame(results)
+
+
+def dedup_examples(
+    new_examples: List[Dict], existing_records: pd.DataFrame, collection_config: Dict
+) -> Tuple[List[Dict], List[Dict]]:
+    """对新上传的数据进行去重"""
+    new_df = pd.DataFrame(new_examples)
+
+    # 选择用于比较的字段（除了embedding）
+    compare_fields = [
+        field["name"]
+        for field in collection_config["fields"]
+        if field["name"] != "embedding"
+    ]
+
+    # 使用这些字段进行合并
+    merged = pd.merge(
+        new_df, existing_records, on=compare_fields, how="left", indicator=True
+    )
+
+    # 找出重复和新增的记录
+    duplicates = merged[merged["_merge"] == "both"]
+    new_records = merged[merged["_merge"] == "left_only"]
+
+    # 转换回字典列表
+    duplicate_examples = duplicates[compare_fields].to_dict("records")
+    new_examples = new_records[compare_fields].to_dict("records")
+
+    return new_examples, duplicate_examples
+
 
 def main():
     st.title("🗄️ Milvus数据库管理")
@@ -186,13 +249,13 @@ def main():
         st.write(f"名称: {collection_config['name']}")
         st.write(f"描述: {collection_config['description']}")
         st.write("字段:")
-        for field in collection_config['fields']:
+        for field in collection_config["fields"]:
             st.write(f"- {field['name']}: {field['description']}")
-    
+
         st.subheader("数据统计")
         connect_to_milvus()
-        if utility.has_collection(collection_config['name']):
-            stats = get_collection_stats(collection_config['name'])
+        if utility.has_collection(collection_config["name"]):
+            stats = get_collection_stats(collection_config["name"])
             st.write(f"实体数量: {stats['实体数量']}")
             st.write(f"字段数量: {stats['字段数量']}")
             st.write(f"索引类型: {stats['索引类型']}")
@@ -210,28 +273,31 @@ def main():
                 examples = process_csv_file(uploaded_file, collection_config)
                 st.success(f"成功读取 {len(examples)} 条记录")
 
+                # 获取已存在的记录
+                existing_records = get_existing_records(collection_config)
+
+                # 去重
+                new_examples, duplicate_examples = dedup_examples(
+                    examples, existing_records, collection_config
+                )
+
                 # 显示数据预览
                 st.subheader("数据预览")
-                preview_df = pd.DataFrame(examples[:5])  # 只显示前5条记录
-                st.dataframe(preview_df)
+                st.write(f"新增记录: {len(new_examples)}条")
+                st.write(f"重复记录: {len(duplicate_examples)}条")
+
+                new_df = pd.DataFrame(new_examples[:10])  # 只显示前5条新记录
+                st.dataframe(new_df)
 
                 if st.button("插入到Milvus数据库"):
-                    with st.spinner("正在插入数据..."):
-                        inserted_count = insert_examples_to_milvus(
-                            examples, collection_config
-                        )
-                    st.success(f"成功插入 {inserted_count} 条记录到Milvus数据库")
-                    
-                    # 更新统计信息（增加延迟）
-                    st.subheader("更新后的数据统计")
-                    time.sleep(3)  # 增加3秒延迟
-                    connect_to_milvus()
-                    if utility.has_collection(collection_config['name']):
-                        updated_stats = get_collection_stats(collection_config['name'])
-                        st.write(f"实体数量: {updated_stats['实体数量']}")
-                        st.write(f"字段数量: {updated_stats['字段数量']}")
-                        st.write(f"索引类型: {updated_stats['索引类型']}")
-                    connections.disconnect("default")
+                    if len(new_examples) > 0:
+                        with st.spinner("正在插入数据..."):
+                            inserted_count = insert_examples_to_milvus(
+                                new_examples, collection_config
+                            )
+                        st.success(f"成功插入 {inserted_count} 条新记录到Milvus数据库")
+                    else:
+                        st.info("没有新的记录需要插入")
 
             except ValueError as ve:
                 st.error(f"CSV文件格式错误: {str(ve)}")
@@ -240,6 +306,7 @@ def main():
                 st.error("请确保CSV文件格式正确，并且包含所有必需的列。")
 
     show_footer()
+
 
 if __name__ == "__main__":
     main()
