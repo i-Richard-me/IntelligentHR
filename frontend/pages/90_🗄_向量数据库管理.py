@@ -2,7 +2,7 @@ import io
 import os
 import sys
 import json
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Optional
 
 import streamlit as st
 import pandas as pd
@@ -24,7 +24,8 @@ from frontend.ui_components import show_sidebar, show_footer, apply_common_style
 
 # 设置页面配置
 st.set_page_config(
-    page_title="智能HR助手 - Milvus数据库管理", page_icon="🗄️", layout="wide"
+    page_title="智能HR助手 - Milvus数据库管理",
+    page_icon="💾",
 )
 
 # 应用自定义样式
@@ -71,9 +72,9 @@ def insert_examples_to_milvus(examples: List[Dict], collection_config: Dict):
     connect_to_milvus()
 
     embeddings = CustomEmbeddings(
-        api_key=os.getenv("EMBEDDING_API_KEY"),
-        api_base=os.getenv("EMBEDDING_API_BASE"),
-        model=os.getenv("EMBEDDING_MODEL"),
+        api_key=os.getenv("EMBEDDING_API_KEY", ""),
+        api_url=os.getenv("EMBEDDING_API_BASE", ""),
+        model=os.getenv("EMBEDDING_MODEL", ""),
     )
 
     data = {field["name"]: [] for field in collection_config["fields"]}
@@ -144,44 +145,19 @@ def get_collection_stats(collection_name: str) -> Dict:
 def display_db_management_info():
     st.info(
         """
-    **🗄️ Milvus数据库管理**
-
-    Milvus数据库管理工具用于高效管理和更新向量数据库中的示例数据。
-    它支持CSV文件上传、数据预览和批量插入功能，便于维护和扩展向量数据集。
-    通过这个工具，您可以轻松地将结构化数据转换为向量表示并存储在Milvus中，
-    为后续的相似度搜索和智能匹配提供基础。
+    Milvus数据库管理工具用于高效管理和更新向量数据库中的数据。
+    支持CSV文件上传、数据预览和批量插入，便于维护和扩展向量数据集。
     """
     )
 
 
-def display_workflow():
-    with st.expander("📋 查看Milvus数据库管理工作流程", expanded=False):
-        st.markdown(
-            """
-        **1. 选择Collection**
-        从配置中选择要操作的数据集合。
-
-        **2. 上传CSV文件**
-        上传包含示例数据的CSV文件。
-
-        **3. 数据预览和去重**
-        预览上传的数据，确保格式正确，并进行去重处理。
-
-        **4. 向量化处理**
-        将文本数据转换为向量表示。
-
-        **5. 数据插入**
-        将处理后的数据插入Milvus数据库。
-
-        **6. 索引创建**
-        为插入的数据创建索引，优化检索性能。
-        """
-        )
-
-
-def get_existing_records(collection_config: Dict) -> pd.DataFrame:
-    """获取已存在的记录"""
+def get_existing_records(collection_config: Dict) -> Optional[pd.DataFrame]:
+    """获取已存在的记录，如果collection不存在则返回None"""
     connect_to_milvus()
+    if not utility.has_collection(collection_config["name"]):
+        connections.disconnect("default")
+        return None
+
     collection = Collection(collection_config["name"])
     collection.load()
 
@@ -197,9 +173,15 @@ def get_existing_records(collection_config: Dict) -> pd.DataFrame:
 
 
 def dedup_examples(
-    new_examples: List[Dict], existing_records: pd.DataFrame, collection_config: Dict
-) -> Tuple[List[Dict], List[Dict]]:
+    new_examples: List[Dict],
+    existing_records: Optional[pd.DataFrame],
+    collection_config: Dict,
+) -> Tuple[List[Dict], int]:
     """对新上传的数据进行去重"""
+    if existing_records is None:
+        # 如果collection不存在，所有记录都是新的
+        return new_examples, 0
+
     new_df = pd.DataFrame(new_examples)
 
     # 选择用于比较的字段（除了embedding）
@@ -214,15 +196,63 @@ def dedup_examples(
         new_df, existing_records, on=compare_fields, how="left", indicator=True
     )
 
-    # 找出重复和新增的记录
-    duplicates = merged[merged["_merge"] == "both"]
+    # 找出未匹配的记录（新数据）
     new_records = merged[merged["_merge"] == "left_only"]
 
+    # 计算重复记录数量
+    duplicate_count = len(new_examples) - len(new_records)
+
     # 转换回字典列表
-    duplicate_examples = duplicates[compare_fields].to_dict("records")
     new_examples = new_records[compare_fields].to_dict("records")
 
-    return new_examples, duplicate_examples
+    return new_examples, duplicate_count
+
+
+def display_collection_info(collection_config: Dict):
+    """显示Collection信息"""
+    with st.container(border=True):
+        st.subheader("Collection 信息")
+        st.write(f"**名称:** {collection_config['name']}")
+        st.write(f"**描述:** {collection_config['description']}")
+        st.write("**字段:**")
+        for field in collection_config["fields"]:
+            st.write(f"- {field['name']}: {field['description']}")
+
+
+def display_collection_stats(collection_config: Dict):
+    """显示Collection统计信息"""
+    with st.container(border=True):
+        st.subheader("数据统计")
+        connect_to_milvus()
+        if utility.has_collection(collection_config["name"]):
+            stats = get_collection_stats(collection_config["name"])
+            st.write(f"**实体数量:** {stats['实体数量']}")
+            st.write(f"**字段数量:** {stats['字段数量']}")
+            st.write(f"**索引类型:** {stats['索引类型']}")
+        else:
+            st.info("该Collection尚未创建")
+        connections.disconnect("default")
+
+
+def display_data_preview(
+    new_examples: List[Dict], duplicate_count: int, collection_exists: bool
+):
+    """显示数据预览"""
+    with st.container(border=True):
+        st.subheader("数据预览")
+        st.write(f"**上传记录总数:** {len(new_examples) + duplicate_count}")
+        if collection_exists:
+            st.write(f"**数据库中已存在记录:** {duplicate_count}条")
+            st.write(f"**待插入新记录:** {len(new_examples)}条")
+        else:
+            st.write("**待插入新记录:** 所有上传记录（Collection尚未创建）")
+
+        if len(new_examples) > 0:
+            st.write("**新记录预览:**")
+            new_df = pd.DataFrame(new_examples[:5])  # 只显示前5条新记录
+            st.dataframe(new_df)
+        elif collection_exists:
+            st.info("所有上传的记录都已存在于数据库中，没有新数据需要插入。")
 
 
 def main():
@@ -231,79 +261,54 @@ def main():
 
     # 显示功能介绍
     display_db_management_info()
-    st.markdown("---")
-
-    # 显示工作流程
-    display_workflow()
-    st.markdown("---")
 
     # Collection 选择
     st.header("选择 Collection")
-    with st.container(border=True):
-        collection_names = list(CONFIG["collections"].keys())
-        selected_collection = st.selectbox("选择要操作的Collection", collection_names)
-        collection_config = CONFIG["collections"][selected_collection]
+    collection_names = list(CONFIG["collections"].keys())
+    selected_collection = st.selectbox("选择要操作的Collection", collection_names)
+    collection_config = CONFIG["collections"][selected_collection]
 
-        # 显示Collection信息和统计
-        st.subheader("Collection信息")
-        st.write(f"名称: {collection_config['name']}")
-        st.write(f"描述: {collection_config['description']}")
-        st.write("字段:")
-        for field in collection_config["fields"]:
-            st.write(f"- {field['name']}: {field['description']}")
+    # 显示Collection信息
+    display_collection_info(collection_config)
 
-        st.subheader("数据统计")
-        connect_to_milvus()
-        if utility.has_collection(collection_config["name"]):
-            stats = get_collection_stats(collection_config["name"])
-            st.write(f"实体数量: {stats['实体数量']}")
-            st.write(f"字段数量: {stats['字段数量']}")
-            st.write(f"索引类型: {stats['索引类型']}")
-        else:
-            st.info("该Collection尚未创建")
-        connections.disconnect("default")
+    # 显示Collection统计
+    display_collection_stats(collection_config)
 
     st.header("上传和插入数据")
-    with st.container(border=True):
-        # 文件上传
-        uploaded_file = st.file_uploader("上传CSV文件", type=["csv"])
 
-        if uploaded_file is not None:
-            try:
-                examples = process_csv_file(uploaded_file, collection_config)
-                st.success(f"成功读取 {len(examples)} 条记录")
+    # 文件上传
+    uploaded_file = st.file_uploader("上传CSV文件", type=["csv"])
 
-                # 获取已存在的记录
-                existing_records = get_existing_records(collection_config)
+    if uploaded_file is not None:
+        try:
+            examples = process_csv_file(uploaded_file, collection_config)
+            st.success(f"成功读取 {len(examples)} 条记录")
 
-                # 去重
-                new_examples, duplicate_examples = dedup_examples(
-                    examples, existing_records, collection_config
-                )
+            # 获取已存在的记录
+            existing_records = get_existing_records(collection_config)
+            collection_exists = existing_records is not None
 
-                # 显示数据预览
-                st.subheader("数据预览")
-                st.write(f"新增记录: {len(new_examples)}条")
-                st.write(f"重复记录: {len(duplicate_examples)}条")
+            # 去重
+            new_examples, duplicate_count = dedup_examples(
+                examples, existing_records, collection_config
+            )
 
-                new_df = pd.DataFrame(new_examples[:10])  # 只显示前5条新记录
-                st.dataframe(new_df)
+            # 显示数据预览
+            display_data_preview(new_examples, duplicate_count, collection_exists)
 
+            if len(new_examples) > 0:
                 if st.button("插入到Milvus数据库"):
-                    if len(new_examples) > 0:
-                        with st.spinner("正在插入数据..."):
-                            inserted_count = insert_examples_to_milvus(
-                                new_examples, collection_config
-                            )
-                        st.success(f"成功插入 {inserted_count} 条新记录到Milvus数据库")
-                    else:
-                        st.info("没有新的记录需要插入")
+                    with st.spinner("正在插入数据..."):
+                        inserted_count = insert_examples_to_milvus(
+                            new_examples, collection_config
+                        )
+                    st.success(f"成功插入 {inserted_count} 条新记录到Milvus数据库")
 
-            except ValueError as ve:
-                st.error(f"CSV文件格式错误: {str(ve)}")
-            except Exception as e:
-                st.error(f"处理文件时出错: {str(e)}")
-                st.error("请确保CSV文件格式正确，并且包含所有必需的列。")
+        except ValueError as ve:
+            st.error(f"CSV文件格式错误: {str(ve)}")
+        except Exception as e:
+            st.error(f"处理文件时出错: {str(e)}")
+            st.error("请确保CSV文件格式正确，并且包含所有必需的列。")
 
     show_footer()
 
