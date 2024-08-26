@@ -1,0 +1,14 @@
+services:
+  intelligenthr-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8510:8510"
+    environment:
+      - STREAMLIT_SERVER_PORT=8510
+    env_file:
+      - .env
+    volumes:
+      - .:/app
+    command: streamlit run frontend/00_🏠_首页.py --server.port=8510 --server.address=0.0.0.0
