@@ -15,9 +15,9 @@ class ResumeScorer:
             api_key=os.getenv("EMBEDDING_API_KEY"),
         )
         self.connection_args = {
-            "host": "localhost",
-            "port": "19530",
-            "db_name": "resume",
+            "host": os.getenv("VECTOR_DB_HOST", "localhost"),
+            "port": os.getenv("VECTOR_DB_PORT", "19530"),
+            "db_name": os.getenv("VECTOR_DB_DATABASE_RESUME", "resume"),
         }
 
     def get_embedding(self, text: str) -> List[float]:
@@ -33,7 +33,7 @@ class ResumeScorer:
         while True:
             try:
                 response = self.client.embeddings.create(
-                    model="BAAI/bge-large-en-v1.5", input=text
+                    model=os.getenv("EMBEDDING_MODEL", ""), input=text
                 )
                 time.sleep(0.07)
                 return response.data[0].embedding

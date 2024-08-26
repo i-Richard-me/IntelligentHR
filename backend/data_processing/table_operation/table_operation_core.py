@@ -145,7 +145,10 @@ def get_similar_example(
     从Milvus检索与用户查询最相似的示例
     """
     connections.connect(
-        alias="default", host="localhost", port="19530", db_name="examples"
+        alias="default",
+        host=os.getenv("VECTOR_DB_HOST", "localhost"),
+        port=os.getenv("VECTOR_DB_PORT", "19530"),
+        db_name=os.getenv("VECTOR_DB_DATABASE", "examples"),
     )
 
     collection = Collection(collection_name)

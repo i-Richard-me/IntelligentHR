@@ -4,8 +4,6 @@ from typing import List, Optional
 from langchain.embeddings.base import Embeddings
 from utils.llm_tools import CustomEmbeddings
 
-OPENAI_EMBEDDING_MODEL = "BAAI/bge-large-zh-v1.5"
-
 
 class Memory:
     """内存类，用于管理和获取嵌入模型"""

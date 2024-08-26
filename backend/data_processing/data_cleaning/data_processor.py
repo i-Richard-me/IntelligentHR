@@ -8,16 +8,14 @@ from pymilvus import (
 
 from utils.llm_tools import CustomEmbeddings
 
-# Milvus 连接配置
-MILVUS_HOST = "localhost"
-MILVUS_PORT = "19530"
-MILVUS_DB = "examples"
-
 
 def connect_to_milvus():
     """连接到 Milvus 数据库"""
     connections.connect(
-        alias="default", host=MILVUS_HOST, port=MILVUS_PORT, db_name=MILVUS_DB
+        alias="default",
+        host=os.getenv("VECTOR_DB_HOST", "localhost"),
+        port=os.getenv("VECTOR_DB_PORT", "19530"),
+        db_name=os.getenv("VECTOR_DB_DATABASE", "default"),
     )
 
 

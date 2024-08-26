@@ -1,3 +1,4 @@
+import os
 from pymilvus import connections, Collection, DataType
 from typing import Dict, Any, List
 import pandas as pd
@@ -8,7 +9,9 @@ embeddings = VectorEncoder(model="BAAI/bge-m3")
 
 
 def connect_to_milvus(
-    host: str = "localhost", port: str = "19530", db_name: str = "resume"
+    host: str = os.getenv("VECTOR_DB_HOST", "localhost"),
+    port: str = os.getenv("VECTOR_DB_PORT", "19530"),
+    db_name: str = os.getenv("VECTOR_DB_DATABASE_RESUME", "resume"),
 ):
     """连接到Milvus数据库"""
     connections.connect(host=host, port=port, db_name=db_name)

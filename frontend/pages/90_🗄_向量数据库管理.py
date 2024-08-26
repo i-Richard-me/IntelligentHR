@@ -34,11 +34,6 @@ apply_common_styles()
 # 显示侧边栏
 show_sidebar()
 
-# Milvus连接配置
-MILVUS_HOST = "localhost"
-MILVUS_PORT = "19530"
-MILVUS_DB = "examples"
-
 # 加载配置文件
 with open("data/config/collections_config.json", "r", encoding="utf-8") as f:
     CONFIG = json.load(f)
@@ -47,7 +42,10 @@ with open("data/config/collections_config.json", "r", encoding="utf-8") as f:
 def connect_to_milvus():
     """连接到Milvus数据库"""
     connections.connect(
-        alias="default", host=MILVUS_HOST, port=MILVUS_PORT, db_name=MILVUS_DB
+        alias="default",
+        host=os.getenv("VECTOR_DB_HOST", "localhost"),
+        port=os.getenv("VECTOR_DB_PORT", "19530"),
+        db_name=os.getenv("VECTOR_DB_DATABASE", "examples"),
     )
 
 
