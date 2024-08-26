@@ -245,9 +245,9 @@ def display_column_selection():
 
 def display_model_training_and_advanced_settings():
     if (
-            st.session_state.df is not None
-            and st.session_state.target_column
-            and st.session_state.feature_columns
+        st.session_state.df is not None
+        and st.session_state.target_column
+        and st.session_state.feature_columns
     ):
         st.markdown("## 模型训练")
         with st.container(border=True):
@@ -256,6 +256,24 @@ def display_model_training_and_advanced_settings():
             if st.button("开始训练模型"):
                 with st.spinner("正在训练模型，请稍候..."):
                     try:
+                        # 根据模型类型选择相应的参数空间
+                        if st.session_state.model_type == "随机森林":
+                            param_ranges = st.session_state.rf_param_grid
+                            n_trials = st.session_state.rf_n_trials
+                        elif st.session_state.model_type == "决策树":
+                            param_ranges = st.session_state.dt_param_grid
+                            n_trials = None  # 决策树使用网格搜索，不需要n_trials
+                        elif st.session_state.model_type == "XGBoost":
+                            param_ranges = st.session_state.xgb_param_ranges
+                            n_trials = st.session_state.xgb_n_trials
+                        elif st.session_state.model_type == "线性回归":
+                            param_ranges = None  # 线性回归不需要参数优化
+                            n_trials = None
+                        else:
+                            raise ValueError(
+                                f"不支持的模型类型: {st.session_state.model_type}"
+                            )
+
                         st.session_state.model_results = train_model(
                             st.session_state.df,
                             st.session_state.target_column,
@@ -263,13 +281,8 @@ def display_model_training_and_advanced_settings():
                             st.session_state.model_type,
                             st.session_state.problem_type,
                             st.session_state.test_size,
-                            param_ranges=st.session_state.custom_param_ranges,
-                            n_trials=(
-                                st.session_state.rf_n_trials
-                                if st.session_state.model_type == "随机森林"
-                                else st.session_state.xgb_n_trials
-                            ),
-                            use_cv=st.session_state.use_cv_for_linear_regression,
+                            param_ranges=param_ranges,
+                            n_trials=n_trials,
                         )
                         st.session_state.model_records = add_model_record(
                             st.session_state.model_records,
@@ -289,6 +302,7 @@ def display_model_training_and_advanced_settings():
 
                     except Exception as e:
                         st.error(f"模型训练过程中出错：{str(e)}")
+
 
 def display_model_records():
     if not st.session_state.model_records.empty:
@@ -333,7 +347,7 @@ def display_model_records():
                     "交叉验证分数": st.column_config.NumberColumn(
                         "交叉验证分数",
                         format="%.4f",
-                        help="对于线性回归模型不使用交叉验证时，此值为训练集 MSE。"
+                        help="对于线性回归模型不使用交叉验证时，此值为训练集 MSE。",
                     ),
                     "测试集分数": st.column_config.NumberColumn(
                         "测试集分数",
@@ -356,6 +370,7 @@ def display_model_records():
             )
 
             save_selected_models(edited_df)
+
 
 def save_selected_models(edited_df):
     models_to_save = edited_df[edited_df["保存"]]
@@ -381,6 +396,7 @@ def save_selected_models(edited_df):
                 )
             else:
                 st.warning(f"无法保存模型 {model_type}，模型对象不存在。")
+
 
 def display_results():
     if st.session_state.model_results:
@@ -418,7 +434,7 @@ def display_model_performance_overview():
             st.metric(
                 label="交叉验证平均 MSE",
                 value=f"{st.session_state.model_results['cv_mean_score']:.4f}",
-                help="对于线性回归模型不使用交叉验证时，此值为训练集 MSE。"
+                help="对于线性回归模型不使用交叉验证时，此值为训练集 MSE。",
             )
     with col2:
         if st.session_state.problem_type == "classification":
@@ -433,13 +449,15 @@ def display_model_performance_overview():
             )
 
     # 为线性回归模型添加 R² 显示
-    if st.session_state.problem_type == "regression" and st.session_state.model_type == "线性回归":
+    if (
+        st.session_state.problem_type == "regression"
+        and st.session_state.model_type == "线性回归"
+    ):
         col3, col4 = st.columns(2)
         with col3:
             st.metric(
-                label="交叉验证平均 R²",
-                value=f"{st.session_state.model_results['cv_mean_r2']:.4f}",
-                help="对于不使用交叉验证时，此值为训练集 R²。"
+                label="训练集 R²",
+                value=f"{st.session_state.model_results['train_r2']:.4f}",
             )
         with col4:
             st.metric(
@@ -537,8 +555,8 @@ def display_xgboost_label_encoding():
 
 def display_model_interpretation():
     if (
-            st.session_state.model_results
-            and "feature_importance" in st.session_state.model_results
+        st.session_state.model_results
+        and "feature_importance" in st.session_state.model_results
     ):
         st.markdown("## 模型解释")
 
@@ -624,7 +642,11 @@ def calculate_and_store_shap_values():
 
     with st.spinner("正在计算SHAP值，这可能需要一些时间..."):
         try:
-            model_step = "regressor" if st.session_state.model_type == "线性回归" else "classifier"
+            model_step = (
+                "regressor"
+                if st.session_state.model_type == "线性回归"
+                else "classifier"
+            )
             shap_results = calculate_shap_values(
                 st.session_state.model_results["model"].named_steps[model_step],
                 st.session_state.df[st.session_state.feature_columns],
@@ -694,7 +716,10 @@ def display_saved_model_selection():
                 with col1:
                     st.metric("模型类型", model_info["type"])
                 with col2:
-                    st.metric("问题类型", "分类" if problem_type == "classification" else "回归")
+                    st.metric(
+                        "问题类型",
+                        "分类" if problem_type == "classification" else "回归",
+                    )
                 with col3:
                     st.metric("所需特征数量", len(model_info["features"]))
 
@@ -709,7 +734,9 @@ def display_saved_model_selection():
                     st.markdown("### 模型性能")
                     performance = model_info["performance"]
                     if problem_type == "classification":
-                        st.metric("测试集 ROC AUC", f"{performance['test_roc_auc']:.4f}")
+                        st.metric(
+                            "测试集 ROC AUC", f"{performance['test_roc_auc']:.4f}"
+                        )
                     else:
                         col1, col2 = st.columns(2)
                         with col1:

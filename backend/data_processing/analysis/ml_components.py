@@ -58,34 +58,34 @@ def display_random_forest_settings():
             "n_estimators 范围",
             min_value=10,
             max_value=500,
-            value=st.session_state.param_ranges["n_estimators"],
+            value=st.session_state.rf_param_grid["n_estimators"],
             step=10,
         )
         max_depth_range = st.slider(
             "max_depth 范围",
             min_value=1,
             max_value=50,
-            value=st.session_state.param_ranges["max_depth"],
+            value=st.session_state.rf_param_grid["max_depth"],
         )
     with col2:
         min_samples_split_range = st.slider(
             "min_samples_split 范围",
             min_value=2,
             max_value=30,
-            value=st.session_state.param_ranges["min_samples_split"],
+            value=st.session_state.rf_param_grid["min_samples_split"],
         )
         min_samples_leaf_range = st.slider(
             "min_samples_leaf 范围",
             min_value=1,
             max_value=30,
-            value=st.session_state.param_ranges["min_samples_leaf"],
+            value=st.session_state.rf_param_grid["min_samples_leaf"],
         )
 
     max_features_options = st.multiselect(
         "max_features 选项",
         options=["sqrt", "log2"]
-                + list(range(1, len(st.session_state.feature_columns) + 1)),
-        default=st.session_state.param_ranges["max_features"],
+        + list(range(1, len(st.session_state.feature_columns) + 1)),
+        default=st.session_state.rf_param_grid["max_features"],
     )
 
     st.session_state.rf_n_trials = st.slider(
@@ -98,7 +98,7 @@ def display_random_forest_settings():
     )
 
     if st.button("确认随机森林参数设置"):
-        st.session_state.custom_param_ranges = {
+        st.session_state.rf_param_grid = {
             "n_estimators": n_estimators_range,
             "max_depth": max_depth_range,
             "min_samples_split": min_samples_split_range,
@@ -253,16 +253,6 @@ def display_xgboost_settings():
 
 def display_linear_regression_settings():
     st.markdown("#### 线性回归设置")
-
-    use_cv = st.checkbox(
-        "使用交叉验证",
-        value=st.session_state.use_cv_for_linear_regression,
-        help="启用交叉验证可以提供更稳定的模型评估，但会增加训练时间。",
-    )
-
-    if st.button("确认线性回归设置"):
-        st.session_state.use_cv_for_linear_regression = use_cv
-        st.success("线性回归设置已更新，将在下次模型训练时使用。")
 
     st.info("线性回归模型不需要额外的参数设置。它将自动找到最佳的系数值。")
 
