@@ -11,16 +11,48 @@ from sklearn.metrics import (
     mean_squared_error,
     r2_score,
 )
-from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
-from sklearn.tree import DecisionTreeClassifier
 from sklearn.linear_model import LinearRegression
-from xgboost import XGBClassifier, XGBRegressor
 from typing import List, Dict, Any, Tuple
 import joblib
 from datetime import datetime
 import os
+from abc import ABC, abstractmethod
 
 from backend.data_processing.analysis.model_predictor import ModelPredictor
+
+
+class BaseModel(ABC):
+    def __init__(self, problem_type):
+        self.problem_type = problem_type
+        self.model = None
+        self.preprocessor = None
+
+    @abstractmethod
+    def optimize(
+        self, X_train, y_train, categorical_cols, numerical_cols, param_ranges, n_trials
+    ):
+        pass
+
+    @abstractmethod
+    def train(
+        self,
+        X_train,
+        y_train,
+        categorical_cols,
+        numerical_cols,
+        param_ranges=None,
+        n_trials=100,
+    ):
+        pass
+
+    def evaluate(self, X_test, y_test):
+        return evaluate_model(self.model, X_test, y_test, self.problem_type)
+
+    def get_feature_importance(self):
+        return get_feature_importance(
+            self.model.named_steps["classifier"],
+            self.model.named_steps["preprocessor"],
+        )
 
 
 def prepare_data(
@@ -29,18 +61,6 @@ def prepare_data(
     feature_columns: List[str],
     test_size: float = 0.3,
 ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series, List[str], List[str]]:
-    """
-    准备模型训练和测试数据。
-
-    Args:
-        df: 输入数据框
-        target_column: 目标变量的列名
-        feature_columns: 特征列名列表
-        test_size: 测试集占总数据的比例
-
-    Returns:
-        训练特征, 测试特征, 训练目标, 测试目标, 分类特征列表, 数值特征列表
-    """
     X = df[feature_columns]
     y = df[target_column]
 
@@ -57,16 +77,6 @@ def prepare_data(
 def create_preprocessor(
     categorical_cols: List[str], numerical_cols: List[str]
 ) -> ColumnTransformer:
-    """
-    创建特征预处理器。
-
-    Args:
-        categorical_cols: 分类特征列名列表
-        numerical_cols: 数值特征列名列表
-
-    Returns:
-        预处理器
-    """
     numeric_transformer = Pipeline(steps=[("scaler", StandardScaler())])
 
     categorical_transformer = Pipeline(
@@ -86,18 +96,6 @@ def create_preprocessor(
 def evaluate_model(
     model: Any, X_test: pd.DataFrame, y_test: pd.Series, problem_type: str
 ) -> Dict[str, Any]:
-    """
-    评估模型性能。
-
-    Args:
-        model: 训练好的模型
-        X_test: 测试特征
-        y_test: 测试目标
-        problem_type: 问题类型 ("classification" 或 "regression")
-
-    Returns:
-        包含评估指标的字典
-    """
     y_test_pred = model.predict(X_test)
 
     if problem_type == "classification":
@@ -118,18 +116,7 @@ def evaluate_model(
         }
 
 
-
 def get_feature_importance(model: Any, preprocessor: ColumnTransformer) -> pd.Series:
-    """
-    获取特征重要性。
-
-    Args:
-        model: 训练好的模型
-        preprocessor: 特征预处理器
-
-    Returns:
-        特征重要性系列
-    """
     feature_names = preprocessor.get_feature_names_out()
     if hasattr(model, "feature_importances_"):
         feature_importance = pd.Series(
@@ -157,159 +144,62 @@ def train_model(
     n_trials: int = 100,
     use_cv: bool = True,
 ) -> Dict[str, Any]:
-    """
-    训练指定类型的模型并进行评估。
-
-    Args:
-        df: 输入数据框
-        target_column: 目标变量的列名
-        feature_columns: 特征列名列表
-        model_type: 模型类型 ("随机森林", "决策树", "XGBoost", "线性回归")
-        problem_type: 问题类型 ("classification" 或 "regression")
-        test_size: 测试集占总数据的比例
-        param_ranges: 参数搜索范围，如果为None则使用默认值
-        n_trials: Optuna优化的试验次数 (仅用于随机森林和XGBoost)
-        use_cv: 是否使用交叉验证 (仅用于线性回归)
-
-    Returns:
-        包含模型、特征重要性、评估指标、最佳参数和最佳轮次的字典
-    """
     X_train, X_test, y_train, y_test, categorical_cols, numerical_cols = prepare_data(
         df, target_column, feature_columns, test_size
     )
+
+    model_class = get_model_class(model_type)
 
     if model_type == "随机森林":
-        from backend.data_processing.analysis.random_forest_trainer import (
-            train_random_forest,
-        )
-
-        results = train_random_forest(
-            df,
-            target_column,
-            feature_columns,
-            problem_type,
-            test_size,
-            param_ranges,
-            n_trials,
+        param_ranges = (
+            filter_valid_params(param_ranges, RANDOM_FOREST_PARAMS)
+            if param_ranges
+            else None
         )
     elif model_type == "决策树":
-        from backend.data_processing.analysis.decision_tree_trainer import (
-            train_decision_tree,
-        )
-
-        # 移除决策树不使用的参数
-        if param_ranges:
-            dt_param_ranges = {
-                k: v
-                for k, v in param_ranges.items()
-                if k
-                in [
-                    "max_depth",
-                    "min_samples_split",
-                    "min_samples_leaf",
-                    "max_leaf_nodes",
-                ]
-            }
-        else:
-            dt_param_ranges = None
-        results = train_decision_tree(
-            df,
-            target_column,
-            feature_columns,
-            problem_type,
-            test_size,
-            param_grid=dt_param_ranges,
+        param_ranges = (
+            filter_valid_params(param_ranges, DECISION_TREE_PARAMS)
+            if param_ranges
+            else None
         )
     elif model_type == "XGBoost":
-        from backend.data_processing.analysis.xgboost_trainer import train_xgboost
-
-        results = train_xgboost(
-            df,
-            target_column,
-            feature_columns,
-            problem_type,
-            test_size,
-            param_ranges,
-            n_trials,
+        param_ranges = (
+            filter_valid_params(param_ranges, XGBOOST_PARAMS) if param_ranges else None
         )
     elif model_type == "线性回归":
-        results = train_linear_regression(
-            df,
-            target_column,
-            feature_columns,
-            test_size,
-            use_cv,
+        param_ranges = (
+            filter_valid_params(param_ranges, LINEAR_REGRESSION_PARAMS)
+            if param_ranges
+            else None
         )
-    else:
-        raise ValueError(f"不支持的模型类型: {model_type}")
+
+    model = model_class(problem_type)
+
+    results = model.train(
+        X_train, y_train, categorical_cols, numerical_cols, param_ranges, n_trials
+    )
+    test_metrics = model.evaluate(X_test, y_test)
+
+    results.update(test_metrics)
 
     return results
 
 
-def train_linear_regression(
-        df: pd.DataFrame,
-        target_column: str,
-        feature_columns: List[str],
-        test_size: float = 0.3,
-        use_cv: bool = False,
-) -> Dict[str, Any]:
-    """
-    训练线性回归模型并进行评估。
-
-    Args:
-        df: 输入数据框
-        target_column: 目标变量的列名
-        feature_columns: 特征列名列表
-        test_size: 测试集占总数据的比例
-        use_cv: 是否使用交叉验证
-
-    Returns:
-        包含模型、特征重要性、评估指标的字典
-    """
-    X_train, X_test, y_train, y_test, categorical_cols, numerical_cols = prepare_data(
-        df, target_column, feature_columns, test_size
+def get_model_class(model_type: str):
+    from backend.data_processing.analysis.random_forest_trainer import RandomForestModel
+    from backend.data_processing.analysis.decision_tree_trainer import DecisionTreeModel
+    from backend.data_processing.analysis.xgboost_trainer import XGBoostModel
+    from backend.data_processing.analysis.linear_regression_trainer import (
+        LinearRegressionModel,
     )
 
-    preprocessor = create_preprocessor(categorical_cols, numerical_cols)
-    model = LinearRegression()
-    pipeline = Pipeline(steps=[("preprocessor", preprocessor), ("regressor", model)])
-
-    pipeline.fit(X_train, y_train)
-
-    # 计算训练集 MSE 和 R²
-    y_train_pred = pipeline.predict(X_train)
-    train_mse = mean_squared_error(y_train, y_train_pred)
-    train_r2 = r2_score(y_train, y_train_pred)
-
-    # 计算测试集 MSE 和其他指标
-    test_metrics = evaluate_model(pipeline, X_test, y_test, "regression")
-
-    feature_importance = get_feature_importance(model, preprocessor)
-
-    results = {
-        "model": pipeline,
-        "feature_importance": feature_importance,
-        "train_mse": train_mse,
-        "train_r2": train_r2,
-        **test_metrics,
+    model_classes = {
+        "随机森林": RandomForestModel,
+        "决策树": DecisionTreeModel,
+        "XGBoost": XGBoostModel,
+        "线性回归": LinearRegressionModel,
     }
-
-    if use_cv:
-        cv_mse_scores = cross_val_score(pipeline, X_train, y_train, cv=5, scoring="neg_mean_squared_error")
-        cv_r2_scores = cross_val_score(pipeline, X_train, y_train, cv=5, scoring="r2")
-        results["cv_mean_score"] = -np.mean(cv_mse_scores)  # 转换为正的MSE
-        results["cv_mean_r2"] = np.mean(cv_r2_scores)
-    else:
-        results["cv_mean_score"] = train_mse  # 使用训练集MSE作为CV分数
-        results["cv_mean_r2"] = train_r2  # 使用训练集R²
-
-    # 添加系数和截距
-    results["coefficients"] = pd.Series(
-        model.coef_, index=preprocessor.get_feature_names_out()
-    )
-    results["intercept"] = model.intercept_
-
-    return results
+    return model_classes.get(model_type)
 
 
 def save_model(
@@ -319,24 +209,12 @@ def save_model(
     timestamp: datetime,
     save_path: str = "data/ml_models",
 ):
-    """
-    保存训练好的模型。
-
-    Args:
-        model: 训练好的模型对象
-        model_type: 模型类型
-        problem_type: 问题类型 ("classification" 或 "regression")
-        timestamp: 训练时间戳
-        save_path: 基础保存路径
-    """
-    # 根据问题类型选择子文件夹
     problem_folder = (
         "classification" if problem_type == "classification" else "regression"
     )
     full_save_path = os.path.join(save_path, problem_folder)
     os.makedirs(full_save_path, exist_ok=True)
 
-    # 优化文件名格式
     file_name = (
         f"{model_type}_{problem_type}_{timestamp.strftime('%Y%m%d_%H%M%S')}.joblib"
     )
@@ -351,18 +229,6 @@ def add_model_record(
     problem_type: str,
     model_results: Dict[str, Any],
 ) -> pd.DataFrame:
-    """
-    添加新的模型记录。
-
-    Args:
-        model_records: 现有的模型记录DataFrame
-        model_type: 模型类型
-        problem_type: 问题类型 ("classification" 或 "regression")
-        model_results: 模型训练结果
-
-    Returns:
-        更新后的模型记录DataFrame
-    """
     new_record = {
         "模型ID": f"Model_{len(model_records) + 1}",
         "模型类型": model_type,
@@ -391,10 +257,40 @@ def add_model_record(
     return pd.concat([model_records, pd.DataFrame([new_record])], ignore_index=True)
 
 
+def filter_valid_params(params, valid_params):
+    return {k: v for k, v in params.items() if k in valid_params}
+
+
+RANDOM_FOREST_PARAMS = [
+    "n_estimators",
+    "max_depth",
+    "min_samples_split",
+    "min_samples_leaf",
+    "max_features",
+]
+
+DECISION_TREE_PARAMS = [
+    "classifier__max_depth",
+    "classifier__min_samples_split",
+    "classifier__min_samples_leaf",
+    "classifier__max_leaf_nodes",
+]
+
+XGBOOST_PARAMS = [
+    "n_estimators",
+    "max_depth",
+    "learning_rate",
+    "subsample",
+    "colsample_bytree",
+    "min_child_weight",
+    "reg_alpha",
+    "reg_lambda",
+]
+
+LINEAR_REGRESSION_PARAMS = []
+
+
 def initialize_session_state():
-    """
-    初始化会话状态。
-    """
     default_states = {
         "df": None,
         "model_results": None,
@@ -402,7 +298,7 @@ def initialize_session_state():
         "feature_columns": None,
         "model_type": "随机森林",
         "problem_type": "classification",
-        "param_ranges": {
+        "rf_param_grid": {
             "n_estimators": (10, 200),
             "max_depth": (5, 30),
             "min_samples_split": (2, 20),
@@ -447,7 +343,6 @@ def initialize_session_state():
         "data_validated": False,
         "mode": "train",
         "do_model_interpretation": False,
-        "use_cv_for_linear_regression": False,  # 新增：是否对线性回归使用交叉验证
     }
 
     return default_states
