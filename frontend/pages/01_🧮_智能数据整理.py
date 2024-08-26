@@ -221,6 +221,14 @@ def clean_filename(filename: str) -> str:
     return cleaned_name if cleaned_name else "unnamed_file"
 
 
+def clean_column_names(df: pd.DataFrame) -> pd.DataFrame:
+    """清洗DataFrame的列名，移除特殊字符并替换空格。"""
+    df.columns = df.columns.str.strip()
+    df.columns = df.columns.str.replace(r"[^\w\u4e00-\u9fff]+", "_", regex=True)
+    df.columns = df.columns.str.lower()
+    return df
+
+
 def handle_file_upload():
     """处理文件上传逻辑。"""
     st.markdown("## 数据上传")
@@ -249,6 +257,8 @@ def handle_file_upload():
                 else:
                     st.error(f"不支持的文件格式：{file_extension}")
                     continue
+
+                df = clean_column_names(df)
 
                 df_name = clean_filename(uploaded_file.name)
                 st.session_state.workflow.load_dataframe(df_name, df)
@@ -289,6 +299,9 @@ def display_loaded_dataframes():
 
             # 显示简要信息
             st.caption(f"行数: {info['shape'][0]}, 列数: {info['shape'][1]}")
+            st.caption(
+                "注意：为了保证数据处理的准确性，若列名中含有特殊字符或空格，系统将自动进行清洗。"
+            )
 
 
 def process_user_query():
