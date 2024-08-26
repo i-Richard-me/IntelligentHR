@@ -41,7 +41,11 @@ def get_entity_retriever(collection: Collection, entity_type: str) -> Callable:
     """获取实体检索器"""
 
     def retriever(query: str, k: int = 1) -> List[Dict]:
-        embedding_model = CustomEmbeddings(os.getenv("OPENAI_API_KEY_SILICONCLOUD"))
+        embedding_model = CustomEmbeddings(
+            api_key=os.getenv("EMBEDDING_API_KEY", ""),
+            api_url=os.getenv("EMBEDDING_API_BASE", ""),
+            model=os.getenv("EMBEDDING_MODEL", ""),
+        )
         query_embedding = embedding_model.embed_query(query)
 
         search_params = {"metric_type": "L2", "params": {"nprobe": 10}}

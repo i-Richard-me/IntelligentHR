@@ -149,7 +149,11 @@ def get_similar_example(
     collection = Collection(collection_name)
     collection.load()
 
-    embeddings = CustomEmbeddings(api_key=os.getenv("OPENAI_API_KEY_SILICONCLOUD"))
+    embeddings = CustomEmbeddings(
+        api_key=os.getenv("EMBEDDING_API_KEY"),
+        api_base=os.getenv("EMBEDDING_API_BASE"),
+        model=os.getenv("EMBEDDING_MODEL"),
+    )
     query_vector = embeddings.embed_query(query)
 
     search_params = {"metric_type": "L2", "params": {"nprobe": 10}}

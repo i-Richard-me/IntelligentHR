@@ -308,8 +308,8 @@ class CustomEmbeddings(Embeddings):
     def __init__(
         self,
         api_key: str,
-        api_url: str = "https://api.siliconflow.cn/v1/embeddings",
-        model: str = "BAAI/bge-m3",
+        api_url: str,
+        model: str,
     ):
         self.api_key = api_key
         self.api_url = api_url
@@ -345,10 +345,12 @@ class CustomEmbeddings(Embeddings):
 class VectorEncoder:
     def __init__(
         self,
-        model: str = "BAAI/bge-m3",
+        model: str,
     ):
         self.embeddings = CustomEmbeddings(
-            os.getenv("OPENAI_API_KEY_SILICONCLOUD"), model=model
+            api_key=os.getenv("EMBEDDING_API_KEY", ""),
+            api_url=os.getenv("EMBEDDING_API_BASE", ""),
+            model=model,
         )
 
     def get_embedding(self, text: str) -> Optional[List[float]]:

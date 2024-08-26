@@ -26,7 +26,9 @@ class Memory:
 
         if embedding_provider == "openai":
             self._embeddings = CustomEmbeddings(
-                os.getenv("OPENAI_API_KEY_SILICONCLOUD")
+                api_key=os.getenv("EMBEDDING_API_KEY", ""),
+                api_url=os.getenv("EMBEDDING_API_BASE", ""),
+                model=os.getenv("EMBEDDING_MODEL", ""),
             )
         else:
             raise ValueError("不支持的嵌入提供者。")
