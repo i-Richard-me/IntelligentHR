@@ -50,6 +50,7 @@ SYSTEM_MESSAGE = """
 7. 对于 output_df_names：
    a. output_df_names 应该是能体现任务意图且用户友好的名称，因为它会作为用户下载时的文件名称。
    b. 某些工具（如 compare_dataframes）可能输出多个 DataFrame，因此使用列表来存储输出名称。
+   c. 确保根据调用的函数输出是一个还是多个 DataFrame，在 output_df_names 列表中提供相应数目的名称。
 
 8. 在选择操作和提供建议时，充分考虑每个表格的数据类型信息。
 
@@ -58,10 +59,6 @@ SYSTEM_MESSAGE = """
 10. 如果用户的请求有一些模糊但可以推测的部分，可以提出你的猜测并询问是否正确。
 
 11. 在回答中，先重述你对用户需求的理解，然后再给出建议或请求更多信息。
-
-以下是一个示例，你可以参考这个示例的处理方式：
-
-{example}
 
 请根据这些指导原则，仔细分析用户的输入并提供相应的响应。你的目标是尽可能帮助用户完成他们的表格操作需求，即使这可能需要多次交互来澄清和细化需求。只有在确定无法提供任何有用帮助时，才考虑使用 "out_of_scope"。
 """
@@ -72,7 +69,12 @@ HUMAN_MESSAGE_TEMPLATE = """
 
 {tools_description}
 
+以下是一个示例，你可以参考这个示例来执行用户的需求(但用户的实际需求与示例可能不同，请不要直接使用示例中的操作步骤，而是根据用户的需求重新生成操作步骤):
+
+{example}
+
 当前用户上传的表格及其信息：
+
 {dataframe_info}
 
 用户输入：
@@ -151,7 +153,7 @@ def get_similar_example(
 
     embeddings = CustomEmbeddings(
         api_key=os.getenv("EMBEDDING_API_KEY"),
-        api_base=os.getenv("EMBEDDING_API_BASE"),
+        api_url=os.getenv("EMBEDDING_API_BASE"),
         model=os.getenv("EMBEDDING_MODEL"),
     )
     query_vector = embeddings.embed_query(query)

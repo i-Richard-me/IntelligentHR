@@ -58,7 +58,7 @@ def main():
     if st.session_state.files_uploaded:
         process_user_query()
 
-        if st.session_state.get('operation_result'):
+        if st.session_state.get("operation_result"):
             display_operation_result()
             display_feedback()
 
@@ -253,6 +253,12 @@ def handle_file_upload():
                 df_name = clean_filename(uploaded_file.name)
                 st.session_state.workflow.load_dataframe(df_name, df)
 
+                # 提示用户字段过多可能导致执行成功率降低
+                if df.shape[1] > 10:
+                    st.warning(
+                        f"注意：{uploaded_file.name} 包含超过10个字段，这可能导致执行成功率降低。"
+                    )
+
             st.session_state.files_uploaded = True
 
         # 在文件上传的 container 中显示数据预览
@@ -405,16 +411,16 @@ def display_assistant_response(container, result):
                 for i, step in enumerate(st.session_state.operation_steps, 1):
                     st.markdown(f"步骤 {i}: {step['tool_name']}")
                 full_message = (
-                        message
-                        + "\n"
-                        + "\n".join(
-                    [
-                        f"步骤 {i}: {step['tool_name']}"
-                        for i, step in enumerate(
-                        st.session_state.operation_steps, 1
+                    message
+                    + "\n"
+                    + "\n".join(
+                        [
+                            f"步骤 {i}: {step['tool_name']}"
+                            for i, step in enumerate(
+                                st.session_state.operation_steps, 1
+                            )
+                        ]
                     )
-                    ]
-                )
                 )
                 st.session_state.conversation_history.append(
                     {"role": "assistant", "content": full_message}
@@ -432,7 +438,7 @@ def display_operation_result():
     """显示操作结果。"""
     if st.session_state.operation_result:
         result = st.session_state.operation_result
-        
+
         st.markdown("---")
         st.markdown("## 操作结果")
 
