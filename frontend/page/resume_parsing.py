@@ -188,8 +188,6 @@ def main():
     display_info_message()
     display_workflow()
 
-    st.markdown("---")
-
     st.markdown("## 简历提取")
 
     with st.container(border=True):

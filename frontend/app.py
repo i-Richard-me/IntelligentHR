@@ -9,7 +9,7 @@ sys.path.append(project_root)
 
 if "role" in st.query_params:
     st.session_state.role = st.query_params.role
-    
+
 if "role" not in st.session_state:
     st.session_state.role = None
 
@@ -35,52 +35,52 @@ def logout():
 role = st.session_state.role
 
 logout_page = st.Page(logout, title="Log out", icon=":material/logout:")
-home_page = st.Page("00_🏠_首页.py", title="首页", icon=":material/home:", default=True)
+home_page = st.Page("Home.py", title="首页", icon=":material/home:", default=True)
 table_operation = st.Page(
-    "page/01_🧮_智能数据整理.py", title="智能数据整理", icon=":material/table_view:"
+    "page/table_operation.py", title="智能数据整理", icon=":material/table_view:"
 )
 data_cleaning = st.Page(
-    "page/02_🏢_自动化数据清洗.py",
+    "page/data_cleaning.py",
     title="自动化数据清洗",
     icon=":material/mop:",
 )
-smart_translation = st.Page(
-    "page/03_🌐_智能语境翻译.py",
+ai_translation = st.Page(
+    "page/ai_translation.py",
     title="智能语境翻译",
     icon=":material/translate:",
 )
 sentiment_analysis = st.Page(
-    "page/04_😊_情感分析与文本标注.py",
+    "page/sentiment_analysis.py",
     title="情感分析与文本标注",
     icon=":material/family_star:",
 )
 text_clustering = st.Page(
-    "page/05_🗂️_文本聚类分析.py",
+    "page/text_clustering.py",
     title="文本聚类分析",
     icon=":material/folder_open:",
 )
 resume_parsing = st.Page(
-    "page/06_📄_智能简历解析.py",
+    "page/resume_parsing.py",
     title="智能简历解析",
     icon=":material/newspaper:",
 )
 resume_recommendation = st.Page(
-    "page/07_🧩_智能简历推荐.py",
+    "page/resume_recommendation.py",
     title="智能简历推荐",
     icon=":material/thumb_up:",
 )
 ai_research = st.Page(
-    "page/08_🔍_AI研究助手.py",
+    "page/ai_research.py",
     title="AI研究助手",
     icon=":material/quick_reference_all:",
 )
 modeling_analysis = st.Page(
-    "page/10_🤖_建模与分析.py",
+    "page/modeling_analysis.py",
     title="建模与分析",
     icon=":material/monitoring:",
 )
 vector_db_management = st.Page(
-    "page/90_🗄_向量数据库管理.py",
+    "page/vector_db_management.py",
     title="向量数据库管理",
     icon=":material/database:",
 )
@@ -89,7 +89,7 @@ account_pages = [logout_page, home_page]
 request_pages = [
     table_operation,
     data_cleaning,
-    smart_translation,
+    ai_translation,
     sentiment_analysis,
     text_clustering,
     resume_parsing,

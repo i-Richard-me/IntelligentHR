@@ -111,8 +111,6 @@ st.markdown("---")
 display_info_message()
 display_workflow()
 
-st.markdown("---")
-
 st.markdown("## 简历推荐")
 
 # 添加高级设置

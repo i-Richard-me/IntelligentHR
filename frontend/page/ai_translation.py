@@ -156,7 +156,6 @@ def main():
 
     # 显示功能介绍
     display_translation_info()
-    st.markdown("---")
 
     st.markdown("## 文本翻译")
 
