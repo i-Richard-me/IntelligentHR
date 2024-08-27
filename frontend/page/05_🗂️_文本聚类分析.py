@@ -14,11 +14,6 @@ from backend.text_processing.clustering.clustering_workflow import (
 )
 from frontend.ui_components import show_sidebar, show_footer, apply_common_styles
 
-# 设置页面配置
-st.set_page_config(
-    page_title="智能HR助手 - 文本聚类分析",
-    page_icon="🔬",
-)
 
 # 应用自定义样式
 apply_common_styles()
@@ -83,8 +78,6 @@ def display_info_message():
     """
     st.info(
         """
-        **🔬 文本聚类分析工具**
-
         文本聚类分析工具利用大语言模型的语义理解能力，自动化地从大量文本中识别和归类主要主题。
 
         工具采用分批处理和多阶段聚类策略，能够高效处理大规模文本数据。支持自定义类别数量范围，并提供交互式的类别审核和编辑功能，让用户能够根据具体需求优化聚类结果。
@@ -296,5 +289,4 @@ def display_classification_results():
             )
 
 
-if __name__ == "__main__":
-    main()
+main()

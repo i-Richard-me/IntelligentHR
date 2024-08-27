@@ -20,12 +20,6 @@ from backend.data_processing.data_cleaning.verification_workflow import (
     ProcessingStatus,
 )
 
-# Streamlit 页面配置
-st.set_page_config(
-    page_title="智能HR助手 - 自动化数据清洗",
-    page_icon="🏢",
-)
-
 # 应用自定义样式
 apply_common_styles()
 
@@ -393,5 +387,4 @@ def display_batch_results(result_df: pd.DataFrame, entity_type: str):
     )
 
 
-if __name__ == "__main__":
-    main()
+main()

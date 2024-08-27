@@ -47,12 +47,6 @@ from backend.data_processing.analysis.shap_analysis import (
     create_shap_dependence_plot,
 )
 
-# Streamlit 页面配置
-st.set_page_config(
-    page_title="智能HR助手 - 机器学习建模与预测",
-    page_icon="🤖",
-)
-
 # 应用自定义样式
 apply_common_styles()
 
@@ -838,5 +832,4 @@ def display_prediction_results():
             )
 
 
-if __name__ == "__main__":
-    main()
+main()

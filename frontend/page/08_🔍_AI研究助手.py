@@ -16,11 +16,6 @@ from backend.ai_research.ai_researcher import AIResearcher
 from backend.ai_research.research_enums import ReportType, Tone
 from frontend.ui_components import show_sidebar, show_footer, apply_common_styles
 
-# 设置页面配置
-st.set_page_config(
-    page_title="智能HR助手 - AI研究助手",
-    page_icon="🔍",
-)
 
 # 应用自定义样式
 apply_common_styles()
@@ -193,5 +188,4 @@ def display_report():
         )
 
 
-if __name__ == "__main__":
-    main()
+main()

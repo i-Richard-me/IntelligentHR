@@ -22,12 +22,6 @@ sys.path.append(project_root)
 from utils.llm_tools import CustomEmbeddings
 from frontend.ui_components import show_sidebar, show_footer, apply_common_styles
 
-# 设置页面配置
-st.set_page_config(
-    page_title="智能HR助手 - Milvus数据库管理",
-    page_icon="💾",
-)
-
 # 应用自定义样式
 apply_common_styles()
 
@@ -311,5 +305,4 @@ def main():
     show_footer()
 
 
-if __name__ == "__main__":
-    main()
+main()

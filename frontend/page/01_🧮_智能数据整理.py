@@ -480,5 +480,4 @@ def provide_csv_download(df: pd.DataFrame, df_name: str):
     )
 
 
-if __name__ == "__main__":
-    main()
+main()

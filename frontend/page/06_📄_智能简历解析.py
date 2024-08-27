@@ -18,14 +18,10 @@ from backend.resume_management.extractor.resume_extraction_core import (
     store_resume,
 )
 
-# 设置页面配置
-st.set_page_config(
-    page_title="智能HR助手 - 智能简历解析",
-    page_icon="📄",
-)
-
 # 应用自定义样式
 apply_common_styles()
+
+show_sidebar()
 
 
 def clean_html(html_content):
@@ -238,7 +234,4 @@ def main():
     show_footer()
 
 
-if __name__ == "__main__":
-    # 显示侧边栏
-    show_sidebar()
-    main()
+main()

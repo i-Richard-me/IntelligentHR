@@ -14,12 +14,6 @@ set_llm_cache(SQLiteCache(database_path="data/llm_cache/langchain.db"))
 
 from frontend.ui_components import show_sidebar, show_footer, apply_common_styles
 
-# 设置页面配置
-st.set_page_config(
-    page_title="智能HR助手 - 首页",
-    page_icon="🏠",
-)
-
 # 应用自定义样式
 apply_common_styles()
 
@@ -103,5 +97,5 @@ def display_documentation_link():
     )
 
 
-if __name__ == "__main__":
-    main()
+
+main()

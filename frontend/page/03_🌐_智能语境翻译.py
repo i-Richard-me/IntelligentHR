@@ -13,9 +13,6 @@ sys.path.append(project_root)
 from frontend.ui_components import show_sidebar, show_footer, apply_common_styles
 from backend.text_processing.translation.translator import Translator
 
-# 设置页面配置
-st.set_page_config(page_title="智能HR助手 - 智能语境翻译", page_icon="🌐")
-
 # 应用自定义样式
 apply_common_styles()
 
@@ -227,5 +224,4 @@ def main():
     show_footer()
 
 
-if __name__ == "__main__":
-    main()
+main()

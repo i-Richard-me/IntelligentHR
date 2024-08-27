@@ -18,12 +18,6 @@ from backend.text_processing.classification.classification_core import (
     ClassificationResult,
 )
 
-# 设置页面配置
-st.set_page_config(
-    page_title="智能HR助手 - 情感分析与文本标注",
-    page_icon="🏷️",
-)
-
 # 应用自定义样式
 apply_common_styles()
 
@@ -282,5 +276,4 @@ def main():
     show_footer()
 
 
-if __name__ == "__main__":
-    main()
+main()
