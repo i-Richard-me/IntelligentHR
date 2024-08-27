@@ -14,4 +14,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 EXPOSE 8510
 
 # 运行应用
-CMD ["streamlit", "run", "frontend/00_🏠_首页.py", "--server.port=8510", "--server.address=0.0.0.0"]
+CMD ["streamlit", "run", "frontend/app.py", "--server.port=8510", "--server.address=0.0.0.0"]

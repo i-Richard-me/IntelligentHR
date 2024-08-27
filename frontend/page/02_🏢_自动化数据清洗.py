@@ -20,6 +20,8 @@ from backend.data_processing.data_cleaning.verification_workflow import (
     ProcessingStatus,
 )
 
+st.query_params.role = st.session_state.role
+
 # 应用自定义样式
 apply_common_styles()
 

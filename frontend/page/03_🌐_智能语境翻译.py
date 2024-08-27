@@ -13,6 +13,8 @@ sys.path.append(project_root)
 from frontend.ui_components import show_sidebar, show_footer, apply_common_styles
 from backend.text_processing.translation.translator import Translator
 
+st.query_params.role = st.session_state.role
+
 # 应用自定义样式
 apply_common_styles()
 
@@ -66,37 +68,11 @@ async def batch_translate(
 def display_translation_info():
     st.info(
         """
-    **🌐 智能语境翻译**
-
     智能语境翻译是一个高效的多语言翻译工具，专为批量处理文本设计。它支持单条文本和CSV文件的翻译，
     通过上下文理解提高翻译准确性。该工具利用异步处理功能，确保大规模翻译任务的稳定性。
     智能语境翻译适用于需要快速、准确翻译大量文本的各类场景，如国际化文档处理或多语言数据分析。
     """
     )
-
-
-def display_translation_workflow():
-    with st.expander("📋 查看智能语境翻译工作流程", expanded=False):
-
-        with st.container(border=True):
-            col1, col2 = st.columns([1, 1])
-
-            with col2:
-                st.markdown(
-                    """
-                    **1. 输入准备**
-                    指定文本主题，提供上下文信息以提高翻译准确性。
-
-                    **2. 智能翻译**
-                    AI模型结合上下文进行翻译，优化专业术语和行业特定表达。
-
-                    **3. 异步处理**
-                    系统进行文本分割和批处理，高效处理大量文本。
-
-                    **4. 结果展示**
-                    显示翻译结果，支持单条文本即时显示和批量结果预览。
-                    """
-                )
 
 
 def upload_and_process_file() -> Tuple[pd.DataFrame, str]:
@@ -180,10 +156,6 @@ def main():
 
     # 显示功能介绍
     display_translation_info()
-    st.markdown("---")
-
-    # 显示工作流程
-    display_translation_workflow()
     st.markdown("---")
 
     st.markdown("## 文本翻译")

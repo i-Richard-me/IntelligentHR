@@ -18,6 +18,8 @@ from backend.text_processing.classification.classification_core import (
     ClassificationResult,
 )
 
+st.query_params.role = st.session_state.role
+
 # 应用自定义样式
 apply_common_styles()
 

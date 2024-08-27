@@ -14,6 +14,7 @@ from backend.text_processing.clustering.clustering_workflow import (
 )
 from frontend.ui_components import show_sidebar, show_footer, apply_common_styles
 
+st.query_params.role = st.session_state.role
 
 # 应用自定义样式
 apply_common_styles()

@@ -11,4 +11,4 @@ services:
       - .env
     volumes:
       - .:/app
-    command: streamlit run frontend/00_🏠_首页.py --server.port=8510 --server.address=0.0.0.0
+    command: streamlit run frontend/app.py --server.port=8510 --server.address=0.0.0.0

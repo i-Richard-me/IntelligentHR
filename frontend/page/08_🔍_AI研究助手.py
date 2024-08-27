@@ -16,6 +16,7 @@ from backend.ai_research.ai_researcher import AIResearcher
 from backend.ai_research.research_enums import ReportType, Tone
 from frontend.ui_components import show_sidebar, show_footer, apply_common_styles
 
+st.query_params.role = st.session_state.role
 
 # 应用自定义样式
 apply_common_styles()

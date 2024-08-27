@@ -1,7 +1,7 @@
 import streamlit as st
 
 # 版本号
-VERSION = "0.0.3"
+VERSION = "0.0.4"
 
 
 def show_sidebar():
@@ -11,14 +11,14 @@ def show_sidebar():
     with st.sidebar:
         _render_sidebar_content()
         _add_version_info()
-        _add_reset_button()
 
 
 def _render_sidebar_content():
     """
     渲染侧边栏的主要内容。
     """
-    st.markdown(_get_sidebar_style() + _get_sidebar_content(), unsafe_allow_html=True)
+    st.markdown(_get_sidebar_style(), unsafe_allow_html=True)
+    _get_sidebar_content()
     st.markdown("---")
 
 
@@ -46,23 +46,6 @@ def _get_sidebar_style():
         font-weight: bold;
         margin-bottom: 0.5rem;
     }
-    .sidebar-subtitle {
-        font-size: 0.9rem;
-        color: #6c757d;
-        margin-bottom: 1rem;
-        line-height: 1.6;
-    }
-    .sidebar-info {
-        font-size: 0.85rem;
-        margin-bottom: 0.5rem;
-    }
-    .sidebar-link {
-        color: #4F8BF9;
-        text-decoration: none;
-    }
-    .sidebar-link:hover {
-        text-decoration: underline;
-    }
     </style>
     """
 
@@ -71,21 +54,9 @@ def _get_sidebar_content():
     """
     返回侧边栏的HTML内容。
     """
-    return """
-    <div class="sidebar-content">
-        <h1 class="sidebar-title">🚀 智能HR助手</h1>
-        <p class="sidebar-subtitle">
-            实验性的人力资源管理工具集，探索AI技术在HR领域的应用潜力，为人力资源管理提供全方位的智能化解决方案。
-        </p>
-        <p class="sidebar-info">
-            <strong>开发者:</strong> Richard Wang<br>
-            <strong>联系方式:</strong> <a href="mailto:contact@xmail.ing" class="sidebar-link">contact@xmail.ing</a>
-        </p>
-        <p class="sidebar-info">
-            <a href="https://github.com/i-Richard-me/IntelligentHR" target="_blank" class="sidebar-link">GitHub 项目仓库</a>
-        </p>
-    </div>
-    """
+
+    st.caption("By: Richard Wang Email: [contact@xmail.ing](mailto:contact@xmail.ing)")
+    st.caption("[GitHub 项目仓库](https://github.com/i-Richard-me/IntelligentHR)")
 
 
 def _add_version_info():
@@ -93,15 +64,6 @@ def _add_version_info():
     添加版本信息到侧边栏。
     """
     st.caption(f"Version {VERSION}")
-
-
-def _add_reset_button():
-    """
-    添加重置按钮到侧边栏。
-    """
-    if st.button("重置任务", key="reset_button"):
-        st.session_state.clear()
-        st.rerun()
 
 
 def show_footer():
@@ -165,19 +127,6 @@ def _get_common_styles():
     """
     return """
     <style>
-    .stButton>button {
-        background-color: #f0f2f6;
-        color: #31333F;
-        border: 1px solid #d1d5db;
-        padding: 0.25rem 1rem;
-        font-size: 0.875rem;
-        border-radius: 0.375rem;
-        transition: all 0.2s;
-    }
-    .stButton>button:hover {
-        background-color: #e5e7eb;
-        border-color: #9ca3af;
-    }
     .stTextInput>div>div>input {
         border-color: #E0E0E0;
     }

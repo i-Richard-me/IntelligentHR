@@ -19,8 +19,7 @@ from backend.data_processing.table_operation.table_operation_workflow import (
 )
 from frontend.ui_components import show_sidebar, show_footer, apply_common_styles
 
-# 设置页面配置
-st.set_page_config(page_title="智能HR助手 - 智能数据整理", page_icon="🧮")
+st.query_params.role = st.session_state.role
 
 # 应用自定义样式
 apply_common_styles()

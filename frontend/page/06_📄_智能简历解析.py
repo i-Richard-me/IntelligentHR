@@ -18,6 +18,8 @@ from backend.resume_management.extractor.resume_extraction_core import (
     store_resume,
 )
 
+st.query_params.role = st.session_state.role
+
 # 应用自定义样式
 apply_common_styles()
 

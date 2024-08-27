@@ -47,6 +47,8 @@ from backend.data_processing.analysis.shap_analysis import (
     create_shap_dependence_plot,
 )
 
+st.query_params.role = st.session_state.role
+
 # 应用自定义样式
 apply_common_styles()
 
