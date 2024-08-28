@@ -79,6 +79,7 @@ class EntityVerificationWorkflow:
         # Web search and analysis
         if not self.skip_search:
             search_results = self._perform_web_search(user_query)
+            result["search_results"] = search_results  # 将搜索结果添加到结果字典
             langfuse_handler = create_langfuse_handler(session_id, "search_analysis")
             result["identified_entity_name"], is_identified = (
                 self._analyze_search_results(
@@ -91,6 +92,7 @@ class EntityVerificationWorkflow:
                 else ProcessingStatus.UNIDENTIFIED
             )
         else:
+            result["search_results"] = None  # 如果跳过搜索，设置为 None
             result["identified_entity_name"] = user_query
             result["status"] = ProcessingStatus.IDENTIFIED
 

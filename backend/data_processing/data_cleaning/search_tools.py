@@ -16,7 +16,7 @@ class SearchTools:
         self.duckduckgo_search_tool = DuckDuckGoSearchRun(
             api_wrapper=self.duckduckgo_wrapper
         )
-        self.tavily_search_tool = TavilySearchResults(k=2)
+        self.tavily_search_tool = TavilySearchResults(max_results=5)
 
     def duckduckgo_search(self, query: str) -> str:
         """

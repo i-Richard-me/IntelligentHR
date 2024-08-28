@@ -269,6 +269,8 @@ def display_single_result(result: Dict[str, Any], entity_type: str):
         st.metric("标准化状态", result["status"].value)
 
     with st.expander("查看详细信息"):
+        # 显示基本信息
+        st.subheader("基本信息")
         display_info = {
             "原始输入": result["original_input"],
             "最终实体名称": result["final_entity_name"],
@@ -278,6 +280,21 @@ def display_single_result(result: Dict[str, Any], entity_type: str):
             "检索的实体名称": result.get("retrieved_entity_name"),
         }
         st.json(display_info)
+
+        # 添加专门的搜索结果展示区域
+        st.subheader("网络搜索结果")
+        if result.get("search_results"):
+            st.text_area(
+                label="搜索结果详情",
+                value=result["search_results"],
+                height=200,
+                disabled=True,
+                key="search_results",
+            )
+        elif result.get("search_results") is None:
+            st.info("未进行网络搜索")
+        else:
+            st.info("网络搜索未返回结果")
 
     if result["status"] == ProcessingStatus.INVALID_INPUT:
         st.error("输入被判定为无效，请检查并重新输入。")
@@ -326,12 +343,25 @@ def process_batch(
     """
     results = []
     progress_bar = st.progress(0)
+    status_area = st.empty()
+
     for i, entity_name in enumerate(df.iloc[:, 0]):
         with st.spinner(f"正在处理: {entity_name}"):
             session_id = str(uuid4())  # 为每个实体生成新的 session_id
             result = workflow.run(entity_name, session_id=session_id)
             results.append(result)
-        progress_bar.progress((i + 1) / len(df))
+
+        # 更新进度条
+        progress = (i + 1) / len(df)
+        progress_bar.progress(progress)
+
+        # 更新状态信息
+        status_message = (
+            f"已处理: {i+1}/{len(df)} - "
+            f"最新: '{entity_name}' → '{result['final_entity_name']}' "
+            f"(状态: {result['status'].value})"
+        )
+        status_area.info(status_message)
 
     result_df = pd.DataFrame(results)
 
@@ -341,6 +371,9 @@ def process_batch(
     # 更新会话状态
     st.session_state.batch_results_df = result_df
     st.session_state.processing_complete = True
+
+    # 处理完成后的提示
+    status_area.success(f"批量处理完成！共处理 {len(df)} 条数据。")
 
 
 def display_batch_results(result_df: pd.DataFrame, entity_type: str):
@@ -364,7 +397,8 @@ def display_batch_results(result_df: pd.DataFrame, entity_type: str):
 
     # 显示结果表格
     st.subheader("详细结果")
-    st.dataframe(result_df[["原始输入", "final_entity_name", "status"]])
+    display_columns = ["原始输入", "final_entity_name", "status", "search_results"]
+    st.dataframe(result_df[display_columns])
 
     # 提供建议
     if (
