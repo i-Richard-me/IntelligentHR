@@ -53,6 +53,9 @@ class EntityVerificationWorkflow:
         self.search_tools = SearchTools()
 
     def run(self, user_query: str, session_id: Optional[str] = None) -> Dict[str, Any]:
+        
+        user_query = str(user_query)
+        
         if session_id is None:
             session_id = str(uuid4())
 

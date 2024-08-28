@@ -35,13 +35,13 @@ with open("data/config/collections_config.json", "r", encoding="utf-8") as f:
     CONFIG = json.load(f)
 
 
-def connect_to_milvus():
+def connect_to_milvus(db_name: str):
     """连接到Milvus数据库"""
     connections.connect(
         alias="default",
         host=os.getenv("VECTOR_DB_HOST", "localhost"),
         port=os.getenv("VECTOR_DB_PORT", "19530"),
-        db_name=os.getenv("VECTOR_DB_DATABASE", "examples"),
+        db_name=db_name,
     )
 
 
@@ -61,9 +61,11 @@ def create_milvus_collection(collection_config: Dict, dim: int):
     return collection
 
 
-def insert_examples_to_milvus(examples: List[Dict], collection_config: Dict):
+def insert_examples_to_milvus(
+    examples: List[Dict], collection_config: Dict, db_name: str
+):
     """将示例插入到Milvus数据库"""
-    connect_to_milvus()
+    connect_to_milvus(db_name)
 
     embeddings = CustomEmbeddings(
         api_key=os.getenv("EMBEDDING_API_KEY", ""),
@@ -76,8 +78,19 @@ def insert_examples_to_milvus(examples: List[Dict], collection_config: Dict):
 
     for example in examples:
         for field in collection_config["fields"]:
-            data[field["name"]].append(example[field["name"]])
-        vector = embeddings.embed_query(example[collection_config["embedding_field"]])
+            # 根据字段类型进行转换
+            if field["type"] == "str":
+                value = str(example[field["name"]])
+            elif field["type"] == "int":
+                value = int(example[field["name"]])
+            elif field["type"] == "float":
+                value = float(example[field["name"]])
+            else:
+                value = example[field["name"]]
+            data[field["name"]].append(value)
+
+        embedding_text = str(example[collection_config["embedding_field"]])
+        vector = embeddings.embed_query(embedding_text)
         vectors.append(vector)
 
     if not utility.has_collection(collection_config["name"]):
@@ -120,9 +133,9 @@ def process_csv_file(file, collection_config: Dict):
     return examples
 
 
-def get_collection_stats(collection_name: str) -> Dict:
+def get_collection_stats(collection_name: str, db_name: str) -> Dict:
     """获取集合的统计信息"""
-    connect_to_milvus()
+    connect_to_milvus(db_name)
     collection = Collection(collection_name)
     collection.load()
 
@@ -145,9 +158,11 @@ def display_db_management_info():
     )
 
 
-def get_existing_records(collection_config: Dict) -> Optional[pd.DataFrame]:
+def get_existing_records(
+    collection_config: Dict, db_name: str
+) -> Optional[pd.DataFrame]:
     """获取已存在的记录，如果collection不存在则返回None"""
-    connect_to_milvus()
+    connect_to_milvus(db_name)
     if not utility.has_collection(collection_config["name"]):
         connections.disconnect("default")
         return None
@@ -213,13 +228,13 @@ def display_collection_info(collection_config: Dict):
             st.write(f"- {field['name']}: {field['description']}")
 
 
-def display_collection_stats(collection_config: Dict):
+def display_collection_stats(collection_config: Dict, db_name: str):
     """显示Collection统计信息"""
     with st.container(border=True):
         st.subheader("数据统计")
-        connect_to_milvus()
+        connect_to_milvus(db_name)
         if utility.has_collection(collection_config["name"]):
-            stats = get_collection_stats(collection_config["name"])
+            stats = get_collection_stats(collection_config["name"], db_name)
             st.write(f"**实体数量:** {stats['实体数量']}")
             st.write(f"**字段数量:** {stats['字段数量']}")
             st.write(f"**索引类型:** {stats['索引类型']}")
@@ -243,7 +258,7 @@ def display_data_preview(
 
         if len(new_examples) > 0:
             st.write("**新记录预览:**")
-            new_df = pd.DataFrame(new_examples[:5])  # 只显示前5条新记录
+            new_df = pd.DataFrame(new_examples[:5])
             st.dataframe(new_df)
         elif collection_exists:
             st.info("所有上传的记录都已存在于数据库中，没有新数据需要插入。")
@@ -256,17 +271,25 @@ def main():
     # 显示功能介绍
     display_db_management_info()
 
+    # 数据库选择
+    st.header("选择数据库")
+    db_names = [os.getenv("VECTOR_DB_DATABASE", "examples"), "data_cleaning"]
+    selected_db = st.selectbox("选择要操作的数据库", db_names)
+
     # Collection 选择
     st.header("选择 Collection")
     collection_names = list(CONFIG["collections"].keys())
     selected_collection = st.selectbox("选择要操作的Collection", collection_names)
     collection_config = CONFIG["collections"][selected_collection]
 
+    # 连接到Milvus时使用所选数据库
+    connect_to_milvus(selected_db)
+
     # 显示Collection信息
     display_collection_info(collection_config)
 
     # 显示Collection统计
-    display_collection_stats(collection_config)
+    display_collection_stats(collection_config, selected_db)
 
     st.header("上传和插入数据")
 
@@ -279,7 +302,7 @@ def main():
             st.success(f"成功读取 {len(examples)} 条记录")
 
             # 获取已存在的记录
-            existing_records = get_existing_records(collection_config)
+            existing_records = get_existing_records(collection_config, selected_db)
             collection_exists = existing_records is not None
 
             # 去重
@@ -294,7 +317,7 @@ def main():
                 if st.button("插入到Milvus数据库"):
                     with st.spinner("正在插入数据..."):
                         inserted_count = insert_examples_to_milvus(
-                            new_examples, collection_config
+                            new_examples, collection_config, selected_db
                         )
                     st.success(f"成功插入 {inserted_count} 条新记录到Milvus数据库")
 
