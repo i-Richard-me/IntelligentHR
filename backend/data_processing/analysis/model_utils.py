@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 from sklearn.model_selection import train_test_split, cross_val_score
-from sklearn.preprocessing import StandardScaler, OneHotEncoder, LabelEncoder
+from sklearn.preprocessing import StandardScaler, OneHotEncoder, OrdinalEncoder
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 from sklearn.metrics import (
@@ -75,13 +75,25 @@ def prepare_data(
 
 
 def create_preprocessor(
-    categorical_cols: List[str], numerical_cols: List[str]
+    categorical_cols: List[str],
+    numerical_cols: List[str],
+    numeric_preprocessor: str = "StandardScaler",
+    categorical_preprocessor: str = "OneHotEncoder",
 ) -> ColumnTransformer:
-    numeric_transformer = Pipeline(steps=[("scaler", StandardScaler())])
-
-    categorical_transformer = Pipeline(
-        steps=[("onehot", OneHotEncoder(handle_unknown="ignore", drop="if_binary"))]
+    numeric_transformer = (
+        StandardScaler() if numeric_preprocessor == "StandardScaler" else "passthrough"
     )
+
+    if categorical_preprocessor == "OneHotEncoder":
+        categorical_transformer = OneHotEncoder(
+            handle_unknown="ignore", drop="if_binary"
+        )
+    elif categorical_preprocessor == "OrdinalEncoder":
+        categorical_transformer = OrdinalEncoder(
+            handle_unknown="use_encoded_value", unknown_value=-1
+        )
+    else:  # 'passthrough'
+        categorical_transformer = "passthrough"
 
     preprocessor = ColumnTransformer(
         transformers=[
@@ -143,6 +155,8 @@ def train_model(
     param_ranges: Dict[str, Any] = None,
     n_trials: int = 100,
     use_cv: bool = True,
+    numeric_preprocessor: str = "StandardScaler",
+    categorical_preprocessor: str = "OneHotEncoder",
 ) -> Dict[str, Any]:
     X_train, X_test, y_train, y_test, categorical_cols, numerical_cols = prepare_data(
         df, target_column, feature_columns, test_size
@@ -176,7 +190,14 @@ def train_model(
     model = model_class(problem_type)
 
     results = model.train(
-        X_train, y_train, categorical_cols, numerical_cols, param_ranges, n_trials
+        X_train,
+        y_train,
+        categorical_cols,
+        numerical_cols,
+        param_ranges,
+        n_trials,
+        numeric_preprocessor=numeric_preprocessor,
+        categorical_preprocessor=categorical_preprocessor,
     )
     test_metrics = model.evaluate(X_test, y_test)
 
@@ -343,6 +364,8 @@ def initialize_session_state():
         "data_validated": False,
         "mode": "train",
         "do_model_interpretation": False,
+        "numeric_preprocessor": "StandardScaler",
+        "categorical_preprocessor": "OneHotEncoder",
     }
 
     return default_states

@@ -16,10 +16,20 @@ from backend.data_processing.analysis.model_utils import (
 
 
 class RandomForestModel(BaseModel):
+    def __init__(self, problem_type):
+        super().__init__(problem_type)
+        self.numeric_preprocessor = "StandardScaler"
+        self.categorical_preprocessor = "OneHotEncoder"
+
     def optimize(
         self, X_train, y_train, categorical_cols, numerical_cols, param_ranges, n_trials
     ):
-        preprocessor = create_preprocessor(categorical_cols, numerical_cols)
+        preprocessor = create_preprocessor(
+            categorical_cols,
+            numerical_cols,
+            self.numeric_preprocessor,
+            self.categorical_preprocessor,
+        )
 
         def objective(trial):
             params = {
@@ -89,7 +99,12 @@ class RandomForestModel(BaseModel):
         numerical_cols,
         param_ranges=None,
         n_trials=100,
+        numeric_preprocessor="StandardScaler",
+        categorical_preprocessor="OneHotEncoder",
     ):
+        self.numeric_preprocessor = numeric_preprocessor
+        self.categorical_preprocessor = categorical_preprocessor
+
         default_param_ranges = {
             "n_estimators": (10, 200),
             "max_depth": (5, 30),

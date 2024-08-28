@@ -12,28 +12,52 @@ from backend.data_processing.analysis.model_utils import (
     get_feature_importance,
 )
 
+
 class LinearRegressionModel(BaseModel):
     def __init__(self, problem_type):
         super().__init__(problem_type)
         self.logger = logging.getLogger(__name__)
+        self.numeric_preprocessor = "StandardScaler"
+        self.categorical_preprocessor = "OneHotEncoder"
 
-    def optimize(self, X_train, y_train, categorical_cols, numerical_cols, param_ranges, n_trials):
+    def optimize(
+        self, X_train, y_train, categorical_cols, numerical_cols, param_ranges, n_trials
+    ):
         # 线性回归不需要参数优化，直接返回None
         return None, None, None, None
 
-    def train(self, X_train, y_train, categorical_cols, numerical_cols, param_ranges=None, n_trials=None):
+    def train(
+        self,
+        X_train,
+        y_train,
+        categorical_cols,
+        numerical_cols,
+        param_ranges=None,
+        n_trials=None,
+        numeric_preprocessor="StandardScaler",
+        categorical_preprocessor="OneHotEncoder",
+    ):
         self.logger.info("Starting Linear Regression training")
-        
-        preprocessor = create_preprocessor(categorical_cols, numerical_cols)
+        self.numeric_preprocessor = numeric_preprocessor
+        self.categorical_preprocessor = categorical_preprocessor
+
+        preprocessor = create_preprocessor(
+            categorical_cols,
+            numerical_cols,
+            self.numeric_preprocessor,
+            self.categorical_preprocessor,
+        )
         model = LinearRegression()
-        self.model = Pipeline(steps=[("preprocessor", preprocessor), ("regressor", model)])
+        self.model = Pipeline(
+            steps=[("preprocessor", preprocessor), ("regressor", model)]
+        )
 
         # 在全部训练数据上拟合模型
         self.model.fit(X_train, y_train)
 
         # 计算训练集 MSE 和 R²
         y_train_pred = self.model.predict(X_train)
-        train_mse = np.mean((y_train - y_train_pred)**2)
+        train_mse = np.mean((y_train - y_train_pred) ** 2)
         train_r2 = self.model.score(X_train, y_train)
 
         self.logger.info(f"Training MSE: {train_mse}, R²: {train_r2}")
@@ -46,10 +70,10 @@ class LinearRegressionModel(BaseModel):
         }
 
         # 添加系数和截距
-        linear_model = self.model.named_steps['regressor']
+        linear_model = self.model.named_steps["regressor"]
         results["coefficients"] = pd.Series(
-            linear_model.coef_, 
-            index=self.model.named_steps['preprocessor'].get_feature_names_out()
+            linear_model.coef_,
+            index=self.model.named_steps["preprocessor"].get_feature_names_out(),
         )
         results["intercept"] = linear_model.intercept_
 
@@ -64,7 +88,7 @@ class LinearRegressionModel(BaseModel):
 
     def get_feature_importance(self):
         # 对于线性回归，我们可以使用系数的绝对值作为特征重要性
-        linear_model = self.model.named_steps['regressor']
-        feature_names = self.model.named_steps['preprocessor'].get_feature_names_out()
+        linear_model = self.model.named_steps["regressor"]
+        feature_names = self.model.named_steps["preprocessor"].get_feature_names_out()
         importance = np.abs(linear_model.coef_)
         return pd.Series(importance, index=feature_names).sort_values(ascending=False)

@@ -21,11 +21,18 @@ class XGBoostModel(BaseModel):
         super().__init__(problem_type)
         self.label_encoder = None
         self.logger = logging.getLogger(__name__)
+        self.numeric_preprocessor = "StandardScaler"
+        self.categorical_preprocessor = "OneHotEncoder"
 
     def optimize(
         self, X_train, y_train, categorical_cols, numerical_cols, param_ranges, n_trials
     ):
-        preprocessor = create_preprocessor(categorical_cols, numerical_cols)
+        preprocessor = create_preprocessor(
+            categorical_cols,
+            numerical_cols,
+            self.numeric_preprocessor,
+            self.categorical_preprocessor,
+        )
 
         def objective(trial):
             params = {
@@ -119,8 +126,13 @@ class XGBoostModel(BaseModel):
         numerical_cols,
         param_ranges=None,
         n_trials=100,
+        numeric_preprocessor="StandardScaler",
+        categorical_preprocessor="OneHotEncoder",
     ):
         self.logger.info(f"Starting XGBoost training for {self.problem_type} problem")
+
+        self.numeric_preprocessor = numeric_preprocessor
+        self.categorical_preprocessor = categorical_preprocessor
 
         if self.problem_type == "classification":
             self.label_encoder = LabelEncoder()

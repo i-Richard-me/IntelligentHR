@@ -14,10 +14,20 @@ from backend.data_processing.analysis.model_utils import (
 
 
 class DecisionTreeModel(BaseModel):
+    def __init__(self, problem_type):
+        super().__init__(problem_type)
+        self.numeric_preprocessor = "StandardScaler"
+        self.categorical_preprocessor = "OneHotEncoder"
+
     def optimize(
         self, X_train, y_train, categorical_cols, numerical_cols, param_grid, n_trials
     ):
-        preprocessor = create_preprocessor(categorical_cols, numerical_cols)
+        preprocessor = create_preprocessor(
+            categorical_cols,
+            numerical_cols,
+            self.numeric_preprocessor,
+            self.categorical_preprocessor,
+        )
 
         if self.problem_type == "classification":
             dt = DecisionTreeClassifier(random_state=42)
@@ -48,7 +58,12 @@ class DecisionTreeModel(BaseModel):
         numerical_cols,
         param_ranges=None,
         n_trials=100,
+        numeric_preprocessor="StandardScaler",
+        categorical_preprocessor="OneHotEncoder",
     ):
+        self.numeric_preprocessor = numeric_preprocessor
+        self.categorical_preprocessor = categorical_preprocessor
+
         default_param_grid = {
             "classifier__max_depth": [2, 4, 6, 8, 10, None],
             "classifier__min_samples_split": [2, 5, 10],
