@@ -15,7 +15,7 @@ def connect_to_milvus():
         alias="default",
         host=os.getenv("VECTOR_DB_HOST", "localhost"),
         port=os.getenv("VECTOR_DB_PORT", "19530"),
-        db_name=os.getenv("VECTOR_DB_DATABASE", "default"),
+        db_name=os.getenv("VECTOR_DB_DATA_CLEANING", "default"),
     )
 
 

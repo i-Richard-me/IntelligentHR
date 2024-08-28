@@ -1,6 +1,10 @@
 from typing import Dict, Any, List, Optional, Callable
 from uuid import uuid4
 from langfuse.callback import CallbackHandler
+import traceback
+
+import logging
+logger = logging.getLogger(__name__)
 
 from backend.data_processing.data_cleaning.search_tools import SearchTools
 from backend.data_processing.data_cleaning.verification_models import (
@@ -18,6 +22,7 @@ class ProcessingStatus(Enum):
     UNIDENTIFIED = "未识别"
     VERIFIED = "已验证"
     UNVERIFIED = "未验证"
+    ERROR = "处理错误"
 
 
 def create_langfuse_handler(session_id: str, step: str) -> CallbackHandler:
@@ -53,75 +58,89 @@ class EntityVerificationWorkflow:
         self.search_tools = SearchTools()
 
     def run(self, user_query: str, session_id: Optional[str] = None) -> Dict[str, Any]:
-        
         user_query = str(user_query)
-        
+
         if session_id is None:
             session_id = str(uuid4())
 
         result = self._initialize_result()
         result["original_input"] = user_query
 
-        # Input validation
-        if not self.skip_validation:
-            langfuse_handler = create_langfuse_handler(session_id, "input_validation")
-            result["is_valid"] = self._validate_input(user_query, langfuse_handler)
-        else:
-            result["is_valid"] = True
-
-        if not result["is_valid"]:
-            result["status"] = ProcessingStatus.INVALID_INPUT
-            return self._generate_output(result)
-
-        # If skipping search and retrieval, return valid input
-        if self.skip_search and self.skip_retrieval:
-            result["status"] = ProcessingStatus.VALID_INPUT
-            result["identified_entity_name"] = user_query
-            return self._generate_output(result)
-
-        # Web search and analysis
-        if not self.skip_search:
-            search_results = self._perform_web_search(user_query)
-            result["search_results"] = search_results  # 将搜索结果添加到结果字典
-            langfuse_handler = create_langfuse_handler(session_id, "search_analysis")
-            result["identified_entity_name"], is_identified = (
-                self._analyze_search_results(
-                    user_query, search_results, langfuse_handler
-                )
-            )
-            result["status"] = (
-                ProcessingStatus.IDENTIFIED
-                if is_identified
-                else ProcessingStatus.UNIDENTIFIED
-            )
-        else:
-            result["search_results"] = None  # 如果跳过搜索，设置为 None
-            result["identified_entity_name"] = user_query
-            result["status"] = ProcessingStatus.IDENTIFIED
-
-        # Vector retrieval and verification
-        if not self.skip_retrieval and result["status"] == ProcessingStatus.IDENTIFIED:
-            retrieval_results = self._direct_retrieve(result["identified_entity_name"])
-            if retrieval_results:
-                result["retrieved_entity_name"] = retrieval_results[0].get(
-                    self.standard_field, ""
-                )
+        try:
+            # Input validation
+            if not self.skip_validation:
                 langfuse_handler = create_langfuse_handler(
-                    session_id, "name_verification"
+                    session_id, "input_validation"
                 )
-                is_verified = self._evaluate_match(
-                    user_query,
-                    result["retrieved_entity_name"],
-                    search_results if not self.skip_search else "",
-                    langfuse_handler,
+                result["is_valid"] = self._validate_input(user_query, langfuse_handler)
+            else:
+                result["is_valid"] = True
+
+            if not result["is_valid"]:
+                result["status"] = ProcessingStatus.INVALID_INPUT
+                return self._generate_output(result)
+
+            # If skipping search and retrieval, return valid input
+            if self.skip_search and self.skip_retrieval:
+                result["status"] = ProcessingStatus.VALID_INPUT
+                result["identified_entity_name"] = user_query
+                return self._generate_output(result)
+
+            # Web search and analysis
+            if not self.skip_search:
+                search_results = self._perform_web_search(user_query)
+                result["search_results"] = search_results
+                langfuse_handler = create_langfuse_handler(
+                    session_id, "search_analysis"
+                )
+                result["identified_entity_name"], is_identified = (
+                    self._analyze_search_results(
+                        user_query, search_results, langfuse_handler
+                    )
                 )
                 result["status"] = (
-                    ProcessingStatus.VERIFIED
-                    if is_verified
-                    else ProcessingStatus.UNVERIFIED
+                    ProcessingStatus.IDENTIFIED
+                    if is_identified
+                    else ProcessingStatus.UNIDENTIFIED
                 )
             else:
-                result["status"] = ProcessingStatus.UNVERIFIED
+                result["search_results"] = None
+                result["identified_entity_name"] = user_query
+                result["status"] = ProcessingStatus.IDENTIFIED
+
+            # Vector retrieval and verification
+            if (
+                not self.skip_retrieval
+                and result["status"] == ProcessingStatus.IDENTIFIED
+            ):
+                retrieval_results = self._direct_retrieve(
+                    result["identified_entity_name"]
+                )
+                if retrieval_results:
+                    result["retrieved_entity_name"] = retrieval_results[0].get(
+                        self.standard_field, ""
+                    )
+                    langfuse_handler = create_langfuse_handler(
+                        session_id, "name_verification"
+                    )
+                    is_verified = self._evaluate_match(
+                        user_query,
+                        result["retrieved_entity_name"],
+                        search_results if not self.skip_search else "",
+                        langfuse_handler,
+                    )
+                    result["status"] = (
+                        ProcessingStatus.VERIFIED
+                        if is_verified
+                        else ProcessingStatus.UNVERIFIED
+                    )
+                else:
+                    result["status"] = ProcessingStatus.UNVERIFIED
+
+        except Exception as e:
+            result["status"] = ProcessingStatus.ERROR
+            result["error_message"] = str(e)
+            result["error_traceback"] = traceback.format_exc()
 
         return self._generate_output(result)
 
@@ -200,6 +219,8 @@ class EntityVerificationWorkflow:
     def _generate_output(self, result: Dict[str, Any]) -> Dict[str, Any]:
         if result["status"] == ProcessingStatus.INVALID_INPUT:
             result["final_entity_name"] = "无效输入"
+        elif result["status"] == ProcessingStatus.ERROR:
+            result["final_entity_name"] = "处理错误"
         elif result["status"] in [
             ProcessingStatus.VERIFIED,
             ProcessingStatus.IDENTIFIED,
@@ -209,5 +230,7 @@ class EntityVerificationWorkflow:
             )
         else:
             result["final_entity_name"] = result["original_input"]
+
+        logger.info(f"Final entity name: {result['final_entity_name']}, status: {result['status']}")
 
         return result
