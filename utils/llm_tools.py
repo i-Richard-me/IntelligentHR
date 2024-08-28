@@ -20,12 +20,14 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def init_language_model(temperature: float = 0.0, **kwargs: Any) -> ChatOpenAI:
+def init_language_model(temperature: float = 0.0, provider: Optional[str] = None, model_name: Optional[str] = None, **kwargs: Any) -> ChatOpenAI:
     """
     初始化语言模型，支持OpenAI模型和其他模型供应商。
 
     Args:
         temperature: 模型输出的温度，控制随机性。默认为0.0。
+        provider: 可选的模型供应商，优先于环境变量。
+        model_name: 可选的模型名称，优先于环境变量。
         **kwargs: 其他可选参数，将传递给模型初始化。
 
     Returns:
@@ -34,8 +36,8 @@ def init_language_model(temperature: float = 0.0, **kwargs: Any) -> ChatOpenAI:
     Raises:
         ValueError: 当提供的参数无效或缺少必要的配置时抛出。
     """
-    provider = os.getenv("LLM_PROVIDER", "openai").lower()
-    model_name = os.getenv("LLM_MODEL", "gpt-4")
+    provider = provider.lower() if provider else os.getenv("LLM_PROVIDER", "openai").lower()
+    model_name = model_name or os.getenv("LLM_MODEL", "gpt-4")
 
     api_key_env_var = f"OPENAI_API_KEY_{provider.upper()}"
     api_base_env_var = f"OPENAI_API_BASE_{provider.upper()}"

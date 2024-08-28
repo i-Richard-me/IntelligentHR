@@ -1,3 +1,4 @@
+import os
 from typing import Literal
 from pydantic import BaseModel, Field
 
@@ -91,5 +92,5 @@ name_verifier = LanguageModelChain(
     EntityVerification,
     system_message_verification,
     human_message_verification,
-    language_model,
+    init_language_model(provider=os.getenv("SMART_LLM_PROVIDER"), model_name=os.getenv("SMART_LLM_MODEL")),
 )()
