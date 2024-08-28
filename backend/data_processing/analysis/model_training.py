@@ -21,13 +21,6 @@ from backend.data_processing.analysis.visualization import (
     create_shap_dependence_plot,
 )
 from backend.data_processing.analysis.model_predictor import ModelPredictor
-from backend.data_processing.analysis.model_utils import (
-    train_model,
-    save_model,
-    add_model_record,
-    evaluate_model,
-    get_feature_importance,
-)
 from backend.data_processing.analysis.ml_components import (
     display_info_message,
     display_data_split_settings,
@@ -36,6 +29,7 @@ from backend.data_processing.analysis.ml_components import (
     display_xgboost_settings,
     display_linear_regression_settings,
     display_model_selection,
+    display_preprocessing_settings,
 )
 from backend.data_processing.analysis.ml_explanations import (
     CONFUSION_MATRIX_EXPLANATION,
@@ -164,6 +158,7 @@ def display_model_training_and_advanced_settings():
         st.markdown("## 模型训练")
         with st.container(border=True):
             display_data_split_settings()
+            display_preprocessing_settings()
 
             if st.button("开始训练模型"):
                 with st.spinner("正在训练模型，请稍候..."):
@@ -180,6 +175,8 @@ def display_model_training_and_advanced_settings():
                             st.session_state.test_size,
                             param_ranges=param_ranges,
                             n_trials=n_trials,
+                            numeric_preprocessor=st.session_state.numeric_preprocessor,
+                            categorical_preprocessor=st.session_state.categorical_preprocessor,
                         )
                         st.session_state.model_records = add_model_record(
                             st.session_state.model_records,

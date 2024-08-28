@@ -44,6 +44,38 @@ def display_data_split_settings():
     st.session_state.test_size = st.session_state.confirmed_test_size
 
 
+def display_preprocessing_settings():
+    with st.expander("数据预处理设置", expanded=False):
+        st.markdown("#### 特征预处理方法选择")
+
+        col1, col2 = st.columns(2)
+        with col1:
+            st.session_state.numeric_preprocessor = st.selectbox(
+                "数值特征预处理方法",
+                options=["StandardScaler", "passthrough"],
+                index=(
+                    0
+                    if st.session_state.numeric_preprocessor == "StandardScaler"
+                    else 1
+                ),
+                help="StandardScaler: 标准化数值特征\npassthrough: 不对数值特征进行处理",
+            )
+        with col2:
+            st.session_state.categorical_preprocessor = st.selectbox(
+                "分类特征预处理方法",
+                options=["OneHotEncoder", "OrdinalEncoder", "passthrough"],
+                index=["OneHotEncoder", "OrdinalEncoder", "passthrough"].index(
+                    st.session_state.categorical_preprocessor
+                ),
+                help="OneHotEncoder: 独热编码\nOrdinalEncoder: 序数编码\npassthrough: 不对分类特征进行处理",
+            )
+
+        if st.button("确认预处理设置"):
+            st.success(
+                f"预处理设置已更新。数值特征: {st.session_state.numeric_preprocessor}, 分类特征: {st.session_state.categorical_preprocessor}"
+            )
+
+
 def display_random_forest_settings():
     col1, col2 = st.columns(2)
     with col1:
