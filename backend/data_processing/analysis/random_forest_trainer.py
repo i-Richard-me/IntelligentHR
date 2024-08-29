@@ -6,6 +6,7 @@ from sklearn.pipeline import Pipeline
 import optuna
 from optuna.samplers import TPESampler
 from typing import List, Dict, Any, Tuple
+import logging
 
 from backend.data_processing.analysis.model_utils import (
     BaseModel,
@@ -16,14 +17,39 @@ from backend.data_processing.analysis.model_utils import (
 
 
 class RandomForestModel(BaseModel):
-    def __init__(self, problem_type):
+    """随机森林模型类"""
+
+    def __init__(self, problem_type: str):
         super().__init__(problem_type)
         self.numeric_preprocessor = "StandardScaler"
         self.categorical_preprocessor = "OneHotEncoder"
+        self.logger = logging.getLogger(__name__)
 
     def optimize(
-        self, X_train, y_train, categorical_cols, numerical_cols, param_ranges, n_trials
-    ):
+        self,
+        X_train: pd.DataFrame,
+        y_train: pd.Series,
+        categorical_cols: List[str],
+        numerical_cols: List[str],
+        param_ranges: Dict[str, Any],
+        n_trials: int,
+    ) -> Tuple[Pipeline, Dict[str, Any], float, int]:
+        """
+        优化随机森林模型参数
+
+        Args:
+            X_train: 训练特征
+            y_train: 训练标签
+            categorical_cols: 分类特征列名列表
+            numerical_cols: 数值特征列名列表
+            param_ranges: 参数范围
+            n_trials: 优化尝试次数
+
+        Returns:
+            Tuple[Pipeline, Dict[str, Any], float, int]:
+            最佳模型pipeline, 最佳参数, 最佳得分, 最佳试验次数
+        """
+        self.logger.info("开始随机森林模型参数优化")
         preprocessor = create_preprocessor(
             categorical_cols,
             numerical_cols,
@@ -89,19 +115,37 @@ class RandomForestModel(BaseModel):
         best_score = study.best_value
         best_trial = study.best_trial.number + 1
 
+        self.logger.info(f"随机森林模型参数优化完成。最佳得分: {best_score}")
         return best_pipeline, best_params, best_score, best_trial
 
     def train(
         self,
-        X_train,
-        y_train,
-        categorical_cols,
-        numerical_cols,
-        param_ranges=None,
-        n_trials=100,
-        numeric_preprocessor="StandardScaler",
-        categorical_preprocessor="OneHotEncoder",
-    ):
+        X_train: pd.DataFrame,
+        y_train: pd.Series,
+        categorical_cols: List[str],
+        numerical_cols: List[str],
+        param_ranges: Dict[str, Any] = None,
+        n_trials: int = 100,
+        numeric_preprocessor: str = "StandardScaler",
+        categorical_preprocessor: str = "OneHotEncoder",
+    ) -> Dict[str, Any]:
+        """
+        训练随机森林模型
+
+        Args:
+            X_train: 训练特征
+            y_train: 训练标签
+            categorical_cols: 分类特征列名列表
+            numerical_cols: 数值特征列名列表
+            param_ranges: 参数范围
+            n_trials: 优化尝试次数
+            numeric_preprocessor: 数值特征预处理方法
+            categorical_preprocessor: 分类特征预处理方法
+
+        Returns:
+            Dict[str, Any]: 包含训练结果的字典
+        """
+        self.logger.info("开始随机森林模型训练")
         self.numeric_preprocessor = numeric_preprocessor
         self.categorical_preprocessor = categorical_preprocessor
 
@@ -131,4 +175,31 @@ class RandomForestModel(BaseModel):
         if self.problem_type == "regression":
             results["cv_mean_score"] = abs(results["cv_mean_score"])
 
+        self.logger.info("随机森林模型训练完成")
         return results
+
+    def evaluate(self, X_test: pd.DataFrame, y_test: pd.Series) -> Dict[str, Any]:
+        """
+        评估随机森林模型性能
+
+        Args:
+            X_test: 测试特征
+            y_test: 测试标签
+
+        Returns:
+            Dict[str, Any]: 包含评估指标的字典
+        """
+        self.logger.info("开始随机森林模型评估")
+        return evaluate_model(self.model, X_test, y_test, self.problem_type)
+
+    def get_feature_importance(self) -> pd.Series:
+        """
+        获取特征重要性
+
+        Returns:
+            pd.Series: 特征重要性
+        """
+        return get_feature_importance(
+            self.model.named_steps["classifier"],
+            self.model.named_steps["preprocessor"],
+        )

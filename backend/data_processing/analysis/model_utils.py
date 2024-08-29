@@ -11,7 +11,6 @@ from sklearn.metrics import (
     mean_squared_error,
     r2_score,
 )
-from sklearn.linear_model import LinearRegression
 from typing import List, Dict, Any, Tuple
 import joblib
 from datetime import datetime
@@ -22,33 +21,47 @@ from backend.data_processing.analysis.model_predictor import ModelPredictor
 
 
 class BaseModel(ABC):
-    def __init__(self, problem_type):
+    """基础模型类，为所有模型提供通用接口"""
+
+    def __init__(self, problem_type: str):
         self.problem_type = problem_type
         self.model = None
         self.preprocessor = None
 
     @abstractmethod
     def optimize(
-        self, X_train, y_train, categorical_cols, numerical_cols, param_ranges, n_trials
-    ):
+        self,
+        X_train: pd.DataFrame,
+        y_train: pd.Series,
+        categorical_cols: List[str],
+        numerical_cols: List[str],
+        param_ranges: Dict[str, Any],
+        n_trials: int,
+    ) -> Tuple[Pipeline, Dict[str, Any], float, int]:
+        """优化模型参数"""
         pass
 
     @abstractmethod
     def train(
         self,
-        X_train,
-        y_train,
-        categorical_cols,
-        numerical_cols,
-        param_ranges=None,
-        n_trials=100,
-    ):
+        X_train: pd.DataFrame,
+        y_train: pd.Series,
+        categorical_cols: List[str],
+        numerical_cols: List[str],
+        param_ranges: Dict[str, Any] = None,
+        n_trials: int = 100,
+        numeric_preprocessor: str = "StandardScaler",
+        categorical_preprocessor: str = "OneHotEncoder",
+    ) -> Dict[str, Any]:
+        """训练模型"""
         pass
 
-    def evaluate(self, X_test, y_test):
+    def evaluate(self, X_test: pd.DataFrame, y_test: pd.Series) -> Dict[str, Any]:
+        """评估模型性能"""
         return evaluate_model(self.model, X_test, y_test, self.problem_type)
 
-    def get_feature_importance(self):
+    def get_feature_importance(self) -> pd.Series:
+        """获取特征重要性"""
         return get_feature_importance(
             self.model.named_steps["classifier"],
             self.model.named_steps["preprocessor"],
@@ -61,6 +74,18 @@ def prepare_data(
     feature_columns: List[str],
     test_size: float = 0.3,
 ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series, List[str], List[str]]:
+    """
+    准备训练和测试数据
+
+    Args:
+        df: 原始数据框
+        target_column: 目标变量列名
+        feature_columns: 特征列名列表
+        test_size: 测试集比例
+
+    Returns:
+        训练特征、测试特征、训练标签、测试标签、分类特征列表、数值特征列表
+    """
     X = df[feature_columns]
     y = df[target_column]
 
@@ -84,6 +109,18 @@ def create_preprocessor(
     numeric_preprocessor: str = "StandardScaler",
     categorical_preprocessor: str = "OneHotEncoder",
 ) -> ColumnTransformer:
+    """
+    创建数据预处理器
+
+    Args:
+        categorical_cols: 分类特征列名列表
+        numerical_cols: 数值特征列名列表
+        numeric_preprocessor: 数值特征预处理方法
+        categorical_preprocessor: 分类特征预处理方法
+
+    Returns:
+        ColumnTransformer 预处理器
+    """
     numeric_transformer = (
         StandardScaler() if numeric_preprocessor == "StandardScaler" else "passthrough"
     )
@@ -99,19 +136,29 @@ def create_preprocessor(
     else:  # 'passthrough'
         categorical_transformer = "passthrough"
 
-    preprocessor = ColumnTransformer(
+    return ColumnTransformer(
         transformers=[
             ("num", numeric_transformer, numerical_cols),
             ("cat", categorical_transformer, categorical_cols),
         ]
     )
 
-    return preprocessor
-
 
 def evaluate_model(
     model: Any, X_test: pd.DataFrame, y_test: pd.Series, problem_type: str
 ) -> Dict[str, Any]:
+    """
+    评估模型性能
+
+    Args:
+        model: 训练好的模型
+        X_test: 测试特征
+        y_test: 测试标签
+        problem_type: 问题类型（'classification' 或 'regression'）
+
+    Returns:
+        包含评估指标的字典
+    """
     y_test_pred = model.predict(X_test)
 
     if problem_type == "classification":
@@ -133,6 +180,16 @@ def evaluate_model(
 
 
 def get_feature_importance(model: Any, preprocessor: ColumnTransformer) -> pd.Series:
+    """
+    获取特征重要性
+
+    Args:
+        model: 训练好的模型
+        preprocessor: 数据预处理器
+
+    Returns:
+        特征重要性的 Series
+    """
     feature_names = preprocessor.get_feature_names_out()
     if hasattr(model, "feature_importances_"):
         feature_importance = pd.Series(
@@ -158,38 +215,35 @@ def train_model(
     test_size: float = 0.3,
     param_ranges: Dict[str, Any] = None,
     n_trials: int = 100,
-    use_cv: bool = True,
     numeric_preprocessor: str = "StandardScaler",
     categorical_preprocessor: str = "OneHotEncoder",
 ) -> Dict[str, Any]:
+    """
+    训练模型的主函数
+
+    Args:
+        df: 原始数据框
+        target_column: 目标变量列名
+        feature_columns: 特征列名列表
+        model_type: 模型类型
+        problem_type: 问题类型（'classification' 或 'regression'）
+        test_size: 测试集比例
+        param_ranges: 参数范围
+        n_trials: 优化尝试次数
+        numeric_preprocessor: 数值特征预处理方法
+        categorical_preprocessor: 分类特征预处理方法
+
+    Returns:
+        包含训练结果的字典
+    """
     X_train, X_test, y_train, y_test, categorical_cols, numerical_cols = prepare_data(
         df, target_column, feature_columns, test_size
     )
 
     model_class = get_model_class(model_type)
 
-    if model_type == "随机森林":
-        param_ranges = (
-            filter_valid_params(param_ranges, RANDOM_FOREST_PARAMS)
-            if param_ranges
-            else None
-        )
-    elif model_type == "决策树":
-        param_ranges = (
-            filter_valid_params(param_ranges, DECISION_TREE_PARAMS)
-            if param_ranges
-            else None
-        )
-    elif model_type == "XGBoost":
-        param_ranges = (
-            filter_valid_params(param_ranges, XGBOOST_PARAMS) if param_ranges else None
-        )
-    elif model_type == "线性回归":
-        param_ranges = (
-            filter_valid_params(param_ranges, LINEAR_REGRESSION_PARAMS)
-            if param_ranges
-            else None
-        )
+    if param_ranges:
+        param_ranges = filter_valid_params(param_ranges, get_valid_params(model_type))
 
     model = model_class(problem_type)
 
@@ -222,6 +276,7 @@ def train_model(
 
 
 def get_model_class(model_type: str):
+    """根据模型类型获取对应的模型类"""
     from backend.data_processing.analysis.random_forest_trainer import RandomForestModel
     from backend.data_processing.analysis.decision_tree_trainer import DecisionTreeModel
     from backend.data_processing.analysis.xgboost_trainer import XGBoostModel
@@ -244,7 +299,20 @@ def save_model(
     problem_type: str,
     timestamp: datetime,
     save_path: str = "data/ml_models",
-):
+) -> str:
+    """
+    保存模型
+
+    Args:
+        model: 训练好的模型
+        model_type: 模型类型
+        problem_type: 问题类型
+        timestamp: 时间戳
+        save_path: 保存路径
+
+    Returns:
+        保存的文件路径
+    """
     problem_folder = (
         "classification" if problem_type == "classification" else "regression"
     )
@@ -265,6 +333,18 @@ def add_model_record(
     problem_type: str,
     model_results: Dict[str, Any],
 ) -> pd.DataFrame:
+    """
+    添加模型记录
+
+    Args:
+        model_records: 现有的模型记录
+        model_type: 模型类型
+        problem_type: 问题类型
+        model_results: 模型结果
+
+    Returns:
+        更新后的模型记录
+    """
     new_record = {
         "模型ID": f"Model_{len(model_records) + 1}",
         "模型类型": model_type,
@@ -276,58 +356,54 @@ def add_model_record(
             if problem_type == "classification"
             else model_results["test_mse"]
         ),
+        "参数": str(model_results.get("best_params", "N/A")),
+        "最佳轮次": model_results.get("best_trial", "N/A"),
     }
-
-    if "best_params" in model_results:
-        new_record["参数"] = str(model_results["best_params"])
-    elif model_type == "线性回归":
-        new_record["参数"] = "N/A (线性回归无需参数优化)"
-    else:
-        new_record["参数"] = "未知"
-
-    if "best_trial" in model_results:
-        new_record["最佳轮次"] = model_results["best_trial"]
-    else:
-        new_record["最佳轮次"] = "N/A"
 
     return pd.concat([model_records, pd.DataFrame([new_record])], ignore_index=True)
 
 
-def filter_valid_params(params, valid_params):
+def filter_valid_params(
+    params: Dict[str, Any], valid_params: List[str]
+) -> Dict[str, Any]:
+    """过滤有效参数"""
     return {k: v for k, v in params.items() if k in valid_params}
 
 
-RANDOM_FOREST_PARAMS = [
-    "n_estimators",
-    "max_depth",
-    "min_samples_split",
-    "min_samples_leaf",
-    "max_features",
-]
+def get_valid_params(model_type: str) -> List[str]:
+    """获取模型的有效参数列表"""
+    valid_params = {
+        "随机森林": [
+            "n_estimators",
+            "max_depth",
+            "min_samples_split",
+            "min_samples_leaf",
+            "max_features",
+        ],
+        "决策树": [
+            "classifier__max_depth",
+            "classifier__min_samples_split",
+            "classifier__min_samples_leaf",
+            "classifier__max_leaf_nodes",
+        ],
+        "XGBoost": [
+            "n_estimators",
+            "max_depth",
+            "learning_rate",
+            "subsample",
+            "colsample_bytree",
+            "min_child_weight",
+            "reg_alpha",
+            "reg_lambda",
+        ],
+        "线性回归": [],
+    }
+    return valid_params.get(model_type, [])
 
-DECISION_TREE_PARAMS = [
-    "classifier__max_depth",
-    "classifier__min_samples_split",
-    "classifier__min_samples_leaf",
-    "classifier__max_leaf_nodes",
-]
 
-XGBOOST_PARAMS = [
-    "n_estimators",
-    "max_depth",
-    "learning_rate",
-    "subsample",
-    "colsample_bytree",
-    "min_child_weight",
-    "reg_alpha",
-    "reg_lambda",
-]
-
-LINEAR_REGRESSION_PARAMS = []
-
-
-def initialize_session_state():
-    default_states = {
+def initialize_session_state() -> Dict[str, Any]:
+    """初始化会话状态"""
+    return {
         "df": None,
         "model_results": None,
         "target_column": None,
@@ -382,5 +458,3 @@ def initialize_session_state():
         "numeric_preprocessor": "StandardScaler",
         "categorical_preprocessor": "OneHotEncoder",
     }
-
-    return default_states

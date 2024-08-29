@@ -17,7 +17,9 @@ from backend.data_processing.analysis.model_utils import (
 
 
 class XGBoostModel(BaseModel):
-    def __init__(self, problem_type):
+    """XGBoost 模型类"""
+
+    def __init__(self, problem_type: str):
         super().__init__(problem_type)
         self.label_encoder = None
         self.logger = logging.getLogger(__name__)
@@ -25,8 +27,30 @@ class XGBoostModel(BaseModel):
         self.categorical_preprocessor = "OneHotEncoder"
 
     def optimize(
-        self, X_train, y_train, categorical_cols, numerical_cols, param_ranges, n_trials
-    ):
+        self,
+        X_train: pd.DataFrame,
+        y_train: pd.Series,
+        categorical_cols: List[str],
+        numerical_cols: List[str],
+        param_ranges: Dict[str, Any],
+        n_trials: int,
+    ) -> Tuple[Pipeline, Dict[str, Any], float, int]:
+        """
+        优化 XGBoost 模型参数
+
+        Args:
+            X_train: 训练特征
+            y_train: 训练标签
+            categorical_cols: 分类特征列名列表
+            numerical_cols: 数值特征列名列表
+            param_ranges: 参数范围
+            n_trials: 优化尝试次数
+
+        Returns:
+            Tuple[Pipeline, Dict[str, Any], float, int]:
+            最佳模型pipeline, 最佳参数, 最佳得分, 最佳试验次数
+        """
+        self.logger.info("开始 XGBoost 模型参数优化")
         preprocessor = create_preprocessor(
             categorical_cols,
             numerical_cols,
@@ -94,12 +118,8 @@ class XGBoostModel(BaseModel):
             )
             return np.mean(scores)
 
-        self.logger.info(f"Starting optimization with {n_trials} trials")
         study = optuna.create_study(direction="maximize")
         study.optimize(objective, n_trials=n_trials, n_jobs=-1)
-        self.logger.info(
-            f"Optimization completed. Best trial: {study.best_trial.number}"
-        )
 
         best_params = study.best_params
         if self.problem_type == "classification":
@@ -116,20 +136,37 @@ class XGBoostModel(BaseModel):
         best_score = study.best_value
         best_trial = study.best_trial.number + 1
 
+        self.logger.info(f"XGBoost 模型参数优化完成。最佳得分: {best_score}")
         return best_pipeline, best_params, best_score, best_trial
 
     def train(
         self,
-        X_train,
-        y_train,
-        categorical_cols,
-        numerical_cols,
-        param_ranges=None,
-        n_trials=100,
-        numeric_preprocessor="StandardScaler",
-        categorical_preprocessor="OneHotEncoder",
-    ):
-        self.logger.info(f"Starting XGBoost training for {self.problem_type} problem")
+        X_train: pd.DataFrame,
+        y_train: pd.Series,
+        categorical_cols: List[str],
+        numerical_cols: List[str],
+        param_ranges: Dict[str, Any] = None,
+        n_trials: int = 100,
+        numeric_preprocessor: str = "StandardScaler",
+        categorical_preprocessor: str = "OneHotEncoder",
+    ) -> Dict[str, Any]:
+        """
+        训练 XGBoost 模型
+
+        Args:
+            X_train: 训练特征
+            y_train: 训练标签
+            categorical_cols: 分类特征列名列表
+            numerical_cols: 数值特征列名列表
+            param_ranges: 参数范围
+            n_trials: 优化尝试次数
+            numeric_preprocessor: 数值特征预处理方法
+            categorical_preprocessor: 分类特征预处理方法
+
+        Returns:
+            Dict[str, Any]: 包含训练结果的字典
+        """
+        self.logger.info("开始 XGBoost 模型训练")
 
         self.numeric_preprocessor = numeric_preprocessor
         self.categorical_preprocessor = categorical_preprocessor
@@ -138,10 +175,10 @@ class XGBoostModel(BaseModel):
             self.label_encoder = LabelEncoder()
             y_train_encoded = self.label_encoder.fit_transform(y_train)
         else:
-            y_train_encoded = np.array(y_train)  # 确保y_train是numpy数组
+            y_train_encoded = np.array(y_train)
 
         self.logger.info(
-            f"Shape of X_train: {X_train.shape}, Shape of y_train: {y_train_encoded.shape}"
+            f"训练数据形状 - X: {X_train.shape}, y: {y_train_encoded.shape}"
         )
 
         default_param_ranges = {
@@ -189,11 +226,21 @@ class XGBoostModel(BaseModel):
         else:
             results["cv_mean_score"] = abs(results["cv_mean_score"])
 
-        self.logger.info(f"XGBoost training completed. CV mean score: {cv_mean_score}")
+        self.logger.info("XGBoost 模型训练完成")
         return results
 
-    def evaluate(self, X_test, y_test):
-        self.logger.info("Starting model evaluation")
+    def evaluate(self, X_test: pd.DataFrame, y_test: pd.Series) -> Dict[str, Any]:
+        """
+        评估 XGBoost 模型性能
+
+        Args:
+            X_test: 测试特征
+            y_test: 测试标签
+
+        Returns:
+            Dict[str, Any]: 包含评估指标的字典
+        """
+        self.logger.info("开始 XGBoost 模型评估")
         if self.problem_type == "classification" and self.label_encoder is not None:
             y_test_encoded = self.label_encoder.transform(y_test)
         else:

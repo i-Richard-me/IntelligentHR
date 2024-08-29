@@ -14,30 +14,59 @@ from backend.data_processing.analysis.model_utils import (
 
 
 class LinearRegressionModel(BaseModel):
-    def __init__(self, problem_type):
+    """线性回归模型类"""
+
+    def __init__(self, problem_type: str):
         super().__init__(problem_type)
         self.logger = logging.getLogger(__name__)
         self.numeric_preprocessor = "StandardScaler"
         self.categorical_preprocessor = "OneHotEncoder"
 
     def optimize(
-        self, X_train, y_train, categorical_cols, numerical_cols, param_ranges, n_trials
-    ):
-        # 线性回归不需要参数优化，直接返回None
+        self,
+        X_train: pd.DataFrame,
+        y_train: pd.Series,
+        categorical_cols: List[str],
+        numerical_cols: List[str],
+        param_ranges: Dict[str, Any],
+        n_trials: int,
+    ) -> Tuple[Pipeline, Dict[str, Any], float, int]:
+        """
+        线性回归模型不需要参数优化，此方法仅为满足接口要求
+
+        Returns:
+            Tuple[None, None, None, None]: 占位返回值
+        """
         return None, None, None, None
 
     def train(
         self,
-        X_train,
-        y_train,
-        categorical_cols,
-        numerical_cols,
-        param_ranges=None,
-        n_trials=None,
-        numeric_preprocessor="StandardScaler",
-        categorical_preprocessor="OneHotEncoder",
-    ):
-        self.logger.info("Starting Linear Regression training")
+        X_train: pd.DataFrame,
+        y_train: pd.Series,
+        categorical_cols: List[str],
+        numerical_cols: List[str],
+        param_ranges: Dict[str, Any] = None,
+        n_trials: int = None,
+        numeric_preprocessor: str = "StandardScaler",
+        categorical_preprocessor: str = "OneHotEncoder",
+    ) -> Dict[str, Any]:
+        """
+        训练线性回归模型
+
+        Args:
+            X_train: 训练特征
+            y_train: 训练标签
+            categorical_cols: 分类特征列名列表
+            numerical_cols: 数值特征列名列表
+            param_ranges: 未使用
+            n_trials: 未使用
+            numeric_preprocessor: 数值特征预处理方法
+            categorical_preprocessor: 分类特征预处理方法
+
+        Returns:
+            Dict[str, Any]: 包含训练结果的字典
+        """
+        self.logger.info("开始线性回归模型训练")
         self.numeric_preprocessor = numeric_preprocessor
         self.categorical_preprocessor = categorical_preprocessor
 
@@ -60,7 +89,7 @@ class LinearRegressionModel(BaseModel):
         train_mse = np.mean((y_train - y_train_pred) ** 2)
         train_r2 = self.model.score(X_train, y_train)
 
-        self.logger.info(f"Training MSE: {train_mse}, R²: {train_r2}")
+        self.logger.info(f"训练 MSE: {train_mse}, R²: {train_r2}")
 
         results = {
             "model": self.model,
@@ -82,12 +111,27 @@ class LinearRegressionModel(BaseModel):
 
         return results
 
-    def evaluate(self, X_test, y_test):
-        self.logger.info("Starting model evaluation")
+    def evaluate(self, X_test: pd.DataFrame, y_test: pd.Series) -> Dict[str, Any]:
+        """
+        评估线性回归模型性能
+
+        Args:
+            X_test: 测试特征
+            y_test: 测试标签
+
+        Returns:
+            Dict[str, Any]: 包含评估指标的字典
+        """
+        self.logger.info("开始模型评估")
         return evaluate_model(self.model, X_test, y_test, self.problem_type)
 
-    def get_feature_importance(self):
-        # 对于线性回归，我们可以使用系数的绝对值作为特征重要性
+    def get_feature_importance(self) -> pd.Series:
+        """
+        获取特征重要性（线性回归中使用系数的绝对值）
+
+        Returns:
+            pd.Series: 特征重要性
+        """
         linear_model = self.model.named_steps["regressor"]
         feature_names = self.model.named_steps["preprocessor"].get_feature_names_out()
         importance = np.abs(linear_model.coef_)
