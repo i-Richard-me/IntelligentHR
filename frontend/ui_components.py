@@ -1,7 +1,7 @@
 import streamlit as st
 
 # 版本号
-VERSION = "0.0.4"
+VERSION = "0.0.5"
 
 
 def show_sidebar():
@@ -55,8 +55,8 @@ def _get_sidebar_content():
     返回侧边栏的HTML内容。
     """
 
-    st.caption("By: Richard Wang Email: [contact@xmail.ing](mailto:contact@xmail.ing)")
     st.caption("[GitHub 项目仓库](https://github.com/i-Richard-me/IntelligentHR)")
+    st.caption("**Richard Wang** [contact@xmail.ing](mailto:contact@xmail.ing)")
 
 
 def _add_version_info():
@@ -136,23 +136,25 @@ def _get_common_styles():
     h2, h3, h4 {
         border-bottom: 2px solid;
         padding-bottom: 0.5rem;
-        margin-top: 1.5rem;
         margin-bottom: 1rem;
     }
     h2 {
-        color: #1E90FF;  /* 道奇蓝，较浅的深蓝色 */
+        color: #1E90FF;
         border-bottom-color: #1E90FF;
         font-size: 1.8rem;
+        margin-top: 1.5rem;
     }
     h3 {
-        color: #16A085;  /* 绿松石色 */
+        color: #16A085;
         border-bottom-color: #16A085;
         font-size: 1.5rem;
+        margin-top: 1rem;
     }
     h4 {
-        color: #E67E22;  /* 橙色 */
+        color: #E67E22;
         border-bottom-color: #E67E22;
-        font-size: 1.3rem;
+        font-size: 1.2rem;
+        margin-top: 0.5rem;
     }
     .workflow-container {
         background-color: rgba(248, 249, 250, 0.05);
@@ -169,15 +171,15 @@ def _get_common_styles():
             border-color: rgba(255, 255, 255, 0.125);
         }
         h2 {
-            color: #3498DB;  /* 亮蓝色，适合深色模式 */
+            color: #3498DB;
             border-bottom-color: #3498DB;
         }
         h3 {
-            color: #2ECC71;  /* 亮绿色，适合深色模式 */
+            color: #2ECC71;
             border-bottom-color: #2ECC71;
         }
         h4 {
-            color: #F39C12;  /* 亮橙色，适合深色模式 */
+            color: #F39C12;
             border-bottom-color: #F39C12;
         }
     }
@@ -186,3 +188,4 @@ def _get_common_styles():
     }
     </style>
     """
+
