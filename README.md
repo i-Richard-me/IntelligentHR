@@ -16,12 +16,35 @@ Intelligent HR solutions for the data-driven enterprise.
    复制 `.env.example` 为 `.env` 并填写必要的 API 密钥。
 
 3. 使用Docker启动服务:
+   
+   基础服务启动:
    ```
    docker-compose up --build
    ```
+   
+   如果您没有现有的Langfuse和Milvus服务,可以使用以下命令启动所有服务:
+   ```
+   docker-compose --profile langfuse --profile milvus up --build
+   ```
+   
+   如果您只需要其中一个服务:
+   - 仅启动Langfuse: `docker-compose --profile langfuse up --build`
+   - 仅启动Milvus: `docker-compose --profile milvus up --build`
 
 4. 访问应用:
-   打开浏览器,访问 `http://localhost:8510` 即可使用智能HR助手。
+   - 智能HR助手: 打开浏览器,访问 `http://localhost:8510`
+   - Langfuse服务 (如果启用): 访问 `http://localhost:3000`
+   - Milvus Attu界面 (如果启用): 访问 `http://localhost:3010`
+
+5. 使用现有服务:
+   如果您已有Langfuse或Milvus服务,请确保在 `.env` 文件中正确配置相关连接信息,无需启动对应的Docker服务。
+
+6. 其他可用服务 (如果启用):
+   - PostgreSQL数据库: 可通过 localhost:5432 访问
+   - Minio对象存储: 控制台可通过 `http://localhost:9001` 访问
+   - Milvus服务: 可通过 localhost:19530 连接
+
+注意: 请根据您的实际需求和现有环境选择适当的启动方式。
 
 ## 贡献
 
