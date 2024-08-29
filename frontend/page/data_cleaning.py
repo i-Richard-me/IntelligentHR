@@ -6,6 +6,7 @@ import os
 from typing import Dict, Any, List, Optional
 from uuid import uuid4
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # 添加项目根目录到 Python 路径
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -325,8 +326,14 @@ def batch_processing(workflow: EntityVerificationWorkflow, entity_type: str):
         df = pd.read_csv(uploaded_file)
         st.write("预览上传的数据：")
         st.dataframe(df.head())
+
+        # 添加并行处理线程数选择
+        max_workers = st.slider(
+            "选择并行处理线程数", min_value=1, max_value=10, value=3, step=1
+        )
+
         if st.button("开始批量处理"):
-            process_batch(df, workflow, entity_type)
+            process_batch(df, workflow, entity_type, max_workers)
 
     # 显示处理结果（如果有）
     if st.session_state.batch_results_df is not None:
@@ -334,51 +341,94 @@ def batch_processing(workflow: EntityVerificationWorkflow, entity_type: str):
 
 
 def process_batch(
-    df: pd.DataFrame, workflow: EntityVerificationWorkflow, entity_type: str
+    df: pd.DataFrame,
+    workflow: EntityVerificationWorkflow,
+    entity_type: str,
+    max_workers: int = 3,
 ):
     """
-    处理批量实体数据。
+    并行处理批量实体数据，如果连续出现10次错误则停止处理。
 
     Args:
         df (pd.DataFrame): 包含实体名称的DataFrame。
         workflow (EntityVerificationWorkflow): 实体名称标准化工作流对象。
         entity_type (str): 实体类型。
+        max_workers (int): 最大并行工作线程数，默认为3。
     """
     results = []
     progress_bar = st.progress(0)
     status_area = st.empty()
+    total_entities = len(df)
+    consecutive_errors = 0
+    max_consecutive_errors = 10
 
-    for i, entity_name in enumerate(df.iloc[:, 0]):
-        with st.spinner(f"正在处理: {entity_name}"):
-            session_id = str(uuid4())  # 为每个实体生成新的 session_id
-            result = workflow.run(entity_name, session_id=session_id)
+    def process_entity(entity_name):
+        session_id = str(uuid4())
+        return workflow.run(entity_name, session_id=session_id)
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = [
+            executor.submit(process_entity, entity_name)
+            for entity_name in df.iloc[:, 0]
+        ]
+
+        for i, future in enumerate(as_completed(futures)):
+            result = future.result()
             results.append(result)
 
-        # 更新进度条
-        progress = (i + 1) / len(df)
-        progress_bar.progress(progress)
+            # 检查是否为错误状态
+            if result["status"] == ProcessingStatus.ERROR:
+                consecutive_errors += 1
+            else:
+                consecutive_errors = 0
 
-        # 更新状态信息
-        status_message = (
-            f"已处理: {i+1}/{len(df)} - "
-            f"最新: '{entity_name}' → '{result['final_entity_name']}' "
-            f"(状态: {result['status'].value})"
-        )
-        status_area.info(status_message)
+            # 更新进度条
+            progress = (i + 1) / total_entities
+            progress_bar.progress(progress)
 
-        time.sleep(8)
+            # 更新状态信息
+            status_message = (
+                f"已处理: {i + 1}/{total_entities} - "
+                f"最新: '{result['original_input']}' → '{result['final_entity_name']}' "
+                f"(状态: {result['status'].value})"
+            )
+            status_area.info(status_message)
+
+            # 如果连续错误次数达到阈值，停止处理
+            if consecutive_errors >= max_consecutive_errors:
+                status_area.warning(
+                    f"连续出现{max_consecutive_errors}次错误，停止处理。"
+                )
+                break
+
+            time.sleep(0.5)
 
     result_df = pd.DataFrame(results)
 
-    # 添加原始输入列
-    result_df.insert(0, "原始输入", df.iloc[:, 0])
+    # 添加原始输入列并排序以匹配原始DataFrame的顺序
+    result_df["原始输入"] = df.iloc[: len(results), 0]
+    result_df = result_df.sort_values("原始输入").reset_index(drop=True)
+
+    # 保存结果到临时文件夹
+    temp_dir = os.path.join("data", "temp")
+    os.makedirs(temp_dir, exist_ok=True)
+    timestamp = time.strftime("%Y%m%d-%H%M%S")
+    temp_file_path = os.path.join(
+        temp_dir, f"batch_results_{entity_type}_{timestamp}.csv"
+    )
+    result_df.to_csv(temp_file_path, index=False, encoding="utf-8-sig")
 
     # 更新会话状态
     st.session_state.batch_results_df = result_df
     st.session_state.processing_complete = True
 
     # 处理完成后的提示
-    status_area.success(f"批量处理完成！共处理 {len(df)} 条数据。")
+    if consecutive_errors >= max_consecutive_errors:
+        status_area.warning(
+            f"由于连续出现{max_consecutive_errors}次错误，处理提前终止。共处理 {len(results)} 条数据。"
+        )
+    else:
+        status_area.success(f"批量处理完成！共处理 {len(results)} 条数据。")
 
 
 def display_batch_results(result_df: pd.DataFrame, entity_type: str):

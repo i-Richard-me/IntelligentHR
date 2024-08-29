@@ -4,6 +4,7 @@ from langfuse.callback import CallbackHandler
 import traceback
 
 import logging
+
 logger = logging.getLogger(__name__)
 
 from backend.data_processing.data_cleaning.search_tools import SearchTools
@@ -120,7 +121,7 @@ class EntityVerificationWorkflow:
                 )
                 if retrieval_results:
                     result["retrieved_entity_name"] = retrieval_results[0].get(
-                        self.standard_field, ""
+                        self.original_field, ""
                     )
                     langfuse_handler = create_langfuse_handler(
                         session_id, "name_verification"
@@ -231,11 +232,16 @@ class EntityVerificationWorkflow:
                 result.get("retrieved_entity_name") or result["identified_entity_name"]
             )
         else:
-            if result["status"] == ProcessingStatus.UNVERIFIED and result["is_identified"]:
+            if (
+                result["status"] == ProcessingStatus.UNVERIFIED
+                and result["is_identified"]
+            ):
                 result["final_entity_name"] = result["identified_entity_name"]
             else:
                 result["final_entity_name"] = result["original_input"]
 
-        logger.info(f"Final entity name: {result['final_entity_name']}, status: {result['status']}")
+        logger.info(
+            f"Final entity name: {result['final_entity_name']}, status: {result['status']}"
+        )
 
         return result
