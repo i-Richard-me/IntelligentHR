@@ -65,6 +65,7 @@ class EntityVerificationWorkflow:
 
         result = self._initialize_result()
         result["original_input"] = user_query
+        result["is_identified"] = False
 
         try:
             # Input validation
@@ -103,6 +104,7 @@ class EntityVerificationWorkflow:
                     if is_identified
                     else ProcessingStatus.UNIDENTIFIED
                 )
+                result["is_identified"] = is_identified
             else:
                 result["search_results"] = None
                 result["identified_entity_name"] = user_query
@@ -229,7 +231,10 @@ class EntityVerificationWorkflow:
                 result.get("retrieved_entity_name") or result["identified_entity_name"]
             )
         else:
-            result["final_entity_name"] = result["original_input"]
+            if result["status"] == ProcessingStatus.UNVERIFIED and result["is_identified"]:
+                result["final_entity_name"] = result["identified_entity_name"]
+            else:
+                result["final_entity_name"] = result["original_input"]
 
         logger.info(f"Final entity name: {result['final_entity_name']}, status: {result['status']}")
 

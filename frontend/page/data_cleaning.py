@@ -5,6 +5,7 @@ import sys
 import os
 from typing import Dict, Any, List, Optional
 from uuid import uuid4
+import time
 
 # 添加项目根目录到 Python 路径
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -364,6 +365,8 @@ def process_batch(
             f"(状态: {result['status'].value})"
         )
         status_area.info(status_message)
+
+        time.sleep(8)
 
     result_df = pd.DataFrame(results)
 
