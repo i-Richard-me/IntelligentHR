@@ -64,9 +64,13 @@ def prepare_data(
     X = df[feature_columns]
     y = df[target_column]
 
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=test_size, random_state=42
-    )
+    if test_size > 0:
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=test_size, random_state=42
+        )
+    else:
+        X_train, y_train = X, y
+        X_test, y_test = pd.DataFrame(), pd.Series()
 
     categorical_cols = X.select_dtypes(include=["object", "category"]).columns.tolist()
     numerical_cols = X.select_dtypes(include=["int64", "float64"]).columns.tolist()
@@ -199,9 +203,20 @@ def train_model(
         numeric_preprocessor=numeric_preprocessor,
         categorical_preprocessor=categorical_preprocessor,
     )
-    test_metrics = model.evaluate(X_test, y_test)
 
-    results.update(test_metrics)
+    if test_size > 0:
+        test_metrics = model.evaluate(X_test, y_test)
+        results.update(test_metrics)
+    else:
+        results.update(
+            {
+                "test_roc_auc": None,
+                "test_mse": None,
+                "test_r2": None,
+                "test_confusion_matrix": None,
+                "test_classification_report": None,
+            }
+        )
 
     return results
 

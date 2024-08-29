@@ -16,32 +16,42 @@ def display_data_split_settings():
     with st.expander("数据划分设置", expanded=False):
         st.markdown("#### 训练集和测试集划分")
 
-        # 使用会话状态来存储当前的test_size值和之前确认的值
-        if "current_test_size" not in st.session_state:
-            st.session_state.current_test_size = 0.3
-        if "confirmed_test_size" not in st.session_state:
-            st.session_state.confirmed_test_size = 0.3
-
-        # 滑块用于调整test_size
-        new_test_size = st.slider(
-            "测试集比例",
-            min_value=0.1,
-            max_value=0.5,
-            value=st.session_state.current_test_size,
-            step=0.05,
-            help="设置用于测试的数据比例。推荐范围：0.2 - 0.3",
+        # 添加一个选择框来决定是否划分测试集
+        st.session_state.split_test_set = st.checkbox(
+            "划分测试集",
+            value=st.session_state.get("split_test_set", True),
+            help="取消选中将使用全部数据进行训练，不划分测试集"
         )
 
-        # 更新当前的test_size值
-        st.session_state.current_test_size = new_test_size
+        if st.session_state.split_test_set:
+            # 使用会话状态来存储当前的test_size值和之前确认的值
+            if "current_test_size" not in st.session_state:
+                st.session_state.current_test_size = 0.3
+            if "confirmed_test_size" not in st.session_state:
+                st.session_state.confirmed_test_size = 0.3
 
-        # 添加确认按钮
-        if st.button("确认数据划分设置"):
-            st.session_state.confirmed_test_size = new_test_size
-            st.success(f"数据划分设置已更新。测试集比例：{new_test_size:.2f}")
+            # 滑块用于调整test_size
+            new_test_size = st.slider(
+                "测试集比例",
+                min_value=0.1,
+                max_value=0.5,
+                value=st.session_state.current_test_size,
+                step=0.05,
+                help="设置用于测试的数据比例。推荐范围：0.2 - 0.3",
+            )
+
+            # 更新当前的test_size值
+            st.session_state.current_test_size = new_test_size
+
+            # 添加确认按钮
+            if st.button("确认数据划分设置"):
+                st.session_state.confirmed_test_size = new_test_size
+                st.success(f"数据划分设置已更新。测试集比例：{new_test_size:.2f}")
+        else:
+            st.info("已选择使用全部数据进行训练，不划分测试集。")
 
     # 确保其他部分使用确认后的test_size值
-    st.session_state.test_size = st.session_state.confirmed_test_size
+    st.session_state.test_size = st.session_state.confirmed_test_size if st.session_state.split_test_set else 0.0
 
 
 def display_preprocessing_settings():

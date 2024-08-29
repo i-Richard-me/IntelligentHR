@@ -315,21 +315,28 @@ def display_results():
 
         with st.container(border=True):
             if st.session_state.problem_type == "classification":
-                tab1, tab2, tab3 = st.tabs(["模型性能概览", "混淆矩阵", "分类报告"])
+                tabs = ["模型性能概览"]
+                if st.session_state.split_test_set:
+                    tabs.extend(["混淆矩阵", "分类报告"])
             else:
-                tab1, tab2 = st.tabs(["模型性能概览", "残差图"])
+                tabs = ["模型性能概览"]
+                if st.session_state.split_test_set:
+                    tabs.append("残差图")
 
-            with tab1:
+            tab_contents = st.tabs(tabs)
+
+            with tab_contents[0]:
                 display_model_performance_overview()
 
-            if st.session_state.problem_type == "classification":
-                with tab2:
-                    display_confusion_matrix()
-                with tab3:
-                    display_classification_report()
-            else:
-                with tab2:
-                    display_residual_plot()
+            if st.session_state.split_test_set:
+                if st.session_state.problem_type == "classification":
+                    with tab_contents[1]:
+                        display_confusion_matrix()
+                    with tab_contents[2]:
+                        display_classification_report()
+                elif st.session_state.problem_type == "regression":
+                    with tab_contents[1]:
+                        display_residual_plot()
 
 
 def display_model_performance_overview():
@@ -348,17 +355,19 @@ def display_model_performance_overview():
                 value=f"{st.session_state.model_results['cv_mean_score']:.4f}",
                 help="对于线性回归模型不使用交叉验证时，此值为训练集 MSE。",
             )
-    with col2:
-        if st.session_state.problem_type == "classification":
-            st.metric(
-                label="测试集 ROC AUC",
-                value=f"{st.session_state.model_results['test_roc_auc']:.4f}",
-            )
-        else:
-            st.metric(
-                label="测试集 MSE",
-                value=f"{st.session_state.model_results['test_mse']:.4f}",
-            )
+    
+    if st.session_state.split_test_set:
+        with col2:
+            if st.session_state.problem_type == "classification":
+                st.metric(
+                    label="测试集 ROC AUC",
+                    value=f"{st.session_state.model_results['test_roc_auc']:.4f}",
+                )
+            else:
+                st.metric(
+                    label="测试集 MSE",
+                    value=f"{st.session_state.model_results['test_mse']:.4f}",
+                )
 
     # 为线性回归模型添加 R² 显示
     if (
@@ -371,11 +380,15 @@ def display_model_performance_overview():
                 label="训练集 R²",
                 value=f"{st.session_state.model_results['train_r2']:.4f}",
             )
-        with col4:
-            st.metric(
-                label="测试集 R²",
-                value=f"{st.session_state.model_results['test_r2']:.4f}",
-            )
+        if st.session_state.split_test_set:
+            with col4:
+                st.metric(
+                    label="测试集 R²",
+                    value=f"{st.session_state.model_results['test_r2']:.4f}",
+                )
+
+    if not st.session_state.split_test_set:
+        st.info("模型使用全部数据进行训练，没有单独的测试集评估。")
 
 
 def display_confusion_matrix():
