@@ -81,11 +81,15 @@ def insert_to_milvus(
 
     Args:
         collection (Collection): Milvus 集合对象。
-        data (List[Dict[str, Any]]): 要插入的数据。
+        data (List[Dict[str, Any]]): 要插入的数据，每个字典代表一行数据。
         vectors (List[List[float]]): 对应的向量数据。
     """
-    entities = [list(d.values()) for d in data]
+    entities = []
+    for field in collection.schema.fields:
+        if field.name not in ["id", "embedding"]:
+            entities.append([d.get(field.name) for d in data])
     entities.append(vectors)
+
     collection.insert(entities)
 
     index_params = {

@@ -6,20 +6,20 @@ from typing import List, Dict, Tuple, Optional
 
 import streamlit as st
 import pandas as pd
-from pymilvus import (
-    connections,
-    Collection,
-    FieldSchema,
-    CollectionSchema,
-    DataType,
-    utility,
-)
+from pymilvus import Collection, utility
 
 # 添加项目根目录到 Python 路径
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 sys.path.append(project_root)
 
 from utils.llm_tools import CustomEmbeddings
+from utils.vector_db_utils import (
+    connect_to_milvus,
+    initialize_vector_store,
+    create_milvus_collection,
+    insert_to_milvus,
+    get_collection_stats,
+)
 from frontend.ui_components import show_sidebar, show_footer, apply_common_styles
 
 st.query_params.role = st.session_state.role
@@ -35,32 +35,6 @@ with open("data/config/collections_config.json", "r", encoding="utf-8") as f:
     CONFIG = json.load(f)
 
 
-def connect_to_milvus(db_name: str):
-    """连接到Milvus数据库"""
-    connections.connect(
-        alias="default",
-        host=os.getenv("VECTOR_DB_HOST", "localhost"),
-        port=os.getenv("VECTOR_DB_PORT", "19530"),
-        db_name=db_name,
-    )
-
-
-def create_milvus_collection(collection_config: Dict, dim: int):
-    """创建Milvus集合"""
-    fields = [
-        FieldSchema(name="id", dtype=DataType.INT64, is_primary=True, auto_id=True),
-    ]
-    for field in collection_config["fields"]:
-        fields.append(
-            FieldSchema(name=field["name"], dtype=DataType.VARCHAR, max_length=65535)
-        )
-    fields.append(FieldSchema(name="embedding", dtype=DataType.FLOAT_VECTOR, dim=dim))
-
-    schema = CollectionSchema(fields, collection_config["description"])
-    collection = Collection(collection_config["name"], schema)
-    return collection
-
-
 def insert_examples_to_milvus(
     examples: List[Dict], collection_config: Dict, db_name: str
 ):
@@ -73,21 +47,25 @@ def insert_examples_to_milvus(
         model=os.getenv("EMBEDDING_MODEL", ""),
     )
 
-    data = {field["name"]: [] for field in collection_config["fields"]}
+    data = []
     vectors = []
 
     for example in examples:
+        row_data = {}
         for field in collection_config["fields"]:
-            # 根据字段类型进行转换
-            if field["type"] == "str":
-                value = str(example[field["name"]])
-            elif field["type"] == "int":
-                value = int(example[field["name"]])
-            elif field["type"] == "float":
-                value = float(example[field["name"]])
-            else:
-                value = example[field["name"]]
-            data[field["name"]].append(value)
+            if field["name"] != "id":  # 排除 id 字段
+                # 根据字段类型进行转换
+                if field["type"] == "str":
+                    value = str(example[field["name"]])
+                elif field["type"] == "int":
+                    value = int(example[field["name"]])
+                elif field["type"] == "float":
+                    value = float(example[field["name"]])
+                else:
+                    value = example[field["name"]]
+                row_data[field["name"]] = value
+
+        data.append(row_data)
 
         embedding_text = str(example[collection_config["embedding_field"]])
         vector = embeddings.embed_query(embedding_text)
@@ -98,18 +76,8 @@ def insert_examples_to_milvus(
     else:
         collection = Collection(collection_config["name"])
 
-    insert_data = list(data.values()) + [vectors]
-    collection.insert(insert_data)
+    insert_to_milvus(collection, data, vectors)
 
-    index_params = {
-        "metric_type": "L2",
-        "index_type": "IVF_FLAT",
-        "params": {"nlist": 1024},
-    }
-    collection.create_index("embedding", index_params)
-    collection.load()
-
-    connections.disconnect("default")
     return len(examples)
 
 
@@ -133,50 +101,21 @@ def process_csv_file(file, collection_config: Dict):
     return examples
 
 
-def get_collection_stats(collection_name: str, db_name: str) -> Dict:
-    """获取集合的统计信息"""
-    connect_to_milvus(db_name)
-    collection = Collection(collection_name)
-    collection.load()
-
-    stats = {
-        "实体数量": collection.num_entities,
-        "字段数量": len(collection.schema.fields) - 1,  # 减去自动生成的 id 字段
-        "索引类型": collection.index().params.get("index_type", "未知"),
-    }
-
-    connections.disconnect("default")
-    return stats
-
-
-def display_db_management_info():
-    st.info(
-        """
-    Milvus数据库管理工具用于高效管理和更新向量数据库中的数据。
-    支持CSV文件上传、数据预览和批量插入，便于维护和扩展向量数据集。
-    """
-    )
-
-
 def get_existing_records(
     collection_config: Dict, db_name: str
 ) -> Optional[pd.DataFrame]:
     """获取已存在的记录，如果collection不存在则返回None"""
     connect_to_milvus(db_name)
     if not utility.has_collection(collection_config["name"]):
-        connections.disconnect("default")
         return None
 
-    collection = Collection(collection_config["name"])
-    collection.load()
+    collection = initialize_vector_store(collection_config["name"])
 
     # 获取所有字段名
     field_names = [field["name"] for field in collection_config["fields"]]
 
     # 查询所有记录
     results = collection.query(expr="id >= 0", output_fields=field_names)
-
-    connections.disconnect("default")
 
     return pd.DataFrame(results)
 
@@ -234,13 +173,13 @@ def display_collection_stats(collection_config: Dict, db_name: str):
         st.subheader("数据统计")
         connect_to_milvus(db_name)
         if utility.has_collection(collection_config["name"]):
-            stats = get_collection_stats(collection_config["name"], db_name)
+            collection = initialize_vector_store(collection_config["name"])
+            stats = get_collection_stats(collection)
             st.write(f"**实体数量:** {stats['实体数量']}")
             st.write(f"**字段数量:** {stats['字段数量']}")
             st.write(f"**索引类型:** {stats['索引类型']}")
         else:
             st.info("该Collection尚未创建")
-        connections.disconnect("default")
 
 
 def display_data_preview(
@@ -328,6 +267,15 @@ def main():
             st.error("请确保CSV文件格式正确，并且包含所有必需的列。")
 
     show_footer()
+
+
+def display_db_management_info():
+    st.info(
+        """
+    Milvus数据库管理工具用于高效管理和更新向量数据库中的数据。
+    支持CSV文件上传、数据预览和批量插入，便于维护和扩展向量数据集。
+    """
+    )
 
 
 main()
