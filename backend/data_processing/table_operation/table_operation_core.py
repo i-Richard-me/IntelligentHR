@@ -12,8 +12,12 @@ from langchain_core.tools import tool
 from backend.data_processing.table_operation.table_operation_models import (
     AssistantResponse,
 )
-from pymilvus import connections, Collection
 from utils.llm_tools import LanguageModelChain, init_language_model, CustomEmbeddings
+from utils.vector_db_utils import (
+    connect_to_milvus,
+    initialize_vector_store,
+    search_in_milvus,
+)
 
 # 初始化日志记录
 logging.basicConfig(
@@ -144,16 +148,13 @@ def get_similar_example(
     """
     从Milvus检索与用户查询最相似的示例
     """
-    connections.connect(
-        alias="default",
-        host=os.getenv("VECTOR_DB_HOST", "localhost"),
-        port=os.getenv("VECTOR_DB_PORT", "19530"),
-        db_name=os.getenv("VECTOR_DB_DATABASE", "examples"),
-    )
+    # 连接到Milvus数据库
+    connect_to_milvus(db_name=os.getenv("VECTOR_DB_DATABASE", "examples"))
 
-    collection = Collection(collection_name)
-    collection.load()
+    # 初始化或加载向量存储
+    collection = initialize_vector_store(collection_name)
 
+    # 获取查询向量
     embeddings = CustomEmbeddings(
         api_key=os.getenv("EMBEDDING_API_KEY"),
         api_url=os.getenv("EMBEDDING_API_BASE"),
@@ -161,20 +162,14 @@ def get_similar_example(
     )
     query_vector = embeddings.embed_query(query)
 
-    search_params = {"metric_type": "L2", "params": {"nprobe": 10}}
-    results = collection.search(
-        data=[query_vector],
-        anns_field="embedding",
-        param=search_params,
-        limit=1,
-        output_fields=["user_tables", "user_query", "output"],
-    )
+    # 搜索相似向量
+    results = search_in_milvus(collection, query_vector, top_k=1)
 
-    if results[0]:
+    if results:
         similar_example = {
-            "用户上传的表格": results[0][0].entity.get("user_tables"),
-            "用户查询": results[0][0].entity.get("user_query"),
-            "输出": results[0][0].entity.get("output"),
+            "用户上传的表格": results[0].get("user_tables"),
+            "用户查询": results[0].get("user_query"),
+            "输出": results[0].get("output"),
         }
         return similar_example
     else:
