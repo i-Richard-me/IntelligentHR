@@ -20,7 +20,7 @@ def display_data_split_settings():
         st.session_state.split_test_set = st.checkbox(
             "划分测试集",
             value=st.session_state.get("split_test_set", True),
-            help="取消选中将使用全部数据进行训练，不划分测试集"
+            help="取消选中将使用全部数据进行训练，不划分测试集",
         )
 
         if st.session_state.split_test_set:
@@ -51,7 +51,9 @@ def display_data_split_settings():
             st.info("已选择使用全部数据进行训练，不划分测试集。")
 
     # 确保其他部分使用确认后的test_size值
-    st.session_state.test_size = st.session_state.confirmed_test_size if st.session_state.split_test_set else 0.0
+    st.session_state.test_size = (
+        st.session_state.confirmed_test_size if st.session_state.split_test_set else 0.0
+    )
 
 
 def display_preprocessing_settings():
@@ -87,6 +89,7 @@ def display_preprocessing_settings():
 
 
 def display_random_forest_settings():
+    st.markdown("#### 随机森林超参数设置")
     col1, col2 = st.columns(2)
     with col1:
         n_estimators_range = st.slider(
@@ -147,7 +150,7 @@ def display_random_forest_settings():
 
 
 def display_decision_tree_settings():
-    st.markdown("#### 决策树参数设置")
+    st.markdown("#### 决策树超参数设置")
 
     def create_param_range(param_name, default_values):
         non_none_values = [v for v in default_values if v is not None]
@@ -216,6 +219,7 @@ def display_decision_tree_settings():
 
 
 def display_xgboost_settings():
+    st.markdown("#### XGBoost超参数设置")
     col1, col2 = st.columns(2)
     with col1:
         n_estimators_range = st.slider(
@@ -287,7 +291,7 @@ def display_xgboost_settings():
 
 
 def display_linear_regression_settings():
-    st.markdown("#### 线性回归设置")
+    st.markdown("#### 线性回归超参数设置")
 
     st.info("线性回归模型不需要额外的参数设置。它将自动找到最佳的系数值。")
 
@@ -305,12 +309,3 @@ def display_model_selection():
             model_options,
             key="model_type_radio",
         )
-
-        if st.session_state.model_type == "线性回归":
-            display_linear_regression_settings()
-        elif st.session_state.model_type == "随机森林":
-            display_random_forest_settings()
-        elif st.session_state.model_type == "决策树":
-            display_decision_tree_settings()
-        else:  # XGBoost
-            display_xgboost_settings()

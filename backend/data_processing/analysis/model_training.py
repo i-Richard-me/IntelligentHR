@@ -149,12 +149,17 @@ def display_column_selection() -> None:
             validate_problem_type()
 
             # 删除包含null值的行
-            if st.button("删除包含空值的行"):
+            if st.button("确认特征和目标变量"):
                 original_row_count = len(st.session_state.df)
-                st.session_state.df = st.session_state.df.dropna(subset=[st.session_state.target_column] + st.session_state.feature_columns)
+                st.session_state.df = st.session_state.df.dropna(
+                    subset=[st.session_state.target_column]
+                    + st.session_state.feature_columns
+                )
                 new_row_count = len(st.session_state.df)
                 removed_rows = original_row_count - new_row_count
-                st.success(f"已删除 {removed_rows} 行包含空值的数据。剩余 {new_row_count} 行数据。")
+                st.success(
+                    f"已删除 {removed_rows} 行包含空值的数据。剩余 {new_row_count} 行数据。"
+                )
 
 
 def validate_problem_type() -> None:
@@ -190,9 +195,23 @@ def display_model_training_and_advanced_settings() -> None:
         with st.container(border=True):
             display_data_split_settings()
             display_preprocessing_settings()
+            display_model_parameters_settings()
 
             if st.button("开始训练模型"):
                 train_and_evaluate_model()
+
+
+def display_model_parameters_settings() -> None:
+    """显示模型参数设置"""
+    with st.expander("模型参数设置", expanded=False):
+        if st.session_state.model_type == "随机森林":
+            display_random_forest_settings()
+        elif st.session_state.model_type == "决策树":
+            display_decision_tree_settings()
+        elif st.session_state.model_type == "XGBoost":
+            display_xgboost_settings()
+        elif st.session_state.model_type == "线性回归":
+            display_linear_regression_settings()
 
 
 def train_and_evaluate_model() -> None:
