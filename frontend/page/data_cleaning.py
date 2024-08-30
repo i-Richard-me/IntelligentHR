@@ -3,10 +3,11 @@ from PIL import Image
 import pandas as pd
 import sys
 import os
+import time
 from typing import Dict, Any, List, Optional
 from uuid import uuid4
-import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 
 # 添加项目根目录到 Python 路径
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -327,33 +328,38 @@ def batch_processing(workflow: EntityVerificationWorkflow, entity_type: str):
         st.write("预览上传的数据：")
         st.dataframe(df.head())
 
-        # 添加并行处理线程数选择
+        # 添加并行处理任务数选择
         max_workers = st.slider(
-            "选择并行处理线程数", min_value=1, max_value=10, value=3, step=1
+            "选择并发任务数", min_value=1, max_value=10, value=3, step=1
         )
 
         if st.button("开始批量处理"):
-            process_batch(df, workflow, entity_type, max_workers)
+            asyncio.run(process_batch(df, workflow, entity_type, max_workers))
 
     # 显示处理结果（如果有）
     if st.session_state.batch_results_df is not None:
         display_batch_results(st.session_state.batch_results_df, entity_type)
 
 
-def process_batch(
+async def process_entity(entity_name, workflow):
+    session_id = str(uuid4())
+    return await workflow.run(entity_name, session_id=session_id)
+
+
+async def process_batch(
     df: pd.DataFrame,
     workflow: EntityVerificationWorkflow,
     entity_type: str,
     max_workers: int = 3,
 ):
     """
-    并行处理批量实体数据，如果连续出现10次错误则停止处理。
+    异步处理批量实体数据，如果连续出现10次错误则停止处理。
 
     Args:
         df (pd.DataFrame): 包含实体名称的DataFrame。
         workflow (EntityVerificationWorkflow): 实体名称标准化工作流对象。
         entity_type (str): 实体类型。
-        max_workers (int): 最大并行工作线程数，默认为3。
+        max_workers (int): 最大并发任务数，默认为3。
     """
     results = []
     progress_bar = st.progress(0)
@@ -362,46 +368,42 @@ def process_batch(
     consecutive_errors = 0
     max_consecutive_errors = 10
 
-    def process_entity(entity_name):
-        session_id = str(uuid4())
-        return workflow.run(entity_name, session_id=session_id)
+    semaphore = asyncio.Semaphore(max_workers)
 
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = [
-            executor.submit(process_entity, entity_name)
-            for entity_name in df.iloc[:, 0]
-        ]
+    async def process_with_semaphore(entity_name):
+        async with semaphore:
+            return await process_entity(entity_name, workflow)
 
-        for i, future in enumerate(as_completed(futures)):
-            result = future.result()
-            results.append(result)
+    tasks = [process_with_semaphore(entity_name) for entity_name in df.iloc[:, 0]]
 
-            # 检查是否为错误状态
-            if result["status"] == ProcessingStatus.ERROR:
-                consecutive_errors += 1
-            else:
-                consecutive_errors = 0
+    for i, task in enumerate(asyncio.as_completed(tasks)):
+        result = await task
+        results.append(result)
 
-            # 更新进度条
-            progress = (i + 1) / total_entities
-            progress_bar.progress(progress)
+        # 检查是否为错误状态
+        if result["status"] == ProcessingStatus.ERROR:
+            consecutive_errors += 1
+        else:
+            consecutive_errors = 0
 
-            # 更新状态信息
-            status_message = (
-                f"已处理: {i + 1}/{total_entities} - "
-                f"最新: '{result['original_input']}' → '{result['final_entity_name']}' "
-                f"(状态: {result['status'].value})"
-            )
-            status_area.info(status_message)
+        # 更新进度条
+        progress = (i + 1) / total_entities
+        progress_bar.progress(progress)
 
-            # 如果连续错误次数达到阈值，停止处理
-            if consecutive_errors >= max_consecutive_errors:
-                status_area.warning(
-                    f"连续出现{max_consecutive_errors}次错误，停止处理。"
-                )
-                break
+        # 更新状态信息
+        status_message = (
+            f"已处理: {i + 1}/{total_entities} - "
+            f"最新: '{result['original_input']}' → '{result['final_entity_name']}' "
+            f"(状态: {result['status'].value})"
+        )
+        status_area.info(status_message)
 
-            time.sleep(0.5)
+        # 如果连续错误次数达到阈值，停止处理
+        if consecutive_errors >= max_consecutive_errors:
+            status_area.warning(f"连续出现{max_consecutive_errors}次错误，停止处理。")
+            break
+
+        await asyncio.sleep(0.5)
 
     result_df = pd.DataFrame(results)
 

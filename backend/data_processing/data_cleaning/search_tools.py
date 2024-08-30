@@ -18,7 +18,7 @@ class SearchTools:
         )
         self.tavily_search_tool = TavilySearchResults(max_results=5)
 
-    def duckduckgo_search(self, query: str) -> str:
+    async def aduckduckgo_search(self, query: str) -> str:
         """
         使用 DuckDuckGo 执行搜索。
 
@@ -28,9 +28,9 @@ class SearchTools:
         Returns:
             str: 搜索结果。
         """
-        return self.duckduckgo_search_tool.invoke(query)
+        return await self.duckduckgo_search_tool.ainvoke(query)
 
-    def tavily_search(self, query: str) -> str:
+    async def atavily_search(self, query: str) -> str:
         """
         使用 Tavily 执行搜索。
 
@@ -40,4 +40,4 @@ class SearchTools:
         Returns:
             str: 搜索结果。
         """
-        return self.tavily_search_tool.invoke(query)
+        return await self.tavily_search_tool.ainvoke(query)

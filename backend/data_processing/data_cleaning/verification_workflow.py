@@ -1,8 +1,8 @@
+import asyncio
 from typing import Dict, Any, List, Optional, Callable
 from uuid import uuid4
 from langfuse.callback import CallbackHandler
 import traceback
-
 import logging
 
 logger = logging.getLogger(__name__)
@@ -62,7 +62,9 @@ class EntityVerificationWorkflow:
         self.skip_retrieval = skip_retrieval
         self.search_tools = SearchTools()
 
-    def run(self, user_query: str, session_id: Optional[str] = None) -> Dict[str, Any]:
+    async def run(
+        self, user_query: str, session_id: Optional[str] = None
+    ) -> Dict[str, Any]:
         user_query = str(user_query)
 
         if session_id is None:
@@ -78,7 +80,9 @@ class EntityVerificationWorkflow:
                 langfuse_handler = create_langfuse_handler(
                     session_id, "input_validation"
                 )
-                result["is_valid"] = self._validate_input(user_query, langfuse_handler)
+                result["is_valid"] = await self._validate_input(
+                    user_query, langfuse_handler
+                )
             else:
                 result["is_valid"] = True
 
@@ -94,13 +98,13 @@ class EntityVerificationWorkflow:
 
             # Web search and analysis
             if not self.skip_search:
-                search_results = self._perform_web_search(user_query)
+                search_results = await self._perform_web_search(user_query)
                 result["search_results"] = search_results
                 langfuse_handler = create_langfuse_handler(
                     session_id, "search_analysis"
                 )
                 result["identified_entity_name"], is_identified = (
-                    self._analyze_search_results(
+                    await self._analyze_search_results(
                         user_query, search_results, langfuse_handler
                     )
                 )
@@ -120,7 +124,7 @@ class EntityVerificationWorkflow:
                 not self.skip_retrieval
                 and result["status"] == ProcessingStatus.IDENTIFIED
             ):
-                retrieval_results = self._direct_retrieve(
+                retrieval_results = await self._direct_retrieve(
                     result["identified_entity_name"]
                 )
                 if retrieval_results:
@@ -130,7 +134,7 @@ class EntityVerificationWorkflow:
                     langfuse_handler = create_langfuse_handler(
                         session_id, "name_verification"
                     )
-                    is_verified = self._evaluate_match(
+                    is_verified = await self._evaluate_match(
                         user_query,
                         result["retrieved_entity_name"],
                         search_results if not self.skip_search else "",
@@ -160,10 +164,10 @@ class EntityVerificationWorkflow:
             "final_entity_name": None,
         }
 
-    def _validate_input(
+    async def _validate_input(
         self, user_query: str, langfuse_handler: CallbackHandler
     ) -> bool:
-        validation_result = input_validator.invoke(
+        validation_result = await input_validator.ainvoke(
             {
                 "user_query": user_query,
                 "entity_type": self.entity_type,
@@ -173,13 +177,13 @@ class EntityVerificationWorkflow:
         )
         return validation_result["is_valid"]
 
-    def _perform_web_search(self, user_query: str) -> str:
-        return self.search_tools.duckduckgo_search(user_query)
+    async def _perform_web_search(self, user_query: str) -> str:
+        return await self.search_tools.aduckduckgo_search(user_query)
 
-    def _analyze_search_results(
+    async def _analyze_search_results(
         self, user_query: str, search_results: str, langfuse_handler: CallbackHandler
     ) -> tuple[Optional[str], bool]:
-        analysis_result = search_analysis.invoke(
+        analysis_result = await search_analysis.ainvoke(
             {
                 "user_query": user_query,
                 "snippets": search_results,
@@ -193,8 +197,8 @@ class EntityVerificationWorkflow:
             analysis_result["recognition_status"] == "known",
         )
 
-    def _direct_retrieve(self, search_term: str) -> List[Dict]:
-        results = self.retriever(search_term)
+    async def _direct_retrieve(self, search_term: str) -> List[Dict]:
+        results = await self.retriever(search_term)
         return [
             {
                 "original_name": result.get("original_name", ""),
@@ -204,14 +208,14 @@ class EntityVerificationWorkflow:
             for result in results
         ]
 
-    def _evaluate_match(
+    async def _evaluate_match(
         self,
         user_query: str,
         retrieved_name: str,
         search_results: str,
         langfuse_handler: CallbackHandler,
     ) -> bool:
-        verified_result = name_verifier.invoke(
+        verified_result = await name_verifier.ainvoke(
             {
                 "user_query": user_query,
                 "retrieved_name": retrieved_name,
