@@ -1,4 +1,5 @@
 import os
+import asyncio
 from typing import List, Dict, Any
 from pymilvus import (
     connections,
@@ -125,6 +126,39 @@ def search_in_milvus(
     ]
 
     results = collection.search(
+        data=[query_vector],
+        anns_field="embedding",
+        param=search_params,
+        limit=top_k,
+        output_fields=output_fields,
+    )
+
+    return [
+        {
+            **{field: getattr(hit.entity, field) for field in output_fields},
+            "distance": hit.distance,
+        }
+        for hit in results[0]
+    ]
+
+
+async def asearch_in_milvus(
+    collection: Collection, query_vector: List[float], top_k: int = 1
+) -> List[Dict[str, Any]]:
+    """
+    在 Milvus 集合中异步搜索最相似的向量。
+    """
+    search_params = {"metric_type": "L2", "params": {"nprobe": 10}}
+
+    output_fields = [
+        field.name
+        for field in collection.schema.fields
+        if field.name not in ["id", "embedding"]
+    ]
+
+    # 使用 asyncio.to_thread 来在线程中运行同步操作
+    results = await asyncio.to_thread(
+        collection.search,
         data=[query_vector],
         anns_field="embedding",
         param=search_params,
