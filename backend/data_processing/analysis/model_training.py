@@ -148,6 +148,14 @@ def display_column_selection() -> None:
 
             validate_problem_type()
 
+            # 删除包含null值的行
+            if st.button("删除包含空值的行"):
+                original_row_count = len(st.session_state.df)
+                st.session_state.df = st.session_state.df.dropna(subset=[st.session_state.target_column] + st.session_state.feature_columns)
+                new_row_count = len(st.session_state.df)
+                removed_rows = original_row_count - new_row_count
+                st.success(f"已删除 {removed_rows} 行包含空值的数据。剩余 {new_row_count} 行数据。")
+
 
 def validate_problem_type() -> None:
     """验证问题类型"""
