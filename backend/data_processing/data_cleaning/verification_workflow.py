@@ -13,6 +13,10 @@ from backend.data_processing.data_cleaning.verification_models import (
     search_analysis,
     name_verifier,
 )
+from backend.data_processing.data_cleaning.data_processor import (
+    initialize_vector_store,
+    get_entity_retriever,
+)
 from enum import Enum
 
 
