@@ -19,6 +19,7 @@ from utils.vector_db_utils import (
     create_milvus_collection,
     insert_to_milvus,
     get_collection_stats,
+    update_milvus_records,
 )
 from frontend.ui_components import show_sidebar, show_footer, apply_common_styles
 
@@ -36,7 +37,7 @@ with open("data/config/collections_config.json", "r", encoding="utf-8") as f:
 
 
 def insert_examples_to_milvus(
-    examples: List[Dict], collection_config: Dict, db_name: str
+    examples: List[Dict], collection_config: Dict, db_name: str, overwrite: bool
 ):
     """将示例插入到Milvus数据库"""
     connect_to_milvus(db_name)
@@ -76,7 +77,12 @@ def insert_examples_to_milvus(
     else:
         collection = Collection(collection_config["name"])
 
-    insert_to_milvus(collection, data, vectors)
+    if overwrite:
+        update_milvus_records(
+            collection, data, vectors, collection_config["embedding_field"]
+        )
+    else:
+        insert_to_milvus(collection, data, vectors)
 
     return len(examples)
 
@@ -125,23 +131,19 @@ def dedup_examples(
     existing_records: Optional[pd.DataFrame],
     collection_config: Dict,
 ) -> Tuple[List[Dict], int]:
-    """对新上传的数据进行去重"""
+    """对新上传的数据进行去重，仅基于用于生成向量的字段"""
     if existing_records is None:
         # 如果collection不存在，所有记录都是新的
         return new_examples, 0
 
     new_df = pd.DataFrame(new_examples)
 
-    # 选择用于比较的字段（除了embedding）
-    compare_fields = [
-        field["name"]
-        for field in collection_config["fields"]
-        if field["name"] != "embedding"
-    ]
+    # 使用用于生成向量的字段进行比较
+    embedding_field = collection_config["embedding_field"]
 
-    # 使用这些字段进行合并
+    # 使用这个字段进行合并
     merged = pd.merge(
-        new_df, existing_records, on=compare_fields, how="left", indicator=True
+        new_df, existing_records, on=[embedding_field], how="left", indicator=True
     )
 
     # 找出未匹配的记录（新数据）
@@ -151,7 +153,7 @@ def dedup_examples(
     duplicate_count = len(new_examples) - len(new_records)
 
     # 转换回字典列表
-    new_examples = new_records[compare_fields].to_dict("records")
+    new_examples = new_records.drop(columns=["_merge"]).to_dict("records")
 
     return new_examples, duplicate_count
 
@@ -235,6 +237,11 @@ def main():
     # 文件上传
     uploaded_file = st.file_uploader("上传CSV文件", type=["csv"])
 
+    # 添加覆盖重复数据的选项
+    overwrite_option = st.checkbox(
+        "覆盖重复数据", value=False, help="选中此项将更新已存在的记录，而不是忽略它们"
+    )
+
     if uploaded_file is not None:
         try:
             examples = process_csv_file(uploaded_file, collection_config)
@@ -252,13 +259,23 @@ def main():
             # 显示数据预览
             display_data_preview(new_examples, duplicate_count, collection_exists)
 
-            if len(new_examples) > 0:
+            if len(new_examples) > 0 or (overwrite_option and duplicate_count > 0):
                 if st.button("插入到Milvus数据库"):
                     with st.spinner("正在插入数据..."):
-                        inserted_count = insert_examples_to_milvus(
-                            new_examples, collection_config, selected_db
-                        )
-                    st.success(f"成功插入 {inserted_count} 条新记录到Milvus数据库")
+                        if overwrite_option:
+                            inserted_count = insert_examples_to_milvus(
+                                examples, collection_config, selected_db, True
+                            )
+                            st.success(
+                                f"成功插入或更新 {inserted_count} 条记录到Milvus数据库"
+                            )
+                        else:
+                            inserted_count = insert_examples_to_milvus(
+                                new_examples, collection_config, selected_db, False
+                            )
+                            st.success(
+                                f"成功插入 {inserted_count} 条新记录到Milvus数据库"
+                            )
 
         except ValueError as ve:
             st.error(f"CSV文件格式错误: {str(ve)}")

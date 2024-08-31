@@ -102,6 +102,51 @@ def insert_to_milvus(
     collection.load()
 
 
+def update_milvus_records(
+    collection: Collection,
+    data: List[Dict[str, Any]],
+    vectors: List[List[float]],
+    embedding_field: str,
+):
+    """
+    更新 Milvus 集合中的记录。如果记录不存在，则插入新记录。
+
+    Args:
+        collection (Collection): Milvus 集合对象。
+        data (List[Dict[str, Any]]): 要更新的数据，每个字典代表一行数据。
+        vectors (List[List[float]]): 对应的向量数据。
+        embedding_field (str): 用于生成向量的字段名。
+    """
+    for record, vector in zip(data, vectors):
+        # 使用 embedding_field 查找现有记录
+        existing_records = collection.query(
+            expr=f"{embedding_field} == '{record[embedding_field]}'",
+            output_fields=["id"],
+        )
+
+        if existing_records:
+            # 更新现有记录
+            collection.delete(expr=f"id in {[r['id'] for r in existing_records]}")
+
+        # 插入记录（无论是新记录还是更新后的记录）
+        entities = [
+            [record.get(field.name)]
+            for field in collection.schema.fields
+            if field.name not in ["id", "embedding"]
+        ]
+        entities.append([vector])
+        collection.insert(entities)
+
+    # 重建索引并加载集合
+    index_params = {
+        "metric_type": "L2",
+        "index_type": "IVF_FLAT",
+        "params": {"nlist": 1024},
+    }
+    collection.create_index("embedding", index_params)
+    collection.load()
+
+
 def search_in_milvus(
     collection: Collection, query_vector: List[float], top_k: int = 1
 ) -> List[Dict[str, Any]]:
@@ -118,7 +163,6 @@ def search_in_milvus(
     """
     search_params = {"metric_type": "L2", "params": {"nprobe": 10}}
 
-    # 获取所有字段名称，排除 'id' 和 'embedding' 字段
     output_fields = [
         field.name
         for field in collection.schema.fields
