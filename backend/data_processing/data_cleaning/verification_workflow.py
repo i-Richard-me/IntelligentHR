@@ -131,6 +131,10 @@ class EntityVerificationWorkflow:
                     result["retrieved_entity_name"] = retrieval_results[0].get(
                         self.original_field, ""
                     )
+                    # 添加这一行来包含standard_name
+                    result["standard_name"] = retrieval_results[0].get(
+                        self.standard_field, ""
+                    )
                     langfuse_handler = create_langfuse_handler(
                         session_id, "name_verification"
                     )
@@ -232,13 +236,17 @@ class EntityVerificationWorkflow:
             result["final_entity_name"] = "无效输入"
         elif result["status"] == ProcessingStatus.ERROR:
             result["final_entity_name"] = "处理错误"
-        elif result["status"] in [
-            ProcessingStatus.VERIFIED,
-            ProcessingStatus.IDENTIFIED,
-        ]:
-            result["final_entity_name"] = (
-                result.get("retrieved_entity_name") or result["identified_entity_name"]
-            )
+        elif result["status"] == ProcessingStatus.VERIFIED:
+            # 如果存在standard_name，使用它作为final_entity_name
+            if "standard_name" in result:
+                result["final_entity_name"] = result["standard_name"]
+            else:
+                result["final_entity_name"] = (
+                    result.get("retrieved_entity_name")
+                    or result["identified_entity_name"]
+                )
+        elif result["status"] == ProcessingStatus.IDENTIFIED:
+            result["final_entity_name"] = result["identified_entity_name"]
         else:
             if (
                 result["status"] == ProcessingStatus.UNVERIFIED

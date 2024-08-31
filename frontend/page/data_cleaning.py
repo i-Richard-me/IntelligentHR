@@ -184,7 +184,7 @@ def main():
         tab1, tab2 = st.tabs(["单个样本测试", "批量数据清洗"])
 
         with tab1:
-            single_entity_verification(workflow, entity_type)
+            asyncio.run(single_entity_verification(workflow, entity_type))
 
         with tab2:
             batch_processing(workflow, entity_type)
@@ -244,7 +244,7 @@ def display_workflow():
                 )
 
 
-def single_entity_verification(workflow: EntityVerificationWorkflow, entity_type: str):
+async def single_entity_verification(workflow: EntityVerificationWorkflow, entity_type: str):
     """
     处理单个实体名称的标准化。
 
@@ -261,7 +261,7 @@ def single_entity_verification(workflow: EntityVerificationWorkflow, entity_type
         if submit_button and entity_name:
             with st.spinner("正在标准化..."):
                 session_id = str(uuid4())
-                result = workflow.run(entity_name, session_id=session_id)
+                result = await workflow.run(entity_name, session_id=session_id)
             display_single_result(result, entity_type)
 
 
@@ -370,11 +370,13 @@ async def process_batch(
 
     semaphore = asyncio.Semaphore(max_workers)
 
-    async def process_with_semaphore(entity_name):
+    async def process_with_semaphore(entity_name, index):
         async with semaphore:
-            return await process_entity(entity_name, workflow)
+            result = await process_entity(entity_name, workflow)
+            result['original_index'] = index  # 添加原始索引
+            return result
 
-    tasks = [process_with_semaphore(entity_name) for entity_name in df.iloc[:, 0]]
+    tasks = [process_with_semaphore(entity_name, i) for i, entity_name in enumerate(df.iloc[:, 0])]
 
     for i, task in enumerate(asyncio.as_completed(tasks)):
         result = await task
@@ -407,9 +409,9 @@ async def process_batch(
 
     result_df = pd.DataFrame(results)
 
-    # 添加原始输入列并排序以匹配原始DataFrame的顺序
-    result_df["原始输入"] = df.iloc[: len(results), 0]
-    result_df = result_df.sort_values("原始输入").reset_index(drop=True)
+    # 根据原始索引排序
+    result_df = result_df.sort_values('original_index').reset_index(drop=True)
+    result_df = result_df.drop('original_index', axis=1)
 
     # 保存结果到临时文件夹
     temp_dir = os.path.join("data", "temp")
@@ -454,7 +456,7 @@ def display_batch_results(result_df: pd.DataFrame, entity_type: str):
 
     # 显示结果表格
     st.subheader("详细结果")
-    display_columns = ["原始输入", "final_entity_name", "status", "search_results"]
+    display_columns = ["original_input", "final_entity_name", "status", "search_results"]
     st.dataframe(result_df[display_columns])
 
     # 提供建议
