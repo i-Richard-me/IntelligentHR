@@ -3,6 +3,7 @@ import pandas as pd
 import sys
 import os
 import uuid
+import io
 
 # 添加项目根目录到 Python 路径
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -35,6 +36,7 @@ def initialize_session_state():
         "text_topic",
         "session_id",
         "clustering_params",
+        "use_custom_categories",
     ]
     for var in session_vars:
         if var not in st.session_state:
@@ -53,6 +55,10 @@ def initialize_session_state():
             "classification_batch_size": 20,
         }
 
+    # 初始化 use_custom_categories
+    if st.session_state.use_custom_categories is None:
+        st.session_state.use_custom_categories = False
+
 
 def main():
     """
@@ -67,6 +73,7 @@ def main():
     display_workflow_introduction()
 
     handle_data_input_and_clustering()
+    handle_custom_categories()
     review_clustering_results()
     display_classification_results()
 
@@ -84,6 +91,8 @@ def display_info_message():
         工具采用分批处理和多阶段聚类策略，能够高效处理大规模文本数据。支持自定义类别数量范围，并提供交互式的类别审核和编辑功能，让用户能够根据具体需求优化聚类结果。
         
         适用于各类文本内容分析场景，如用户反馈归类、话题趋势分析等。
+
+        现在还支持用户自定义类别，跳过自动聚类过程，直接进行文本分类。
         """
     )
 
@@ -97,13 +106,19 @@ def display_workflow_introduction():
 
                 上传CSV文件，选择文本列，输入主题背景，并设置聚类参数。
 
-            2. **初始聚类与类别优化**
+            2. **选择聚类方式**
 
-                系统使用大语言模型进行初始文本分类，然后合并和优化类别。
+                选择使用自动聚类或提供自定义类别。
 
-            3. **人工审核与调整**
+            3a. **自动聚类流程**
 
-                展示并允许编辑生成的类别列表，优化类别名称和描述。
+                - 初始聚类与类别优化：系统使用大语言模型进行初始文本分类，然后合并和优化类别。
+                - 人工审核与调整：展示并允许编辑生成的类别列表，优化类别名称和描述。
+
+            3b. **自定义类别流程**
+
+                - 上传或输入自定义类别：提供包含类别名称和描述的CSV文件，或直接在界面中输入。
+                - 审核与调整：查看并根据需要修改自定义类别。
 
             4. **文本分类与结果生成**
 
@@ -120,7 +135,7 @@ def handle_data_input_and_clustering():
     """
     处理数据输入和初始聚类过程
     """
-    st.markdown("## 数据输入和初始聚类")
+    st.markdown("## 数据输入和聚类设置")
 
     with st.container(border=True):
         st.session_state.text_topic = st.text_input(
@@ -132,36 +147,48 @@ def handle_data_input_and_clustering():
         uploaded_file = st.file_uploader("上传CSV文件", type="csv")
         if uploaded_file is not None:
             df = pd.read_csv(uploaded_file)
+            df['unique_id'] = [f"ID{i:06d}" for i in range(1, len(df) + 1)]
+            st.session_state.df_preprocessed = df
+            
             st.write("预览上传的数据：")
             st.write(df.head())
             st.session_state.text_column = st.selectbox("选择包含文本的列", df.columns)
 
-            st.session_state.clustering_params = get_clustering_parameters()
+            st.session_state.use_custom_categories = st.radio(
+                "选择聚类方式",
+                ["自动聚类", "使用自定义类别"],
+                format_func=lambda x: "自动聚类" if x == "自动聚类" else "使用自定义类别",
+            ) == "使用自定义类别"
 
-            if st.button("开始初始聚类"):
-                with st.spinner("正在进行初始聚类..."):
-                    result = generate_categories(
-                        df=df,
-                        text_column=st.session_state.text_column,
-                        text_topic=st.session_state.text_topic,
-                        initial_category_count=st.session_state.clustering_params[
-                            "max_categories"
-                        ],
-                        min_categories=st.session_state.clustering_params[
-                            "min_categories"
-                        ],
-                        max_categories=st.session_state.clustering_params[
-                            "max_categories"
-                        ],
-                        batch_size=st.session_state.clustering_params["batch_size"],
-                        session_id=st.session_state.session_id,
-                    )
+            if not st.session_state.use_custom_categories:
+                st.session_state.clustering_params = get_clustering_parameters()
 
-                st.success("初始聚类完成！")
+                if st.button("开始初始聚类"):
+                    with st.spinner("正在进行初始聚类..."):
+                        result = generate_categories(
+                            df=df,
+                            text_column=st.session_state.text_column,
+                            text_topic=st.session_state.text_topic,
+                            initial_category_count=st.session_state.clustering_params[
+                                "max_categories"
+                            ],
+                            min_categories=st.session_state.clustering_params[
+                                "min_categories"
+                            ],
+                            max_categories=st.session_state.clustering_params[
+                                "max_categories"
+                            ],
+                            batch_size=st.session_state.clustering_params["batch_size"],
+                            session_id=st.session_state.session_id,
+                        )
 
-                # 保存结果到 session state
-                st.session_state.df_preprocessed = result["preprocessed_df"]
-                st.session_state.categories = result["categories"]["categories"]
+                    st.success("初始聚类完成！")
+
+                    # 保存结果到 session state
+                    st.session_state.df_preprocessed = result["preprocessed_df"]
+                    st.session_state.categories = result["categories"]["categories"]
+
+            st.session_state.df_preprocessed = df
 
         else:
             st.warning("请上传CSV文件")
@@ -210,6 +237,38 @@ def get_clustering_parameters():
         "batch_size": batch_size,
         "classification_batch_size": classification_batch_size,
     }
+
+
+def handle_custom_categories():
+    """
+    处理用户自定义类别的输入
+    """
+    if st.session_state.use_custom_categories and st.session_state.df_preprocessed is not None:
+        st.markdown("## 自定义类别输入")
+        with st.container(border=True):
+            custom_category_method = st.radio(
+                "选择自定义类别的方式",
+                ["上传CSV文件", "手动输入"],
+                format_func=lambda x: "上传CSV文件" if x == "上传CSV文件" else "手动输入",
+            )
+
+            if custom_category_method == "上传CSV文件":
+                uploaded_categories = st.file_uploader("上传包含自定义类别的CSV文件", type="csv")
+                if uploaded_categories is not None:
+                    categories_df = pd.read_csv(uploaded_categories)
+                    st.session_state.categories = categories_df.to_dict("records")
+                    st.success("自定义类别已成功上传！")
+            else:
+                categories_text = st.text_area(
+                    "请输入自定义类别（每行一个类别，格式：类别名称,类别描述）",
+                    height=200,
+                    placeholder="工作环境,描述员工对公司工作环境的感受，包括舒适度、设备和软件的先进性等。\n薪资与福利,讨论员工对薪资水平和福利待遇的看法，包括与行业水平的比较、提升空间和健康保险等。",
+                )
+                if categories_text:
+                    categories_list = [line.split(",", 1) for line in categories_text.split("\n") if line.strip()]
+                    categories_df = pd.DataFrame(categories_list, columns=["name", "description"])
+                    st.session_state.categories = categories_df.to_dict("records")
+                    st.success("自定义类别已成功添加！")
 
 
 def review_clustering_results():
