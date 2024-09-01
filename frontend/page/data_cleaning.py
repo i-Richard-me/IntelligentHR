@@ -244,7 +244,9 @@ def display_workflow():
                 )
 
 
-async def single_entity_verification(workflow: EntityVerificationWorkflow, entity_type: str):
+async def single_entity_verification(
+    workflow: EntityVerificationWorkflow, entity_type: str
+):
     """
     处理单个实体名称的标准化。
 
@@ -353,7 +355,7 @@ async def process_batch(
     max_workers: int = 3,
 ):
     """
-    异步处理批量实体数据，如果连续出现10次错误则停止处理。
+    异步处理批量实体数据，每100个实体自动保存一次结果。
 
     Args:
         df (pd.DataFrame): 包含实体名称的DataFrame。
@@ -367,32 +369,48 @@ async def process_batch(
     total_entities = len(df)
     consecutive_errors = 0
     max_consecutive_errors = 10
+    save_interval = 100
 
     semaphore = asyncio.Semaphore(max_workers)
+
+    # 生成唯一的任务标识符
+    task_id = time.strftime("%Y%m%d-%H%M%S")
+    temp_dir = os.path.join("data", "temp")
+    os.makedirs(temp_dir, exist_ok=True)
+    temp_file_path = os.path.join(
+        temp_dir, f"batch_results_{entity_type}_{task_id}.csv"
+    )
 
     async def process_with_semaphore(entity_name, index):
         async with semaphore:
             result = await process_entity(entity_name, workflow)
-            result['original_index'] = index  # 添加原始索引
+            result["original_index"] = index
             return result
 
-    tasks = [process_with_semaphore(entity_name, i) for i, entity_name in enumerate(df.iloc[:, 0])]
+    async def save_results(current_results):
+        result_df = pd.DataFrame(current_results)
+        result_df = result_df.sort_values("original_index").reset_index(drop=True)
+        result_df = result_df.drop("original_index", axis=1)
+        result_df.to_csv(temp_file_path, index=False, encoding="utf-8-sig")
+        st.session_state.batch_results_df = result_df
+
+    tasks = [
+        process_with_semaphore(entity_name, i)
+        for i, entity_name in enumerate(df.iloc[:, 0])
+    ]
 
     for i, task in enumerate(asyncio.as_completed(tasks)):
         result = await task
         results.append(result)
 
-        # 检查是否为错误状态
         if result["status"] == ProcessingStatus.ERROR:
             consecutive_errors += 1
         else:
             consecutive_errors = 0
 
-        # 更新进度条
         progress = (i + 1) / total_entities
         progress_bar.progress(progress)
 
-        # 更新状态信息
         status_message = (
             f"已处理: {i + 1}/{total_entities} - "
             f"最新: '{result['original_input']}' → '{result['final_entity_name']}' "
@@ -400,30 +418,21 @@ async def process_batch(
         )
         status_area.info(status_message)
 
-        # 如果连续错误次数达到阈值，停止处理
+        # 每处理100个实体自动保存一次
+        if (i + 1) % save_interval == 0:
+            await save_results(results)
+            st.info(f"已自动保存 {i + 1} 个处理结果")
+
         if consecutive_errors >= max_consecutive_errors:
             status_area.warning(f"连续出现{max_consecutive_errors}次错误，停止处理。")
             break
 
-        await asyncio.sleep(0.5)
+        await asyncio.sleep(0.05)
 
-    result_df = pd.DataFrame(results)
-
-    # 根据原始索引排序
-    result_df = result_df.sort_values('original_index').reset_index(drop=True)
-    result_df = result_df.drop('original_index', axis=1)
-
-    # 保存结果到临时文件夹
-    temp_dir = os.path.join("data", "temp")
-    os.makedirs(temp_dir, exist_ok=True)
-    timestamp = time.strftime("%Y%m%d-%H%M%S")
-    temp_file_path = os.path.join(
-        temp_dir, f"batch_results_{entity_type}_{timestamp}.csv"
-    )
-    result_df.to_csv(temp_file_path, index=False, encoding="utf-8-sig")
+    # 最后一次保存，确保所有结果都被保存
+    await save_results(results)
 
     # 更新会话状态
-    st.session_state.batch_results_df = result_df
     st.session_state.processing_complete = True
 
     # 处理完成后的提示
@@ -433,7 +442,6 @@ async def process_batch(
         )
     else:
         status_area.success(f"批量处理完成！共处理 {len(results)} 条数据。")
-
 
 def display_batch_results(result_df: pd.DataFrame, entity_type: str):
     st.success("批量处理完成！")
@@ -456,7 +464,12 @@ def display_batch_results(result_df: pd.DataFrame, entity_type: str):
 
     # 显示结果表格
     st.subheader("详细结果")
-    display_columns = ["original_input", "final_entity_name", "status", "search_results"]
+    display_columns = [
+        "original_input",
+        "final_entity_name",
+        "status",
+        "search_results",
+    ]
     st.dataframe(result_df[display_columns])
 
     # 提供建议
