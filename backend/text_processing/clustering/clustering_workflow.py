@@ -1,6 +1,6 @@
-from typing import List, Dict, Any
-import pandas as pd
 import uuid
+from typing import List, Dict, Any, Optional
+import pandas as pd
 from langfuse.callback import CallbackHandler
 from utils.llm_tools import LanguageModelChain, init_language_model
 from utils.text_utils import (
@@ -11,8 +11,6 @@ from utils.text_utils import (
 from backend.text_processing.clustering.clustering_core import (
     Categories,
     ClassificationResult,
-)
-from backend.text_processing.clustering.clustering_core import (
     INITIAL_CATEGORY_GENERATION_SYSTEM_MESSAGE,
     INITIAL_CATEGORY_GENERATION_HUMAN_MESSAGE,
     MERGE_CATEGORIES_SYSTEM_MESSAGE,
@@ -25,7 +23,17 @@ from backend.text_processing.clustering.clustering_core import (
 language_model = init_language_model()
 
 
-def create_langfuse_handler(session_id, step):
+def create_langfuse_handler(session_id: str, step: str) -> CallbackHandler:
+    """
+    创建Langfuse回调处理器
+
+    Args:
+        session_id: 会话ID
+        step: 当前步骤名称
+
+    Returns:
+        CallbackHandler: Langfuse回调处理器实例
+    """
     return CallbackHandler(
         tags=["text_clustering"], session_id=session_id, metadata={"step": step}
     )
@@ -34,6 +42,12 @@ def create_langfuse_handler(session_id, step):
 def generate_unique_ids(df: pd.DataFrame) -> pd.DataFrame:
     """
     为DataFrame生成唯一ID，格式为'ID'后跟6位数字
+
+    Args:
+        df: 输入的DataFrame
+
+    Returns:
+        pd.DataFrame: 添加了唯一ID列的DataFrame
     """
     df["unique_id"] = [f"ID{i:06d}" for i in range(1, len(df) + 1)]
     return df
@@ -42,6 +56,13 @@ def generate_unique_ids(df: pd.DataFrame) -> pd.DataFrame:
 def preprocess_data(df: pd.DataFrame, text_column: str) -> pd.DataFrame:
     """
     预处理数据：清洗文本列，过滤无效文本，生成唯一ID
+
+    Args:
+        df: 输入的DataFrame
+        text_column: 包含文本数据的列名
+
+    Returns:
+        pd.DataFrame: 预处理后的DataFrame
     """
     df = clean_text_columns(df)
     df = filter_invalid_text(df, text_column)
@@ -52,6 +73,14 @@ def preprocess_data(df: pd.DataFrame, text_column: str) -> pd.DataFrame:
 def batch_texts(df: pd.DataFrame, text_column: str, batch_size: int = 100) -> List[str]:
     """
     将文本数据分批处理
+
+    Args:
+        df: 包含文本数据的DataFrame
+        text_column: 文本列的名称
+        batch_size: 每批处理的文本数量
+
+    Returns:
+        List[str]: 批处理后的文本列表
     """
     return [
         " ".join(df[text_column].iloc[i : i + batch_size].tolist())
@@ -64,6 +93,15 @@ def generate_initial_categories(
 ) -> List[Dict]:
     """
     生成初始类别
+
+    Args:
+        texts: 待分类的文本列表
+        text_topic: 文本主题或背景
+        category_count: 期望生成的类别数量
+        session_id: 会话ID
+
+    Returns:
+        List[Dict]: 生成的初始类别列表
     """
     langfuse_handler = create_langfuse_handler(session_id, "initial_categories")
     category_chain = LanguageModelChain(
@@ -97,6 +135,16 @@ def merge_categories(
 ) -> Dict:
     """
     合并生成的类别
+
+    Args:
+        categories_list: 初始类别列表
+        text_topic: 文本主题或背景
+        min_categories: 最小类别数量
+        max_categories: 最大类别数量
+        session_id: 会话ID
+
+    Returns:
+        Dict: 合并后的类别字典
     """
     langfuse_handler = create_langfuse_handler(session_id, "merge_categories")
     merge_chain = LanguageModelChain(
@@ -127,10 +175,23 @@ def generate_categories(
     min_categories: int,
     max_categories: int,
     batch_size: int = 100,
-    session_id: str = None,
+    session_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     生成类别的主函数
+
+    Args:
+        df: 输入的DataFrame
+        text_column: 文本列的名称
+        text_topic: 文本主题或背景
+        initial_category_count: 初始类别数量
+        min_categories: 最小类别数量
+        max_categories: 最大类别数量
+        batch_size: 批处理大小
+        session_id: 会话ID（可选）
+
+    Returns:
+        Dict[str, Any]: 包含生成的类别、预处理后的DataFrame和会话ID的字典
     """
     if session_id is None:
         session_id = str(uuid.uuid4())
@@ -162,6 +223,18 @@ def classify_texts(
 ) -> pd.DataFrame:
     """
     对文本进行分类
+
+    Args:
+        df: 包含文本数据的DataFrame
+        text_column: 文本列的名称
+        id_column: ID列的名称
+        categories: 类别字典
+        text_topic: 文本主题或背景
+        session_id: 会话ID
+        classification_batch_size: 分类批处理大小
+
+    Returns:
+        pd.DataFrame: 包含分类结果的DataFrame
     """
     langfuse_handler = create_langfuse_handler(session_id, "classify_texts")
 

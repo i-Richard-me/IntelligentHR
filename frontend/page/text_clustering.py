@@ -3,7 +3,7 @@ import pandas as pd
 import sys
 import os
 import uuid
-import io
+from typing import Dict, Any, Optional
 
 # 添加项目根目录到 Python 路径
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -25,9 +25,7 @@ show_sidebar()
 
 
 def initialize_session_state():
-    """
-    初始化会话状态变量
-    """
+    """初始化会话状态变量"""
     session_vars = [
         "df_preprocessed",
         "categories",
@@ -60,27 +58,8 @@ def initialize_session_state():
         st.session_state.use_custom_categories = False
 
 
-def main():
-    initialize_session_state()
-
-    st.title("🔬 文本聚类分析")
-    st.markdown("---")
-
-    display_info_message()
-    display_workflow_introduction()
-
-    handle_data_input_and_clustering()
-    handle_custom_categories()
-    review_clustering_results()
-    display_classification_results()
-
-    show_footer()
-
-
 def display_info_message():
-    """
-    显示表格处理助手的信息消息。
-    """
+    """显示表格处理助手的信息消息"""
     st.info(
         """
         文本聚类分析工具利用大语言模型的语义理解能力，自动化地从大量文本中识别和归类主要主题。
@@ -88,50 +67,83 @@ def display_info_message():
         工具采用分批处理和多阶段聚类策略，能够高效处理大规模文本数据。支持自定义类别数量范围，并提供交互式的类别审核和编辑功能，让用户能够根据具体需求优化聚类结果。
         
         适用于各类文本内容分析场景，如用户反馈归类、话题趋势分析等。
-
-        现在还支持用户自定义类别，跳过自动聚类过程，直接进行文本分类。
         """
     )
 
 
 def display_workflow_introduction():
-    with st.expander("📋 查看文本聚类分析工作流程", expanded=False):
-        with st.container(border=True):
-            st.markdown(
-                """
-            1. **数据准备与参数设置**
-
-                上传CSV文件，选择文本列，输入主题背景，并设置聚类参数。
-
-            2. **选择聚类方式**
-
-                选择使用自动聚类或提供自定义类别。
-
-            3a. **自动聚类流程**
-
-                - 初始聚类与类别优化：系统使用大语言模型进行初始文本分类，然后合并和优化类别。
-                - 人工审核与调整：展示并允许编辑生成的类别列表，优化类别名称和描述。
-
-            3b. **自定义类别流程**
-
-                - 上传或输入自定义类别：提供包含类别名称和描述的CSV文件，或直接在界面中输入。
-                - 审核与调整：查看并根据需要修改自定义类别。
-
-            4. **文本分类与结果生成**
-
-                基于确认的类别对所有文本进行分类，生成并展示最终结果。
-
-            5. **结果导出**
-
-                提供分类结果的CSV格式下载选项。
+    """显示工作流程说明"""
+    with st.expander("📋 查看文本聚类分析使用说明", expanded=False):
+        st.markdown(
             """
-            )
+            1. 上传数据：准备包含文本数据的CSV文件，并上传到系统。
+            2. 设置参数：选择文本列，输入主题背景，设置聚类参数。
+            3. 初始聚类：系统自动进行初始聚类，生成类别。
+            4. 审核类别：查看并编辑生成的类别，确保符合需求。
+            5. 文本分类：对所有文本进行分类。
+            6. 查看结果：浏览分类结果，下载分析报告。
+            """
+        )
+
+
+def get_clustering_parameters() -> Dict[str, int]:
+    """获取聚类参数设置"""
+    with st.expander("自动聚类参数设置"):
+        min_categories = st.slider(
+            "最小类别数量",
+            5,
+            15,
+            st.session_state.clustering_params["min_categories"],
+            key="min_categories_slider",
+        )
+        max_categories = st.slider(
+            "最大类别数量",
+            min_categories,
+            20,
+            st.session_state.clustering_params["max_categories"],
+            key="max_categories_slider",
+        )
+        batch_size = st.slider(
+            "聚类批处理大小",
+            10,
+            1000,
+            st.session_state.clustering_params["batch_size"],
+            key="batch_size_slider",
+        )
+        classification_batch_size = st.slider(
+            "分类批处理大小",
+            10,
+            100,
+            st.session_state.clustering_params["classification_batch_size"],
+            key="classification_batch_size_slider",
+        )
+
+    return {
+        "min_categories": min_categories,
+        "max_categories": max_categories,
+        "batch_size": batch_size,
+        "classification_batch_size": classification_batch_size,
+    }
+
+
+def get_custom_classification_parameters() -> Dict[str, int]:
+    """获取自定义分类参数设置"""
+    with st.expander("自定义类别分类参数设置"):
+        classification_batch_size = st.slider(
+            "分类批处理大小",
+            10,
+            100,
+            st.session_state.clustering_params["classification_batch_size"],
+            key="custom_classification_batch_size_slider",
+        )
+
+    return {
+        "classification_batch_size": classification_batch_size,
+    }
 
 
 def handle_data_input_and_clustering():
-    """
-    处理数据输入和初始聚类过程
-    """
+    """处理数据输入和初始聚类过程"""
     st.markdown("## 数据输入和聚类设置")
 
     with st.container(border=True):
@@ -199,76 +211,8 @@ def handle_data_input_and_clustering():
             st.warning("请上传CSV文件")
 
 
-def get_clustering_parameters():
-    """
-    获取自动聚类的参数设置
-
-    Returns:
-        dict: 包含聚类参数的字典
-    """
-    with st.expander("自动聚类参数设置"):
-        min_categories = st.slider(
-            "最小类别数量",
-            5,
-            15,
-            st.session_state.clustering_params["min_categories"],
-            key="min_categories_slider",
-        )
-        max_categories = st.slider(
-            "最大类别数量",
-            min_categories,
-            20,
-            st.session_state.clustering_params["max_categories"],
-            key="max_categories_slider",
-        )
-        batch_size = st.slider(
-            "聚类批处理大小",
-            10,
-            1000,
-            st.session_state.clustering_params["batch_size"],
-            key="batch_size_slider",
-        )
-        classification_batch_size = st.slider(
-            "分类批处理大小",
-            10,
-            100,
-            st.session_state.clustering_params["classification_batch_size"],
-            key="classification_batch_size_slider",
-        )
-
-    return {
-        "min_categories": min_categories,
-        "max_categories": max_categories,
-        "batch_size": batch_size,
-        "classification_batch_size": classification_batch_size,
-    }
-
-
-def get_custom_classification_parameters():
-    """
-    获取自定义类别分类的参数设置
-
-    Returns:
-        dict: 包含分类参数的字典
-    """
-    with st.expander("自定义类别分类参数设置"):
-        classification_batch_size = st.slider(
-            "分类批处理大小",
-            10,
-            100,
-            st.session_state.clustering_params["classification_batch_size"],
-            key="custom_classification_batch_size_slider",
-        )
-
-    return {
-        "classification_batch_size": classification_batch_size,
-    }
-
-
 def handle_custom_categories():
-    """
-    处理用户自定义类别的输入
-    """
+    """处理用户自定义类别的输入"""
     if (
         st.session_state.use_custom_categories
         and st.session_state.df_preprocessed is not None
@@ -311,9 +255,7 @@ def handle_custom_categories():
 
 
 def review_clustering_results():
-    """
-    审核聚类结果并允许用户修改
-    """
+    """审核聚类结果并允许用户修改"""
     if st.session_state.categories is not None:
         st.markdown("---")
         st.markdown("## 聚类结果审核")
@@ -371,9 +313,7 @@ def review_clustering_results():
 
 
 def display_classification_results():
-    """
-    展示分类结果
-    """
+    """展示分类结果"""
     if st.session_state.df_result is not None:
         st.markdown("---")
         st.markdown("## 分类结果展示")
@@ -389,6 +329,24 @@ def display_classification_results():
                 file_name="classification_results.csv",
                 mime="text/csv",
             )
+
+
+def main():
+    """主函数：控制整个应用的流程"""
+    initialize_session_state()
+
+    st.title("🔬 文本聚类分析")
+    st.markdown("---")
+
+    display_info_message()
+    display_workflow_introduction()
+
+    handle_data_input_and_clustering()
+    handle_custom_categories()
+    review_clustering_results()
+    display_classification_results()
+
+    show_footer()
 
 
 main()
