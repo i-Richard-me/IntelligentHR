@@ -69,7 +69,7 @@ SYSTEM_MESSAGE = """
 
 # 人类消息模板
 HUMAN_MESSAGE_TEMPLATE = """
-可用的表格操作的工具函数如下：
+可用的表格操作工具函数如下：
 
 {tools_description}
 
@@ -110,22 +110,36 @@ def record_user_feedback(trace_id: str, is_useful: bool):
     )
 
 
-def get_tools_description(tools: List[tool]) -> str:
+def get_similar_tools(query: str, top_k: int = 3) -> str:
     """
-    获取工具函数的描述。
+    从向量数据库中检索与查询最相似的工具描述。
 
     Args:
-        tools: 工具函数列表。
+        query (str): 用户查询。
+        top_k (int): 返回的最相似结果数量。
 
     Returns:
-        包含所有工具函数描述的字符串。
+        str: 格式化的工具描述字符串。
     """
-    descriptions = []
-    for tool in tools:
-        descriptions.append(
-            f"函数名：{tool.name}\n描述：{tool.description}\n\n参数：{tool.args}\n"
-        )
-    return "\n".join(descriptions)
+    connect_to_milvus(db_name=os.getenv("VECTOR_DB_DATABASE", "examples"))
+    collection = initialize_vector_store("tools_description")
+
+    embeddings = CustomEmbeddings(
+        api_key=os.getenv("EMBEDDING_API_KEY"),
+        api_url=os.getenv("EMBEDDING_API_BASE"),
+        model=os.getenv("EMBEDDING_MODEL"),
+    )
+    query_vector = embeddings.embed_query(query)
+
+    results = search_in_milvus(collection, query_vector, top_k)
+
+    tools_description = ""
+    for result in results:
+        tools_description += f"函数名：\n{result['tool_name']}\n"
+        tools_description += f"描述：\n{result['description']}\n"
+        tools_description += f"参数：\n{result['args']}\n\n"
+
+    return tools_description.strip()
 
 
 def create_dataframe_assistant():
@@ -197,16 +211,14 @@ def process_user_query(
     tools: List[tool],
     session_id: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """
-    处理用户查询并返回结果。
-    """
     try:
         if session_id is None:
             session_id = str(uuid.uuid4())
 
         langfuse_handler = create_langfuse_handler(session_id, "process_user_query")
 
-        tools_description = get_tools_description(tools)
+        # 使用新的 get_similar_tools 函数
+        tools_description = get_similar_tools(user_input)
         dataframe_info_str = format_dataframe_info(dataframe_info)
 
         # 获取相似的示例
