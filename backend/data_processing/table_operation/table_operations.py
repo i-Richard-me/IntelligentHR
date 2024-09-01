@@ -310,3 +310,72 @@ def stack_dataframes(
     result_df = pd.concat(result_dfs, ignore_index=True)
 
     return result_df
+
+
+@tool
+def deduplicate_dataframe(
+    df: Annotated[Any, "Input dataframe to be deduplicated"],
+    group_by_columns: Annotated[
+        Optional[Union[str, List[str]]],
+        "Column(s) to group by for deduplication. If None, removes completely duplicate rows",
+    ] = None,
+    sort_column: Annotated[
+        Optional[str],
+        "Column to sort by within each group. Required if group_by_columns is specified",
+    ] = None,
+    ascending: Annotated[
+        bool, "Sort in ascending order if True, descending if False"
+    ] = False,
+) -> pd.DataFrame:
+    """
+    Deduplicates a dataframe based on specified columns or removes completely duplicate rows.
+
+    Use cases:
+    - Removing completely duplicate rows across all columns.
+    - Keeping only the most recent record for each employee (e.g., latest promotion).
+    - Retaining the record with the highest value for each group (e.g., longest working day per employee per year).
+
+    Notes:
+    - If group_by_columns is None, the function removes completely duplicate rows across all columns.
+    - If group_by_columns is specified, the function groups the dataframe by these columns, sorts within each group by sort_column,
+      and then keeps the first record of each group after sorting.
+    - Set 'ascending=False' to keep the record with the highest value in 'sort_column'.
+    - Set 'ascending=True' to keep the record with the lowest value in 'sort_column'.
+
+    Output:
+    - Returns a pandas DataFrame with duplicates removed according to the specified criteria.
+    """
+    try:
+        if group_by_columns is None:
+            # Remove completely duplicate rows
+            df_deduplicated = df.drop_duplicates()
+            logger.info(
+                f"Removed completely duplicate rows. Original shape: {df.shape}, New shape: {df_deduplicated.shape}"
+            )
+        else:
+            # Ensure group_by_columns is a list
+            if isinstance(group_by_columns, str):
+                group_by_columns = [group_by_columns]
+
+            if sort_column is None:
+                raise ValueError(
+                    "sort_column must be specified when group_by_columns is provided"
+                )
+
+            # Sort the dataframe and drop duplicates
+            df_deduplicated = df.sort_values(
+                by=group_by_columns + [sort_column], ascending=ascending
+            ).drop_duplicates(subset=group_by_columns, keep="first")
+
+            logger.info(
+                f"Deduplicated dataframe based on columns {group_by_columns}. Original shape: {df.shape}, New shape: {df_deduplicated.shape}"
+            )
+
+        # Reset index
+        df_deduplicated = df_deduplicated.reset_index(drop=True)
+
+        return df_deduplicated
+
+    except Exception as e:
+        logger.error(f"Error in deduplicate_dataframe: {str(e)}")
+        raise
