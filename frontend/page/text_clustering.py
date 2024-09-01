@@ -61,9 +61,6 @@ def initialize_session_state():
 
 
 def main():
-    """
-    主函数，控制页面流程和布局
-    """
     initialize_session_state()
 
     st.title("🔬 文本聚类分析")
@@ -147,22 +144,30 @@ def handle_data_input_and_clustering():
         uploaded_file = st.file_uploader("上传CSV文件", type="csv")
         if uploaded_file is not None:
             df = pd.read_csv(uploaded_file)
-            df['unique_id'] = [f"ID{i:06d}" for i in range(1, len(df) + 1)]
+            df["unique_id"] = [f"ID{i:06d}" for i in range(1, len(df) + 1)]
             st.session_state.df_preprocessed = df
-            
+
             st.write("预览上传的数据：")
             st.write(df.head())
             st.session_state.text_column = st.selectbox("选择包含文本的列", df.columns)
 
-            st.session_state.use_custom_categories = st.radio(
-                "选择聚类方式",
-                ["自动聚类", "使用自定义类别"],
-                format_func=lambda x: "自动聚类" if x == "自动聚类" else "使用自定义类别",
-            ) == "使用自定义类别"
+            st.session_state.use_custom_categories = (
+                st.radio(
+                    "选择聚类方式",
+                    ["自动聚类", "使用自定义类别"],
+                    format_func=lambda x: (
+                        "自动聚类" if x == "自动聚类" else "使用自定义类别"
+                    ),
+                )
+                == "使用自定义类别"
+            )
 
-            if not st.session_state.use_custom_categories:
+            if st.session_state.use_custom_categories:
+                st.session_state.clustering_params = (
+                    get_custom_classification_parameters()
+                )
+            else:
                 st.session_state.clustering_params = get_clustering_parameters()
-
                 if st.button("开始初始聚类"):
                     with st.spinner("正在进行初始聚类..."):
                         result = generate_categories(
@@ -196,12 +201,12 @@ def handle_data_input_and_clustering():
 
 def get_clustering_parameters():
     """
-    获取聚类参数设置
+    获取自动聚类的参数设置
 
     Returns:
         dict: 包含聚类参数的字典
     """
-    with st.expander("聚类参数设置"):
+    with st.expander("自动聚类参数设置"):
         min_categories = st.slider(
             "最小类别数量",
             5,
@@ -239,21 +244,49 @@ def get_clustering_parameters():
     }
 
 
+def get_custom_classification_parameters():
+    """
+    获取自定义类别分类的参数设置
+
+    Returns:
+        dict: 包含分类参数的字典
+    """
+    with st.expander("自定义类别分类参数设置"):
+        classification_batch_size = st.slider(
+            "分类批处理大小",
+            10,
+            100,
+            st.session_state.clustering_params["classification_batch_size"],
+            key="custom_classification_batch_size_slider",
+        )
+
+    return {
+        "classification_batch_size": classification_batch_size,
+    }
+
+
 def handle_custom_categories():
     """
     处理用户自定义类别的输入
     """
-    if st.session_state.use_custom_categories and st.session_state.df_preprocessed is not None:
+    if (
+        st.session_state.use_custom_categories
+        and st.session_state.df_preprocessed is not None
+    ):
         st.markdown("## 自定义类别输入")
         with st.container(border=True):
             custom_category_method = st.radio(
                 "选择自定义类别的方式",
                 ["上传CSV文件", "手动输入"],
-                format_func=lambda x: "上传CSV文件" if x == "上传CSV文件" else "手动输入",
+                format_func=lambda x: (
+                    "上传CSV文件" if x == "上传CSV文件" else "手动输入"
+                ),
             )
 
             if custom_category_method == "上传CSV文件":
-                uploaded_categories = st.file_uploader("上传包含自定义类别的CSV文件", type="csv")
+                uploaded_categories = st.file_uploader(
+                    "上传包含自定义类别的CSV文件", type="csv"
+                )
                 if uploaded_categories is not None:
                     categories_df = pd.read_csv(uploaded_categories)
                     st.session_state.categories = categories_df.to_dict("records")
@@ -265,8 +298,14 @@ def handle_custom_categories():
                     placeholder="工作环境,描述员工对公司工作环境的感受，包括舒适度、设备和软件的先进性等。\n薪资与福利,讨论员工对薪资水平和福利待遇的看法，包括与行业水平的比较、提升空间和健康保险等。",
                 )
                 if categories_text:
-                    categories_list = [line.split(",", 1) for line in categories_text.split("\n") if line.strip()]
-                    categories_df = pd.DataFrame(categories_list, columns=["name", "description"])
+                    categories_list = [
+                        line.split(",", 1)
+                        for line in categories_text.split("\n")
+                        if line.strip()
+                    ]
+                    categories_df = pd.DataFrame(
+                        categories_list, columns=["name", "description"]
+                    )
                     st.session_state.categories = categories_df.to_dict("records")
                     st.success("自定义类别已成功添加！")
 
@@ -311,21 +350,24 @@ def review_clustering_results():
             edited_categories = edited_df.to_dict("records")
 
             if st.button("确认类别并开始文本分类"):
-                with st.spinner("正在进行文本分类..."):
-                    df_result = classify_texts(
-                        df=st.session_state.df_preprocessed,
-                        text_column=st.session_state.text_column,
-                        id_column="unique_id",
-                        categories={"categories": edited_categories},
-                        text_topic=st.session_state.text_topic,
-                        session_id=st.session_state.session_id,
-                        classification_batch_size=st.session_state.clustering_params[
-                            "classification_batch_size"
-                        ],
-                    )
+                if st.session_state.clustering_params is None:
+                    st.error("请先设置聚类参数")
+                else:
+                    with st.spinner("正在进行文本分类..."):
+                        df_result = classify_texts(
+                            df=st.session_state.df_preprocessed,
+                            text_column=st.session_state.text_column,
+                            id_column="unique_id",
+                            categories={"categories": edited_categories},
+                            text_topic=st.session_state.text_topic,
+                            session_id=st.session_state.session_id,
+                            classification_batch_size=st.session_state.clustering_params[
+                                "classification_batch_size"
+                            ],
+                        )
 
-                st.session_state.df_result = df_result
-                st.success("文本分类完成！")
+                    st.session_state.df_result = df_result
+                    st.success("文本分类完成！")
 
 
 def display_classification_results():

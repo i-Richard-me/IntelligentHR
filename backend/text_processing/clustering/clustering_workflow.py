@@ -158,7 +158,7 @@ def classify_texts(
     categories: Dict,
     text_topic: str,
     session_id: str,
-    classification_batch_size: int = 20,  # 新增参数
+    classification_batch_size: int = 20,
 ) -> pd.DataFrame:
     """
     对文本进行分类
