@@ -7,6 +7,7 @@ services:
       - "8510:8510"
     environment:
       - STREAMLIT_SERVER_PORT=8510
+      - TZ=Asia/Shanghai
     env_file:
       - .env
     volumes:
@@ -29,6 +30,7 @@ services:
       - NEXTAUTH_URL=http://localhost:3000
       - TELEMETRY_ENABLED=${TELEMETRY_ENABLED:-true}
       - LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES=${LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES:-false}
+      - TZ=Asia/Shanghai
     profiles:
       - langfuse
     restart: always
@@ -45,6 +47,7 @@ services:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
       - POSTGRES_DB=postgres
+      - TZ=Asia/Shanghai
     ports:
       - 5432:5432
     volumes:
@@ -60,6 +63,7 @@ services:
       - ETCD_AUTO_COMPACTION_RETENTION=1000
       - ETCD_QUOTA_BACKEND_BYTES=4294967296
       - ETCD_SNAPSHOT_COUNT=50000
+      - TZ=Asia/Shanghai
     volumes:
       - ../data/etcd:/etcd
     command: etcd -advertise-client-urls=http://127.0.0.1:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
@@ -78,6 +82,7 @@ services:
     environment:
       MINIO_ACCESS_KEY: minioadmin
       MINIO_SECRET_KEY: minioadmin
+      TZ: Asia/Shanghai
     ports:
       - "9001:9001"
       - "9000:9000"
@@ -95,13 +100,14 @@ services:
 
   standalone:
     container_name: milvus-standalone
-    image: milvusdb/milvus:v2.4.5
+    image: milvusdb/milvus:v2.4.10
     command: ["milvus", "run", "standalone"]
     security_opt:
     - seccomp:unconfined
     environment:
       ETCD_ENDPOINTS: etcd:2379
       MINIO_ADDRESS: minio:9000
+      TZ: Asia/Shanghai
     volumes:
       - ../data/milvus:/var/lib/milvus
     healthcheck:
@@ -125,6 +131,7 @@ services:
     image: zilliz/attu:v2.4
     environment:
       MILVUS_URL: milvus-standalone:19530
+      TZ: Asia/Shanghai
     ports:
       - "3010:3000"
     depends_on:
