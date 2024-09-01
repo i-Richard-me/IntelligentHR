@@ -30,11 +30,7 @@ class DataFrameWorkflow:
         self.assistant_chain = create_dataframe_assistant()
         self.dataframes: Dict[str, pd.DataFrame] = {}
         self.available_tools = [
-            join_dataframes,
-            reshape_wide_to_long,
-            reshape_long_to_wide,
-            compare_dataframes,
-            stack_dataframes,
+            tool for tool in globals().values() if callable(tool) and hasattr(tool, 'name')
         ]
         self.conversation_history: List[Dict[str, str]] = []
         self.current_state: str = "initial"
@@ -75,7 +71,6 @@ class DataFrameWorkflow:
             self.assistant_chain,
             full_context,
             dataframe_info,
-            self.available_tools,
             self.session_id,
         )
         logger.info(f"AI response: {result}")

@@ -208,7 +208,6 @@ def process_user_query(
     assistant_chain,
     user_input: str,
     dataframe_info: Dict[str, Dict],
-    tools: List[tool],
     session_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     try:

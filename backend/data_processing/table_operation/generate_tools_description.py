@@ -39,13 +39,7 @@ def generate_csv(tools, output_file):
 
 
 if __name__ == "__main__":
-    tools = [
-        join_dataframes,
-        reshape_wide_to_long,
-        reshape_long_to_wide,
-        compare_dataframes,
-        stack_dataframes,
-    ]
+    tools = [tool for tool in globals().values() if callable(tool) and hasattr(tool, 'name')]
 
     output_file = os.path.join("data", "datasets", "tools_description.csv")
     generate_csv(tools, output_file)
