@@ -34,6 +34,28 @@
             ],
             "embedding_field": "school_name"
         },
+        "tools_description": {
+            "name": "tools_description",
+            "description": "Collection for storing tool function descriptions",
+            "fields": [
+                {
+                    "name": "tool_name",
+                    "type": "str",
+                    "description": "Name of the tool function"
+                },
+                {
+                    "name": "description",
+                    "type": "str",
+                    "description": "Description of the tool function"
+                },
+                {
+                    "name": "args",
+                    "type": "str",
+                    "description": "Arguments of the tool function"
+                }
+            ],
+            "embedding_field": "description"
+        },
         "data_operation_examples": {
             "name": "data_operation_examples",
             "description": "Examples for data operation tasks",
