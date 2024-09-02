@@ -51,6 +51,10 @@ class ResumeSummary(BaseModel):
     experience: str = Field(..., description="工作和项目经历概述")
     skills_overview: str = Field(..., description="技能概述")
 
+class Summary(BaseModel):
+    """简历概述数据模型。"""
+
+    summary: ResumeSummary = Field(..., description="简历概述")
 
 class ResumePersonalEducation(BaseModel):
     """个人信息和教育背景数据模型。"""
@@ -68,14 +72,4 @@ class ResumeWorkProject(BaseModel):
     )
 
 
-class CompleteResume(BaseModel):
-    """完整简历信息数据模型。"""
 
-    id: str = Field(..., description="简历ID")
-    personal_info: PersonalInfo = Field(..., description="个人基本信息、概述和技能")
-    education: List[Education] = Field(..., description="教育背景列表")
-    work_experiences: List[WorkExperience] = Field(..., description="工作经历列表")
-    project_experiences: Optional[List[ProjectExperience]] = Field(
-        None, description="项目经历列表"
-    )
-    summary: ResumeSummary = Field(..., description="简历概述")

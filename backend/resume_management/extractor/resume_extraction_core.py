@@ -12,7 +12,7 @@ from backend.resume_management.extractor.resume_data_models import (
     ResumePersonalEducation,
     ResumeWorkProject,
     ResumeSummary,
-    CompleteResume,
+    Summary,
 )
 from backend.resume_management.extractor.resume_extraction_prompts import (
     PERSONAL_EDUCATION_SYSTEM_MESSAGE,
@@ -25,6 +25,10 @@ from backend.resume_management.extractor.resume_extraction_prompts import (
 from backend.resume_management.storage.resume_vector_storage import (
     store_resume_in_milvus,
 )
+import logging
+
+# 配置 logging
+logging.basicConfig(level=logging.INFO)
 
 # 初始化语言模型
 language_model = init_language_model()
@@ -46,7 +50,7 @@ def extract_personal_education(resume_content: str) -> Dict[str, Any]:
         PERSONAL_EDUCATION_HUMAN_MESSAGE,
         language_model,
     )()
-    return extractor.invoke({"resume_html": resume_content})
+    return extractor.invoke({"raw_resume_content": resume_content})
 
 
 def extract_work_project(resume_content: str) -> Dict[str, Any]:
@@ -65,7 +69,7 @@ def extract_work_project(resume_content: str) -> Dict[str, Any]:
         WORK_PROJECT_HUMAN_MESSAGE,
         language_model,
     )()
-    return extractor.invoke({"resume_html": resume_content})
+    return extractor.invoke({"raw_resume_content": resume_content})
 
 
 def generate_resume_summary(resume_content: str) -> Dict[str, Any]:
@@ -79,12 +83,12 @@ def generate_resume_summary(resume_content: str) -> Dict[str, Any]:
         Dict[str, Any]: 包含简历概述的字典。
     """
     summarizer = LanguageModelChain(
-        ResumeSummary,
+        Summary,
         RESUME_SUMMARY_SYSTEM_MESSAGE,
         RESUME_SUMMARY_HUMAN_MESSAGE,
         language_model,
     )()
-    return summarizer.invoke({"resume_html": resume_content})
+    return summarizer.invoke({"raw_resume_content": resume_content})
 
 
 def process_resume(resume_content: str, resume_id: str) -> Dict[str, Any]:
@@ -103,16 +107,22 @@ def process_resume(resume_content: str, resume_id: str) -> Dict[str, Any]:
         work_project = extract_work_project(resume_content)
         summary = generate_resume_summary(resume_content)
 
-        complete_resume = CompleteResume(
-            id=resume_id,
-            personal_info=personal_education["personal_info"],
-            education=personal_education["education"],
-            work_experiences=work_project["work_experiences"],
-            project_experiences=work_project.get("project_experiences", []),
-            summary=summary,
-        )
+        # 添加 logging 以展示变量结果
+        logging.info(f"个人信息和教育背景: {personal_education}")
+        logging.info(f"工作经历和项目经历: {work_project}")
+        logging.info(f"简历概述: {summary}")
 
-        return complete_resume.dict()
+
+        complete_resume = {
+            "id": resume_id,
+            "personal_info": personal_education.get("personal_info") or personal_education.get("PersonalInfo"),
+            "education": personal_education.get("education") or personal_education.get("Education"),
+            "work_experiences": work_project["work_experiences"] or work_project.get("WorkExperience"),
+            "project_experiences": work_project.get("project_experiences", []) or work_project.get("ProjectExperience", []),
+            "summary": summary.get("summary", {}) or summary.get("Summary", {}),
+        }
+
+        return complete_resume
     except Exception as e:
         return {"error": f"处理简历时出错: {str(e)}"}
 
