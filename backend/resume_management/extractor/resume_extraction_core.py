@@ -26,6 +26,8 @@ from backend.resume_management.storage.resume_vector_storage import (
     store_resume_in_milvus,
 )
 import logging
+from langfuse.callback import CallbackHandler
+import uuid
 
 # 配置 logging
 logging.basicConfig(level=logging.INFO)
@@ -34,91 +36,71 @@ logging.basicConfig(level=logging.INFO)
 language_model = init_language_model()
 
 
-def extract_personal_education(resume_content: str) -> Dict[str, Any]:
-    """
-    提取简历中的个人信息和教育背景。
-
-    Args:
-        resume_content (str): 简历内容文本。
-
-    Returns:
-        Dict[str, Any]: 包含个人信息和教育背景的字典。
-    """
+def extract_personal_education(resume_content: str, session_id: str) -> Dict[str, Any]:
+    langfuse_handler = create_langfuse_handler(session_id, "extract_personal_education")
     extractor = LanguageModelChain(
         ResumePersonalEducation,
         PERSONAL_EDUCATION_SYSTEM_MESSAGE,
         PERSONAL_EDUCATION_HUMAN_MESSAGE,
         language_model,
     )()
-    return extractor.invoke({"raw_resume_content": resume_content})
+    return extractor.invoke(
+        {"raw_resume_content": resume_content}, config={"callbacks": [langfuse_handler]}
+    )
 
 
-def extract_work_project(resume_content: str) -> Dict[str, Any]:
-    """
-    提取简历中的工作经历和项目经历。
-
-    Args:
-        resume_content (str): 简历内容文本。
-
-    Returns:
-        Dict[str, Any]: 包含工作经历和项目经历的字典。
-    """
+def extract_work_project(resume_content: str, session_id: str) -> Dict[str, Any]:
+    langfuse_handler = create_langfuse_handler(session_id, "extract_work_project")
     extractor = LanguageModelChain(
         ResumeWorkProject,
         WORK_PROJECT_SYSTEM_MESSAGE,
         WORK_PROJECT_HUMAN_MESSAGE,
         language_model,
     )()
-    return extractor.invoke({"raw_resume_content": resume_content})
+    return extractor.invoke(
+        {"raw_resume_content": resume_content}, config={"callbacks": [langfuse_handler]}
+    )
 
 
-def generate_resume_summary(resume_content: str) -> Dict[str, Any]:
-    """
-    生成简历概述。
-
-    Args:
-        resume_content (str): 简历内容文本。
-
-    Returns:
-        Dict[str, Any]: 包含简历概述的字典。
-    """
+def generate_resume_summary(resume_content: str, session_id: str) -> Dict[str, Any]:
+    langfuse_handler = create_langfuse_handler(session_id, "generate_resume_summary")
     summarizer = LanguageModelChain(
         Summary,
         RESUME_SUMMARY_SYSTEM_MESSAGE,
         RESUME_SUMMARY_HUMAN_MESSAGE,
         language_model,
     )()
-    return summarizer.invoke({"raw_resume_content": resume_content})
+    return summarizer.invoke(
+        {"raw_resume_content": resume_content}, config={"callbacks": [langfuse_handler]}
+    )
 
 
-def process_resume(resume_content: str, resume_id: str) -> Dict[str, Any]:
-    """
-    处理简历并提取所有相关信息。
+def process_resume(
+    resume_content: str, resume_id: str, session_id: str = None
+) -> Dict[str, Any]:
+    if session_id is None:
+        session_id = str(uuid.uuid4())
 
-    Args:
-        resume_content (str): 简历内容文本。
-        resume_id (str): 简历的唯一标识符。
-
-    Returns:
-        Dict[str, Any]: 包含完整简历信息的字典。
-    """
     try:
-        personal_education = extract_personal_education(resume_content)
-        work_project = extract_work_project(resume_content)
-        summary = generate_resume_summary(resume_content)
+        personal_education = extract_personal_education(resume_content, session_id)
+        work_project = extract_work_project(resume_content, session_id)
+        summary = generate_resume_summary(resume_content, session_id)
 
         # 添加 logging 以展示变量结果
         logging.info(f"个人信息和教育背景: {personal_education}")
         logging.info(f"工作经历和项目经历: {work_project}")
         logging.info(f"简历概述: {summary}")
 
-
         complete_resume = {
             "id": resume_id,
-            "personal_info": personal_education.get("personal_info") or personal_education.get("PersonalInfo"),
-            "education": personal_education.get("education") or personal_education.get("Education"),
-            "work_experiences": work_project["work_experiences"] or work_project.get("WorkExperience"),
-            "project_experiences": work_project.get("project_experiences", []) or work_project.get("ProjectExperience", []),
+            "personal_info": personal_education.get("personal_info")
+            or personal_education.get("PersonalInfo"),
+            "education": personal_education.get("education")
+            or personal_education.get("Education"),
+            "work_experiences": work_project["work_experiences"]
+            or work_project.get("WorkExperience"),
+            "project_experiences": work_project.get("project_experiences", [])
+            or work_project.get("ProjectExperience", []),
             "summary": summary.get("summary", {}) or summary.get("Summary", {}),
         }
 
@@ -156,3 +138,9 @@ def store_resume(resume_data: Dict[str, Any]) -> bool:
     except Exception as e:
         print(f"存储简历数据时出错: {str(e)}")
         return False
+
+
+def create_langfuse_handler(session_id, step):
+    return CallbackHandler(
+        tags=["resume_extraction"], session_id=session_id, metadata={"step": step}
+    )
