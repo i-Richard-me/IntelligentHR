@@ -4,6 +4,7 @@ import os
 import pdfplumber
 import io
 import json
+import requests
 from bs4 import BeautifulSoup
 from PIL import Image
 
@@ -43,12 +44,25 @@ def extract_text_from_pdf(pdf_file):
     return text
 
 
+def extract_text_from_url(url):
+    """从URL中提取文本"""
+    jina_url = f'https://r.jina.ai/{url}'
+    response = requests.get(jina_url)
+    if response.status_code == 200:
+        return response.text
+    else:
+        st.error("无法从URL提取内容")
+        return None
+
+
 def extract_resume_info(file_content, resume_id, file_type):
     """提取简历信息"""
     if file_type == "html":
         content = clean_html(file_content)
     elif file_type == "pdf":
         content = extract_text_from_pdf(io.BytesIO(file_content))
+    elif file_type == "url":
+        content = extract_text_from_url(file_content)
     else:
         st.error("不支持的文件类型")
         return None
@@ -192,6 +206,7 @@ def main():
 
     with st.container(border=True):
         uploaded_file = st.file_uploader("上传简历文件", type=["html", "pdf"])
+        url_input = st.text_input("或输入简历URL")
 
         if uploaded_file is not None:
             file_type = uploaded_file.type.split("/")[-1]
@@ -200,7 +215,17 @@ def main():
                 file_content.decode("utf-8", errors="ignore")
             )
 
-            if st.button("提取信息"):
+            if st.button("提取信息", key="file"):
+                with st.spinner("正在提取简历信息..."):
+                    st.session_state.resume_data = extract_resume_info(
+                        file_content, resume_id, file_type
+                    )
+        elif url_input:
+            file_type = "url"
+            file_content = url_input
+            resume_id = calculate_resume_hash(url_input)
+
+            if st.button("提取信息", key="url"):
                 with st.spinner("正在提取简历信息..."):
                     st.session_state.resume_data = extract_resume_info(
                         file_content, resume_id, file_type
