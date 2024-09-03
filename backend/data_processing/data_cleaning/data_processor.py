@@ -27,15 +27,18 @@ def get_entity_retriever(collection: Collection, entity_type: str) -> Callable:
         )
         query_embedding = await embedding_model.aembed_query(query)
 
-        results = await asearch_in_milvus(collection, query_embedding, k)
+        # 获取原始名称字段
+        original_name_field = (
+            "company_name" if "company_name" in [field.name for field in collection.schema.fields] else "school_name"
+        )
+
+        # 在搜索时使用原始名称字段
+        results = await asearch_in_milvus(collection, query_embedding, original_name_field, k)
 
         # 获取集合的字段信息
         field_names = [field.name for field in collection.schema.fields]
 
         # 确定原始名称字段和标准名称字段
-        original_name_field = (
-            "company_name" if "company_name" in field_names else "school_name"
-        )
         standard_name_field = (
             "standard_name" if "standard_name" in field_names else original_name_field
         )

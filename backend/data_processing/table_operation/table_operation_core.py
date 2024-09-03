@@ -131,7 +131,7 @@ def get_similar_tools(query: str, top_k: int = 3) -> str:
     )
     query_vector = embeddings.embed_query(query)
 
-    results = search_in_milvus(collection, query_vector, top_k)
+    results = search_in_milvus(collection, query_vector, "description", top_k)
 
     tools_description = ""
     for result in results:
@@ -177,7 +177,7 @@ def get_similar_example(
     query_vector = embeddings.embed_query(query)
 
     # 搜索相似向量
-    results = search_in_milvus(collection, query_vector, top_k=1)
+    results = search_in_milvus(collection, query_vector, "user_query", top_k=1)
 
     if results:
         similar_example = {
