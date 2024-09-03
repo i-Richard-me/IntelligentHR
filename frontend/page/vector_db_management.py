@@ -49,7 +49,7 @@ def insert_examples_to_milvus(
     )
 
     data = []
-    vectors = []
+    vectors = {}
 
     for example in examples:
         row_data = {}
@@ -68,18 +68,21 @@ def insert_examples_to_milvus(
 
         data.append(row_data)
 
-        embedding_text = str(example[collection_config["embedding_field"]])
-        vector = embeddings.embed_query(embedding_text)
-        vectors.append(vector)
+        for field_name in collection_config["embedding_fields"]:
+            if field_name not in vectors:
+                vectors[field_name] = []
+            embedding_text = str(example[field_name])
+            vector = embeddings.embed_query(embedding_text)
+            vectors[field_name].append(vector)
 
     if not utility.has_collection(collection_config["name"]):
-        collection = create_milvus_collection(collection_config, len(vectors[0]))
+        collection = create_milvus_collection(collection_config, len(next(iter(vectors.values()))[0]))
     else:
         collection = Collection(collection_config["name"])
 
     if overwrite:
         update_milvus_records(
-            collection, data, vectors, collection_config["embedding_field"]
+            collection, data, vectors, collection_config["embedding_fields"]
         )
     else:
         insert_to_milvus(collection, data, vectors)
@@ -131,19 +134,19 @@ def dedup_examples(
     existing_records: Optional[pd.DataFrame],
     collection_config: Dict,
 ) -> Tuple[List[Dict], int]:
-    """对新上传的数据进行去重，仅基于用于生成向量的字段"""
+    """对新上传的数据进行去重，基于所有用于生成向量的字段"""
     if existing_records is None:
         # 如果collection不存在，所有记录都是新的
         return new_examples, 0
 
     new_df = pd.DataFrame(new_examples)
 
-    # 使用用于生成向量的字段进行比较
-    embedding_field = collection_config["embedding_field"]
+    # 使用所有用于生成向量的字段进行比较
+    embedding_fields = collection_config["embedding_fields"]
 
-    # 使用这个字段进行合并
+    # 使用这些字段进行合并
     merged = pd.merge(
-        new_df, existing_records, on=[embedding_field], how="left", indicator=True
+        new_df, existing_records, on=embedding_fields, how="left", indicator=True
     )
 
     # 找出未匹配的记录（新数据）
