@@ -8,6 +8,7 @@ import requests
 from bs4 import BeautifulSoup
 from PIL import Image
 import uuid
+import asyncio
 
 # 添加项目根目录到 Python 路径
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -56,7 +57,7 @@ def extract_text_from_url(url):
         return None
 
 
-def extract_resume_info(file_content, resume_id, file_type, session_id):
+async def extract_resume_info(file_content, resume_id, file_type, session_id):
     """提取简历信息"""
     if file_type == "html":
         content = clean_html(file_content)
@@ -68,7 +69,7 @@ def extract_resume_info(file_content, resume_id, file_type, session_id):
         st.error("不支持的文件类型")
         return None
 
-    return process_resume(content, resume_id, session_id)
+    return await process_resume(content, resume_id, session_id)
 
 
 def display_resume_info(resume_data):
@@ -220,9 +221,9 @@ def main():
 
             if st.button("提取信息", key="file"):
                 with st.spinner("正在提取简历信息..."):
-                    st.session_state.resume_data = extract_resume_info(
+                    st.session_state.resume_data = asyncio.run(extract_resume_info(
                         file_content, resume_id, file_type, st.session_state.session_id
-                    )
+                    ))
         elif url_input:
             file_type = "url"
             file_content = url_input
@@ -230,9 +231,9 @@ def main():
 
             if st.button("提取信息", key="url"):
                 with st.spinner("正在提取简历信息..."):
-                    st.session_state.resume_data = extract_resume_info(
+                    st.session_state.resume_data = asyncio.run(extract_resume_info(
                         file_content, resume_id, file_type, st.session_state.session_id
-                    )
+                    ))
 
     if st.session_state.resume_data is not None:
         st.markdown("---")

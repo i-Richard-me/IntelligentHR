@@ -28,6 +28,7 @@ from backend.resume_management.storage.resume_vector_storage import (
 import logging
 from langfuse.callback import CallbackHandler
 import uuid
+import asyncio
 
 # 配置 logging
 logging.basicConfig(level=logging.INFO)
@@ -36,7 +37,7 @@ logging.basicConfig(level=logging.INFO)
 language_model = init_language_model()
 
 
-def extract_personal_education(resume_content: str, session_id: str) -> Dict[str, Any]:
+async def extract_personal_education(resume_content: str, session_id: str) -> Dict[str, Any]:
     langfuse_handler = create_langfuse_handler(session_id, "extract_personal_education")
     extractor = LanguageModelChain(
         ResumePersonalEducation,
@@ -44,12 +45,12 @@ def extract_personal_education(resume_content: str, session_id: str) -> Dict[str
         PERSONAL_EDUCATION_HUMAN_MESSAGE,
         language_model,
     )()
-    return extractor.invoke(
+    return await extractor.ainvoke(
         {"raw_resume_content": resume_content}, config={"callbacks": [langfuse_handler]}
     )
 
 
-def extract_work_project(resume_content: str, session_id: str) -> Dict[str, Any]:
+async def extract_work_project(resume_content: str, session_id: str) -> Dict[str, Any]:
     langfuse_handler = create_langfuse_handler(session_id, "extract_work_project")
     extractor = LanguageModelChain(
         ResumeWorkProject,
@@ -57,12 +58,12 @@ def extract_work_project(resume_content: str, session_id: str) -> Dict[str, Any]
         WORK_PROJECT_HUMAN_MESSAGE,
         language_model,
     )()
-    return extractor.invoke(
+    return await extractor.ainvoke(
         {"raw_resume_content": resume_content}, config={"callbacks": [langfuse_handler]}
     )
 
 
-def generate_resume_summary(resume_content: str, session_id: str) -> Dict[str, Any]:
+async def generate_resume_summary(resume_content: str, session_id: str) -> Dict[str, Any]:
     langfuse_handler = create_langfuse_handler(session_id, "generate_resume_summary")
     summarizer = LanguageModelChain(
         Summary,
@@ -70,21 +71,25 @@ def generate_resume_summary(resume_content: str, session_id: str) -> Dict[str, A
         RESUME_SUMMARY_HUMAN_MESSAGE,
         language_model,
     )()
-    return summarizer.invoke(
+    return await summarizer.ainvoke(
         {"raw_resume_content": resume_content}, config={"callbacks": [langfuse_handler]}
     )
 
 
-def process_resume(
+async def process_resume(
     resume_content: str, resume_id: str, session_id: str = None
 ) -> Dict[str, Any]:
     if session_id is None:
         session_id = str(uuid.uuid4())
 
     try:
-        personal_education = extract_personal_education(resume_content, session_id)
-        work_project = extract_work_project(resume_content, session_id)
-        summary = generate_resume_summary(resume_content, session_id)
+        personal_education_task = extract_personal_education(resume_content, session_id)
+        work_project_task = extract_work_project(resume_content, session_id)
+        summary_task = generate_resume_summary(resume_content, session_id)
+
+        personal_education, work_project, summary = await asyncio.gather(
+            personal_education_task, work_project_task, summary_task
+        )
 
         # 添加 logging 以展示变量结果
         logging.info(f"个人信息和教育背景: {personal_education}")
