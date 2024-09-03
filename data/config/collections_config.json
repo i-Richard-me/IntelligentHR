@@ -7,7 +7,8 @@
                 {
                     "name": "company_name",
                     "type": "str",
-                    "description": "Original company name"
+                    "description": "Original company name",
+                    "is_vector": true
                 },
                 {
                     "name": "standard_name",
@@ -15,7 +16,9 @@
                     "description": "Standardized company name"
                 }
             ],
-            "embedding_field": "company_name"
+            "embedding_fields": [
+                "company_name"
+            ]
         },
         "school_data": {
             "name": "school_data",
@@ -24,7 +27,8 @@
                 {
                     "name": "school_name",
                     "type": "str",
-                    "description": "Original school name"
+                    "description": "Original school name",
+                    "is_vector": true
                 },
                 {
                     "name": "standard_name",
@@ -32,7 +36,9 @@
                     "description": "Standardized school name"
                 }
             ],
-            "embedding_field": "school_name"
+            "embedding_fields": [
+                "school_name"
+            ]
         },
         "tools_description": {
             "name": "tools_description",
@@ -46,7 +52,8 @@
                 {
                     "name": "description",
                     "type": "str",
-                    "description": "Description of the tool function"
+                    "description": "Description of the tool function",
+                    "is_vector": true
                 },
                 {
                     "name": "args",
@@ -54,7 +61,9 @@
                     "description": "Arguments of the tool function"
                 }
             ],
-            "embedding_field": "description"
+            "embedding_fields": [
+                "description"
+            ]
         },
         "data_operation_examples": {
             "name": "data_operation_examples",
@@ -68,7 +77,8 @@
                 {
                     "name": "user_query",
                     "type": "str",
-                    "description": "User query"
+                    "description": "User query",
+                    "is_vector": true
                 },
                 {
                     "name": "output",
@@ -76,7 +86,9 @@
                     "description": "Output of the operation"
                 }
             ],
-            "embedding_field": "user_query"
+            "embedding_fields": [
+                "user_query"
+            ]
         }
     }
 }
