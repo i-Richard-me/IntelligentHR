@@ -1,6 +1,7 @@
 import pandas as pd
-from typing import Dict
+from typing import Dict, List
 from utils.dataset_utils import load_df_from_csv, save_df_to_csv
+from backend.resume_management.storage.resume_sql_storage import get_resume_summary
 
 
 class RecommendationOutputGenerator:
@@ -26,12 +27,21 @@ class RecommendationOutputGenerator:
         ranked_resume_scores_df = load_df_from_csv(ranked_resume_scores_file)
         top_resume_ids = ranked_resume_scores_df["resume_id"].tolist()
 
-        df_resume_summary = pd.read_csv("data/datasets/resume_summary.csv")
-        resume_details = df_resume_summary[df_resume_summary["id"].isin(top_resume_ids)]
-        resume_details = resume_details.rename(columns={"id": "resume_id"})
+        resume_details = []
+        for resume_id in top_resume_ids:
+            summary = get_resume_summary(resume_id)
+            if summary:
+                resume_details.append({
+                    "resume_id": resume_id,
+                    "characteristics": summary["characteristics"],
+                    "experience": summary["experience_summary"],
+                    "skills_overview": summary["skills_overview"]
+                })
+
+        resume_details_df = pd.DataFrame(resume_details)
 
         merged_df = pd.merge(
-            ranked_resume_scores_df, resume_details, on="resume_id", how="left"
+            ranked_resume_scores_df, resume_details_df, on="resume_id", how="left"
         )
 
         # 保存合并后的DataFrame为CSV并返回文件名
