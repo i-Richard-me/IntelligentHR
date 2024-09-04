@@ -1,3 +1,5 @@
+import os
+import time
 import uuid
 from typing import List, Dict, Any, Optional
 import pandas as pd
@@ -250,12 +252,17 @@ def classify_texts(
     )
 
     classification_results = []
-    for table in markdown_tables:
+    task_id = time.strftime("%Y%m%d-%H%M%S")
+
+    for i, table in enumerate(markdown_tables):
         result = classification_chain.invoke(
             {"text_topic": text_topic, "categories": categories, "text_table": table},
             config={"callbacks": [langfuse_handler]},
         )
         classification_results.extend(result["classifications"])
+        
+        # 每处理完一个批次，保存临时文件
+        save_temp_results(classification_results, task_id, "text_classification")
 
     df_classifications = pd.DataFrame(classification_results)
     df_result = df.merge(
@@ -264,3 +271,20 @@ def classify_texts(
     df_result = df_result.drop(columns=["unique_id", "id"])
 
     return df_result
+
+
+def save_temp_results(results: List[Dict], task_id: str, entity_type: str):
+    """
+    保存临时结果到文件。
+
+    Args:
+        results (List[Dict]): 分类结果列表。
+        task_id (str): 任务ID。
+        entity_type (str): 实体类型。
+    """
+    temp_dir = os.path.join("data", "temp")
+    os.makedirs(temp_dir, exist_ok=True)
+    temp_file_path = os.path.join(temp_dir, f"classify_texts_{entity_type}_{task_id}.csv")
+    
+    df = pd.DataFrame(results)
+    df.to_csv(temp_file_path, index=False, encoding="utf-8-sig")
