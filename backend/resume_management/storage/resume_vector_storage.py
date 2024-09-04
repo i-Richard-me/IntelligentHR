@@ -1,31 +1,29 @@
 import os
+import json
 from pymilvus import connections, Collection, DataType
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Union
 import pandas as pd
 from utils.llm_tools import VectorEncoder
+from utils.vector_db_utils import (
+    connect_to_milvus,
+    create_milvus_collection,
+    initialize_vector_store,
+    insert_to_milvus,
+    update_milvus_records,
+)
 
 # 初始化embedding服务
 embeddings = VectorEncoder(model="BAAI/bge-m3")
 
-
-def connect_to_milvus(
-    host: str = os.getenv("VECTOR_DB_HOST", "localhost"),
-    port: str = os.getenv("VECTOR_DB_PORT", "19530"),
-    db_name: str = os.getenv("VECTOR_DB_DATABASE_RESUME", "resume"),
-):
-    """连接到Milvus数据库"""
-    connections.connect(host=host, port=port, db_name=db_name)
-    print(f"Connected to Milvus database: {db_name}")
+# 加载集合配置
+with open("data/config/collections_config.json", "r") as f:
+    collections_config = json.load(f)["collections"]
 
 
-def disconnect_from_milvus():
-    """断开与Milvus数据库的连接"""
-    connections.disconnect("default")
-    print("Disconnected from Milvus database")
-
-
-def get_embedding(text: str) -> List[float]:
+def get_embedding(text: Union[str, List[str]]) -> List[float]:
     """获取文本的嵌入向量"""
+    if isinstance(text, list):
+        text = " ".join(text)
     if not text or text.strip() == "":
         return [0] * 1024  # 返回1024维的零向量
     return embeddings.get_embedding(text)
@@ -33,111 +31,79 @@ def get_embedding(text: str) -> List[float]:
 
 def prepare_data_for_milvus(
     data: Dict[str, Any], collection_name: str, resume_id: str
-) -> pd.DataFrame:
-    if collection_name == "personal_infos":
-        df = pd.DataFrame([data])
-        df["summary_vector"] = df["summary"].apply(get_embedding)
-    elif collection_name == "educations":
-        df = pd.DataFrame(data)
-        df["degree_vector"] = df["degree"].apply(get_embedding)
-        df["major_vector"] = df["major"].apply(get_embedding)
-    elif collection_name == "work_experiences":
-        df = pd.DataFrame(data)
-        df["position_vector"] = df["position"].apply(get_embedding)
-        df["responsibilities_text"] = df["responsibilities"].apply(
-            lambda x: " ".join(x) if isinstance(x, list) else x
-        )
-        df["responsibilities_vector"] = df["responsibilities_text"].apply(get_embedding)
-    elif collection_name == "project_experiences":
-        df = pd.DataFrame(data)
-        df["name_vector"] = df["name"].apply(get_embedding)
-        df["details_text"] = df["details"].apply(
-            lambda x: " ".join(x) if isinstance(x, list) else x
-        )
-        df["details_vector"] = df["details_text"].apply(get_embedding)
-    elif collection_name == "skills":
-        df = pd.DataFrame(data)
-        df["skill_vector"] = df["skill"].apply(get_embedding)
-    else:
-        raise ValueError(f"Unknown collection name: {collection_name}")
+) -> tuple:
+    config = collections_config[collection_name]
+    df = pd.DataFrame(data if isinstance(data, list) else [data])
+    df["resume_id"] = resume_id
 
-    # 确保所有 DataFrame 都包含 resume_id
-    if "resume_id" not in df.columns:
-        df["resume_id"] = resume_id
+    # 将列表类型的字段转换为字符串
+    for column in df.columns:
+        if df[column].dtype == "object":
+            df[column] = df[column].apply(
+                lambda x: " ".join(x) if isinstance(x, list) else x
+            )
 
-    return df
+    vectors = {}
+    for field in config["embedding_fields"]:
+        if field in df.columns:
+            vectors[field] = df[field].apply(get_embedding).tolist()
 
-
-def insert_data_to_milvus(collection_name: str, data: Dict[str, Any], resume_id: str):
-    """将数据插入到Milvus集合中"""
-    collection = Collection(collection_name)
-    schema = collection.schema
-
-    df = prepare_data_for_milvus(data, collection_name, resume_id)
-
-    # 获取schema中定义的所有字段名称、类型和长度限制
-    schema_fields = {
-        field.name: (field.dtype, field.params.get("max_length"))
-        for field in schema.fields
-    }
-
-    # 只保留dataframe中在schema中定义的列
-    valid_fields = list(set(schema_fields.keys()).intersection(set(df.columns)))
-    filtered_df = df[valid_fields].copy()
-
-    # 转换数据类型并截断过长的字符串
-    for field, (dtype, max_length) in schema_fields.items():
-        if field in filtered_df.columns:
-            if dtype == DataType.VARCHAR:
-                filtered_df[field] = filtered_df[field].astype(str)
-                if max_length:
-                    filtered_df[field] = filtered_df[field].apply(
-                        lambda x: x[:max_length] if x else x
-                    )
-            elif dtype in [DataType.INT64, DataType.INT32]:
-                filtered_df[field] = pd.to_numeric(
-                    filtered_df[field], errors="coerce"
-                ).astype("Int64")
-
-    # 准备数据
-    insert_data = filtered_df.to_dict("records")
-
-    # 插入数据
-    try:
-        collection.insert(insert_data)
-        print(
-            f"Successfully inserted {len(insert_data)} records into {collection_name}"
-        )
-    except Exception as e:
-        print(f"Error inserting data into {collection_name}: {e}")
-
-    # 刷新collection以确保数据可见
-    collection.flush()
+    return df.to_dict("records"), vectors
 
 
 def store_resume_in_milvus(resume_data: Dict[str, Any]):
     """将解析后的简历数据存储到Milvus中"""
-    connect_to_milvus()
+    connect_to_milvus(db_name=os.getenv("VECTOR_DB_DATABASE_RESUME", "resume"))
 
     try:
         resume_id = resume_data["id"]
-        insert_data_to_milvus("personal_infos", resume_data["personal_info"], resume_id)
-        insert_data_to_milvus("educations", resume_data["education"], resume_id)
-        insert_data_to_milvus(
-            "work_experiences", resume_data["work_experiences"], resume_id
-        )
-        if "project_experiences" in resume_data and resume_data["project_experiences"]:
-            insert_data_to_milvus(
-                "project_experiences", resume_data["project_experiences"], resume_id
-            )
-        if (
-            "skills" in resume_data["personal_info"]
-            and resume_data["personal_info"]["skills"]
-        ):
-            skills_data = [
-                {"resume_id": resume_id, "skill": skill}
-                for skill in resume_data["personal_info"]["skills"]
-            ]
-            insert_data_to_milvus("skills", skills_data, resume_id)
+        for collection_name in [
+            "personal_infos",
+            "educations",
+            "work_experiences",
+            "project_experiences",
+            "skills",
+        ]:
+            config = collections_config[collection_name]
+
+            # 检查集合是否存在，如果不存在则创建
+            try:
+                collection = initialize_vector_store(collection_name)
+            except ValueError:
+                collection = create_milvus_collection(config, dim=1024)
+
+            if collection_name == "personal_infos":
+                data, vectors = prepare_data_for_milvus(
+                    resume_data["personal_info"], collection_name, resume_id
+                )
+            elif collection_name == "educations":
+                data, vectors = prepare_data_for_milvus(
+                    resume_data["education"], collection_name, resume_id
+                )
+            elif collection_name == "work_experiences":
+                data, vectors = prepare_data_for_milvus(
+                    resume_data["work_experiences"], collection_name, resume_id
+                )
+            elif collection_name == "project_experiences" and resume_data.get(
+                "project_experiences"
+            ):
+                data, vectors = prepare_data_for_milvus(
+                    resume_data["project_experiences"], collection_name, resume_id
+                )
+            elif collection_name == "skills" and resume_data["personal_info"].get(
+                "skills"
+            ):
+                skills_data = [
+                    {"skill": skill} for skill in resume_data["personal_info"]["skills"]
+                ]
+                data, vectors = prepare_data_for_milvus(
+                    skills_data, collection_name, resume_id
+                )
+            else:
+                continue
+
+            update_milvus_records(collection, data, vectors, config["embedding_fields"])
+    except Exception as e:
+        raise Exception(f"存储简历数据时出错: {str(e)}")
     finally:
-        disconnect_from_milvus()
+        connections.disconnect("default")

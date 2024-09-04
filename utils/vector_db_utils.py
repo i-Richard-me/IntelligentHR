@@ -51,7 +51,7 @@ def initialize_vector_store(collection_name: str) -> Collection:
 
 def create_milvus_collection(collection_config: Dict[str, Any], dim: int) -> Collection:
     """
-    创建 Milvus 集合，支持多个向量字段。
+    创建 Milvus 集合，支持多个向量字段，并为向量字段创建索引。
 
     Args:
         collection_config (Dict[str, Any]): 集合配置。
@@ -68,15 +68,33 @@ def create_milvus_collection(collection_config: Dict[str, Any], dim: int) -> Col
             FieldSchema(name=field["name"], dtype=DataType.VARCHAR, max_length=65535)
         )
         if field.get("is_vector", False):
-            fields.append(FieldSchema(name=f"{field['name']}_vector", dtype=DataType.FLOAT_VECTOR, dim=dim))
+            fields.append(
+                FieldSchema(
+                    name=f"{field['name']}_vector", dtype=DataType.FLOAT_VECTOR, dim=dim
+                )
+            )
 
     schema = CollectionSchema(fields, collection_config["description"])
     collection = Collection(collection_config["name"], schema)
+
+    # 为向量字段创建索引
+    for field in collection.schema.fields:
+        if field.name.endswith("_vector"):
+            index_params = {
+                "metric_type": "L2",
+                "index_type": "IVF_FLAT",
+                "params": {"nlist": 1024},
+            }
+            collection.create_index(field.name, index_params)
+
+    collection.load()
     return collection
 
 
 def insert_to_milvus(
-    collection: Collection, data: List[Dict[str, Any]], vectors: Dict[str, List[List[float]]]
+    collection: Collection,
+    data: List[Dict[str, Any]],
+    vectors: Dict[str, List[List[float]]],
 ):
     """
     将数据插入 Milvus 集合，支持多个向量字段。
@@ -95,16 +113,6 @@ def insert_to_milvus(
             entities.append(vectors.get(original_field_name, []))
 
     collection.insert(entities)
-
-    for field in collection.schema.fields:
-        if field.name.endswith("_vector"):
-            index_params = {
-                "metric_type": "L2",
-                "index_type": "IVF_FLAT",
-                "params": {"nlist": 1024},
-            }
-            collection.create_index(field.name, index_params)
-    
     collection.load()
 
 
@@ -125,7 +133,9 @@ def update_milvus_records(
     """
     for record in data:
         # 使用所有 embedding_fields 构建查询表达式
-        query_expr = " && ".join([f"{field} == '{record[field]}'" for field in embedding_fields])
+        query_expr = " && ".join(
+            [f"{field} == '{record[field]}'" for field in embedding_fields]
+        )
         existing_records = collection.query(
             expr=query_expr,
             output_fields=["id"],
@@ -146,16 +156,6 @@ def update_milvus_records(
 
         collection.insert(entities)
 
-    # 重建索引并加载集合
-    for field in collection.schema.fields:
-        if field.name.endswith("_vector"):
-            index_params = {
-                "metric_type": "L2",
-                "index_type": "IVF_FLAT",
-                "params": {"nlist": 1024},
-            }
-            collection.create_index(field.name, index_params)
-    
     collection.load()
 
 
