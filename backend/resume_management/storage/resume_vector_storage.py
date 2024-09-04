@@ -17,7 +17,8 @@ import re
 embeddings = VectorEncoder(model="BAAI/bge-m3")
 
 # 加载集合配置
-with open("data/config/collections_config.json", "r") as f:
+collections_config_path = "data/config/collections_config.json"
+with open(collections_config_path, 'r', encoding='utf-8') as f:
     collections_config = json.load(f)["collections"]
 
 
@@ -87,15 +88,6 @@ def store_resume_in_milvus(resume_data: Dict[str, Any]):
 
             if collection_name == "personal_infos":
                 personal_info = resume_data["personal_info"]
-                personal_info["characteristics"] = resume_data.get(
-                    "characteristics", ""
-                )
-                personal_info["experience_summary"] = resume_data.get(
-                    "experience_summary", ""
-                )
-                personal_info["skills_overview"] = resume_data.get(
-                    "skills_overview", ""
-                )
                 data, vectors = prepare_data_for_milvus(
                     personal_info, collection_name, resume_id
                 )

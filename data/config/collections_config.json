@@ -124,21 +124,6 @@
                     "type": "str",
                     "description": "个人简介",
                     "is_vector": true
-                },
-                {
-                    "name": "characteristics",
-                    "type": "str",
-                    "description": "员工特点概述"
-                },
-                {
-                    "name": "experience_summary",
-                    "type": "str",
-                    "description": "工作和项目经历概述"
-                },
-                {
-                    "name": "skills_overview",
-                    "type": "str",
-                    "description": "技能概述"
                 }
             ],
             "embedding_fields": [

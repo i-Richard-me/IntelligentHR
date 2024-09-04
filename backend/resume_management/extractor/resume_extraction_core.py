@@ -136,7 +136,7 @@ def calculate_resume_hash(resume_content: str) -> str:
 
 def store_resume(resume_data: Dict[str, Any]) -> bool:
     """
-    将处理后的简历数据存储到Milvus数据库中。
+    将处理后的简历数据存储到Milvus数据库和SQLite数据库中。
 
     Args:
         resume_data (Dict[str, Any]): 处理后的简历数据。
@@ -145,7 +145,18 @@ def store_resume(resume_data: Dict[str, Any]) -> bool:
         bool: 存储操作是否成功。
     """
     try:
+        # 存储到Milvus
         store_resume_in_milvus(resume_data)
+        
+        # 存储到SQLite
+        from backend.resume_management.storage.resume_sql_storage import init_sqlite_db, store_resume_summary
+        init_sqlite_db()
+        store_resume_summary(
+            resume_data['id'],
+            resume_data.get('characteristics', ''),
+            resume_data.get('experience_summary', ''),
+            resume_data.get('skills_overview', '')
+        )
         return True
     except Exception as e:
         print(f"存储简历数据时出错: {str(e)}")
