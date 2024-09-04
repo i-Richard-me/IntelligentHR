@@ -77,11 +77,18 @@ class ResumeScorer:
             query_vector = self.get_embedding(query["query_content"])
 
             search_params = {"metric_type": "IP", "params": {"nprobe": 10}}
+
+            limit = max(collection.num_entities, 1)
+
+            print(
+                f"集合: {collection.name} 的实体数量: {collection.num_entities} limit: {limit}"
+            )
+
             results = collection.search(
                 data=[query_vector],
                 anns_field=field_name,
                 param=search_params,
-                limit=collection.num_entities,
+                limit=limit,
                 expr=None,
                 output_fields=["resume_id"],
             )
