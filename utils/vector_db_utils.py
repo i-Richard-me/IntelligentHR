@@ -81,7 +81,7 @@ def create_milvus_collection(collection_config: Dict[str, Any], dim: int) -> Col
     for field in collection.schema.fields:
         if field.name.endswith("_vector"):
             index_params = {
-                "metric_type": "L2",
+                "metric_type": "IP",
                 "index_type": "IVF_FLAT",
                 "params": {"nlist": 1024},
             }
@@ -174,7 +174,7 @@ def search_in_milvus(
     Returns:
         List[Dict[str, Any]]: 搜索结果列表。
     """
-    search_params = {"metric_type": "L2", "params": {"nprobe": 10}}
+    search_params = {"metric_type": "IP", "params": {"nprobe": 10}}
 
     output_fields = [
         field.name
@@ -214,7 +214,7 @@ async def asearch_in_milvus(
     Returns:
         List[Dict[str, Any]]: 搜索结果列表。
     """
-    search_params = {"metric_type": "L2", "params": {"nprobe": 10}}
+    search_params = {"metric_type": "IP", "params": {"nprobe": 10}}
 
     output_fields = [
         field.name
