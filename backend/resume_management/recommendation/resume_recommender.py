@@ -67,9 +67,9 @@ class ResumeRecommender:
         """
         return self.requirements.confirm_requirements(answer)
 
-    def generate_search_strategy(self) -> None:
+    def generate_overall_search_strategy(self) -> None:
         """
-        生成简历搜索策略。
+        生成整体简历搜索策略。
         """
         self.refined_query = self.requirements.get_refined_query()
         if not self.refined_query:
@@ -81,23 +81,24 @@ class ResumeRecommender:
             )
         )
         self.search_strategy = self.collection_relevances
-        # 将生成详细的检索策略移到单独的方法中
-        self.generate_detailed_search_strategy()
 
     def generate_detailed_search_strategy(self) -> None:
         """
         生成详细的检索策略。
         """
+        if not self.refined_query or not self.collection_relevances:
+            raise ValueError("缺少生成详细检索策略所需的信息。")
+
         self.collection_search_strategies = self.collection_search_strategy_generator.generate_collection_search_strategy(
             self.refined_query, self.collection_relevances
         )
 
-    def get_search_strategy(self) -> Optional[List[Dict[str, float]]]:
+    def get_overall_search_strategy(self) -> Optional[List[Dict[str, float]]]:
         """
-        获取搜索策略。
+        获取整体搜索策略。
 
         Returns:
-            Optional[List[Dict[str, float]]]: 搜索策略，如果尚未生成则返回 None
+            Optional[List[Dict[str, float]]]: 整体搜索策略，如果尚未生成则返回 None
         """
         return self.search_strategy
 
@@ -183,7 +184,7 @@ class ResumeRecommender:
                 else:
                     raise ValueError("需要更多信息，但没有下一个问题。")
 
-            self.generate_search_strategy()
+            self.generate_overall_search_strategy()
             self.calculate_resume_scores(top_n)
             self.resume_details_file = self.output_generator.fetch_resume_details(
                 self.ranked_resume_scores_file

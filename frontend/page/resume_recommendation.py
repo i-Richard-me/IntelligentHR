@@ -195,11 +195,11 @@ if prompt := st.chat_input("输入您的需求或回答"):
 
 # 处理推荐生成过程
 if st.session_state.processing:
-    with st.spinner("正在生成简历搜索策略..."):
-        st.session_state.recommender.generate_search_strategy()
+    with st.spinner("正在生成整体简历搜索策略..."):
+        st.session_state.recommender.generate_overall_search_strategy()
 
-    # 显示检索策略
-    collection_relevances = st.session_state.recommender.get_search_strategy()
+    # 显示整体检索策略
+    collection_relevances = st.session_state.recommender.get_overall_search_strategy()
     if collection_relevances and not st.session_state.strategy_displayed:
         dimension_descriptions = {
             "work_experiences": "工作经历",
