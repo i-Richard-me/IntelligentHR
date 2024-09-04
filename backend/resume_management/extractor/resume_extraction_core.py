@@ -37,7 +37,9 @@ logging.basicConfig(level=logging.INFO)
 language_model = init_language_model()
 
 
-async def extract_personal_education(resume_content: str, session_id: str) -> Dict[str, Any]:
+async def extract_personal_education(
+    resume_content: str, session_id: str
+) -> Dict[str, Any]:
     langfuse_handler = create_langfuse_handler(session_id, "extract_personal_education")
     extractor = LanguageModelChain(
         ResumePersonalEducation,
@@ -63,7 +65,9 @@ async def extract_work_project(resume_content: str, session_id: str) -> Dict[str
     )
 
 
-async def generate_resume_summary(resume_content: str, session_id: str) -> Dict[str, Any]:
+async def generate_resume_summary(
+    resume_content: str, session_id: str
+) -> Dict[str, Any]:
     langfuse_handler = create_langfuse_handler(session_id, "generate_resume_summary")
     summarizer = LanguageModelChain(
         Summary,
@@ -107,6 +111,9 @@ async def process_resume(
             "project_experiences": work_project.get("project_experiences", [])
             or work_project.get("ProjectExperience", []),
             "summary": summary.get("summary", {}) or summary.get("Summary", {}),
+            "characteristics": summary.get("summary", {}).get("characteristics", ""),
+            "experience_summary": summary.get("summary", {}).get("experience", ""),
+            "skills_overview": summary.get("summary", {}).get("skills_overview", ""),
         }
 
         return complete_resume

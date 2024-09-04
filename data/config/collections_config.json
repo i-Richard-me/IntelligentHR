@@ -89,6 +89,202 @@
             "embedding_fields": [
                 "user_query"
             ]
+        },
+        "personal_infos": {
+            "name": "personal_infos",
+            "description": "个人信息集合",
+            "fields": [
+                {
+                    "name": "resume_id",
+                    "type": "str",
+                    "description": "简历ID"
+                },
+                {
+                    "name": "name",
+                    "type": "str",
+                    "description": "姓名"
+                },
+                {
+                    "name": "email",
+                    "type": "str",
+                    "description": "电子邮件"
+                },
+                {
+                    "name": "phone",
+                    "type": "str",
+                    "description": "电话号码"
+                },
+                {
+                    "name": "address",
+                    "type": "str",
+                    "description": "地址"
+                },
+                {
+                    "name": "summary",
+                    "type": "str",
+                    "description": "个人简介",
+                    "is_vector": true
+                },
+                {
+                    "name": "characteristics",
+                    "type": "str",
+                    "description": "员工特点概述"
+                },
+                {
+                    "name": "experience_summary",
+                    "type": "str",
+                    "description": "工作和项目经历概述"
+                },
+                {
+                    "name": "skills_overview",
+                    "type": "str",
+                    "description": "技能概述"
+                }
+            ],
+            "embedding_fields": [
+                "summary"
+            ]
+        },
+        "educations": {
+            "name": "educations",
+            "description": "教育背景集合",
+            "fields": [
+                {
+                    "name": "resume_id",
+                    "type": "str",
+                    "description": "简历ID"
+                },
+                {
+                    "name": "institution",
+                    "type": "str",
+                    "description": "教育机构"
+                },
+                {
+                    "name": "degree",
+                    "type": "str",
+                    "description": "学位",
+                    "is_vector": true
+                },
+                {
+                    "name": "major",
+                    "type": "str",
+                    "description": "专业",
+                    "is_vector": true
+                },
+                {
+                    "name": "graduation_year",
+                    "type": "str",
+                    "description": "毕业年份"
+                }
+            ],
+            "embedding_fields": [
+                "degree",
+                "major"
+            ]
+        },
+        "work_experiences": {
+            "name": "work_experiences",
+            "description": "工作经历集合",
+            "fields": [
+                {
+                    "name": "resume_id",
+                    "type": "str",
+                    "description": "简历ID"
+                },
+                {
+                    "name": "company",
+                    "type": "str",
+                    "description": "公司名称"
+                },
+                {
+                    "name": "position",
+                    "type": "str",
+                    "description": "职位",
+                    "is_vector": true
+                },
+                {
+                    "name": "start_date",
+                    "type": "str",
+                    "description": "开始日期"
+                },
+                {
+                    "name": "end_date",
+                    "type": "str",
+                    "description": "结束日期"
+                },
+                {
+                    "name": "responsibilities",
+                    "type": "str",
+                    "description": "职责",
+                    "is_vector": true
+                }
+            ],
+            "embedding_fields": [
+                "position",
+                "responsibilities"
+            ]
+        },
+        "project_experiences": {
+            "name": "project_experiences",
+            "description": "项目经历集合",
+            "fields": [
+                {
+                    "name": "resume_id",
+                    "type": "str",
+                    "description": "简历ID"
+                },
+                {
+                    "name": "name",
+                    "type": "str",
+                    "description": "项目名称",
+                    "is_vector": true
+                },
+                {
+                    "name": "role",
+                    "type": "str",
+                    "description": "角色"
+                },
+                {
+                    "name": "start_date",
+                    "type": "str",
+                    "description": "开始日期"
+                },
+                {
+                    "name": "end_date",
+                    "type": "str",
+                    "description": "结束日期"
+                },
+                {
+                    "name": "details",
+                    "type": "str",
+                    "description": "项目详情",
+                    "is_vector": true
+                }
+            ],
+            "embedding_fields": [
+                "name",
+                "details"
+            ]
+        },
+        "skills": {
+            "name": "skills",
+            "description": "技能集合",
+            "fields": [
+                {
+                    "name": "resume_id",
+                    "type": "str",
+                    "description": "简历ID"
+                },
+                {
+                    "name": "skill",
+                    "type": "str",
+                    "description": "技能",
+                    "is_vector": true
+                }
+            ],
+            "embedding_fields": [
+                "skill"
+            ]
         }
     }
 }
