@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import asyncio
+from asyncio import Semaphore
 from typing import List, Dict, Any, Tuple
 import os
 import sys
@@ -48,20 +49,27 @@ async def translate_text(text: str, text_topic: str) -> str:
 
 
 async def batch_translate(
-    texts: List[str], text_topic: str, session_id: str
+    texts: List[str], text_topic: str, session_id: str, max_concurrent: int = 3
 ) -> List[str]:
     """
-    批量翻译文本。
+    批量翻译文本，限制并发数量。
 
     Args:
         texts (List[str]): 要翻译的文本列表。
         text_topic (str): 文本主题。
         session_id (str): 用于整个CSV文件的session ID。
+        max_concurrent (int): 最大并发翻译数量，默认为3。
 
     Returns:
         List[str]: 翻译后的文本列表。
     """
-    tasks = [translator.translate(text, text_topic, session_id) for text in texts]
+    semaphore = Semaphore(max_concurrent)
+
+    async def translate_with_semaphore(text):
+        async with semaphore:
+            return await translator.translate(text, text_topic, session_id)
+
+    tasks = [translate_with_semaphore(text) for text in texts]
     return await asyncio.gather(*tasks)
 
 
@@ -97,7 +105,7 @@ def upload_and_process_file() -> Tuple[pd.DataFrame, str]:
 
 
 def perform_translation(
-    df: pd.DataFrame, text_column: str, text_topic: str
+    df: pd.DataFrame, text_column: str, text_topic: str, max_concurrent: int = 3
 ) -> pd.DataFrame:
     """
     执行批量翻译。
@@ -106,6 +114,7 @@ def perform_translation(
         df (pd.DataFrame): 包含要翻译文本的数据框。
         text_column (str): 要翻译的文本列名。
         text_topic (str): 文本主题。
+        max_concurrent (int): 最大并发翻译数量，默认为3。
 
     Returns:
         pd.DataFrame: 包含翻译结果的数据框。
@@ -114,7 +123,7 @@ def perform_translation(
     session_id = str(uuid.uuid4())
     with st.spinner("正在批量翻译..."):
         translated_texts = asyncio.run(
-            batch_translate(texts_to_translate, text_topic, session_id)
+            batch_translate(texts_to_translate, text_topic, session_id, max_concurrent)
         )
     df["translated_text"] = translated_texts
     return df
