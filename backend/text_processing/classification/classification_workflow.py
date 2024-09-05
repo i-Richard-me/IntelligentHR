@@ -1,3 +1,4 @@
+import os
 from typing import List
 from utils.llm_tools import init_language_model, LanguageModelChain
 from backend.text_processing.classification.classification_core import (
@@ -13,7 +14,10 @@ class TextClassificationWorkflow:
 
     def __init__(self):
         """初始化文本分类工作流程"""
-        self.language_model = init_language_model()
+        self.language_model = init_language_model(
+            provider=os.getenv("SMART_LLM_PROVIDER"),
+            model_name=os.getenv("SMART_LLM_MODEL"),
+        )
         self.classification_chain = LanguageModelChain(
             ClassificationResult,
             CLASSIFICATION_SYSTEM_PROMPT,

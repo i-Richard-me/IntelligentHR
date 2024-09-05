@@ -5,9 +5,7 @@ from utils.llm_tools import LanguageModelChain, init_language_model
 from utils.dataset_utils import load_df_from_csv, save_df_to_csv
 from langfuse.callback import CallbackHandler
 import uuid
-
-# 初始化语言模型
-language_model = init_language_model()
+import os
 
 
 class RecommendationReason(BaseModel):
@@ -18,7 +16,10 @@ class RecommendationReason(BaseModel):
 
 class RecommendationReasonGenerator:
     def __init__(self):
-        self.language_model = init_language_model()
+        self.language_model = init_language_model(
+            provider=os.getenv("SMART_LLM_PROVIDER"),
+            model_name=os.getenv("SMART_LLM_MODEL"),
+        )
         self.system_message = """
         你是一个企业内部使用的智能简历推荐系统。你的任务是生成客观、简洁的推荐理由，解释为什么某份简历符合用户的查询需求。
 

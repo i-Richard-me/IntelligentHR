@@ -1,4 +1,5 @@
 import uuid
+import os
 from typing import List, Dict, Optional
 from pydantic import BaseModel
 from langfuse.callback import CallbackHandler
@@ -9,7 +10,9 @@ from backend.resume_management.recommendation.recommendation_state import (
 from utils.llm_tools import LanguageModelChain, init_language_model
 
 # 初始化语言模型
-language_model = init_language_model()
+language_model = init_language_model(
+    provider=os.getenv("SMART_LLM_PROVIDER"), model_name=os.getenv("SMART_LLM_MODEL")
+)
 
 
 class ResumeSearchStrategyGenerator:

@@ -5,6 +5,7 @@
 工作和项目经历提取，以及简历概述生成。
 """
 
+import os
 import asyncio
 import hashlib
 import logging
@@ -39,7 +40,9 @@ from backend.resume_management.storage.resume_sql_storage import (
 logging.basicConfig(level=logging.INFO)
 
 # 初始化语言模型
-language_model = init_language_model()
+language_model = init_language_model(
+    provider=os.getenv("FAST_LLM_PROVIDER"), model_name=os.getenv("FAST_LLM_MODEL")
+)
 
 
 async def extract_personal_education(

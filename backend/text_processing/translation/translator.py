@@ -1,3 +1,4 @@
+import os
 import logging
 from pydantic import BaseModel, Field
 from typing import Dict, Any
@@ -57,7 +58,11 @@ class Translator:
         Args:
             temperature (float): 语言模型的温度参数，控制输出的随机性。
         """
-        self.language_model = init_language_model(temperature=temperature)
+        self.language_model = init_language_model(
+            temperature=temperature,
+            provider=os.getenv("FAST_LLM_PROVIDER"),
+            model_name=os.getenv("FAST_LLM_MODEL"),
+        )
         self.translation_chain = LanguageModelChain(
             TranslatedText, SYSTEM_MESSAGE, HUMAN_MESSAGE_TEMPLATE, self.language_model
         )()

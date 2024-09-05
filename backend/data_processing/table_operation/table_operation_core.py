@@ -28,7 +28,9 @@ logger = logging.getLogger(__name__)
 langfuse_client = Langfuse()
 
 # 初始化语言模型
-language_model = init_language_model()
+language_model = init_language_model(
+    provider=os.getenv("SMART_LLM_PROVIDER"), model_name=os.getenv("SMART_LLM_MODEL")
+)
 
 # 系统消息
 SYSTEM_MESSAGE = """

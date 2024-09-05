@@ -5,7 +5,9 @@ from pydantic import BaseModel, Field
 from utils.llm_tools import init_language_model, LanguageModelChain
 
 # 初始化语言模型
-language_model = init_language_model()
+language_model = init_language_model(
+    provider=os.getenv("SMART_LLM_PROVIDER"), model_name=os.getenv("SMART_LLM_MODEL")
+)
 
 
 class InputValidation(BaseModel):
@@ -92,5 +94,5 @@ name_verifier = LanguageModelChain(
     EntityVerification,
     system_message_verification,
     human_message_verification,
-    init_language_model(provider=os.getenv("SMART_LLM_PROVIDER"), model_name=os.getenv("SMART_LLM_MODEL")),
+    language_model,
 )()

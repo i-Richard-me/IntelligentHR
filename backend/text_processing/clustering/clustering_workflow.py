@@ -22,7 +22,9 @@ from backend.text_processing.clustering.clustering_core import (
 )
 
 # 初始化语言模型
-language_model = init_language_model()
+language_model = init_language_model(
+    provider=os.getenv("SMART_LLM_PROVIDER"), model_name=os.getenv("SMART_LLM_MODEL")
+)
 
 
 def create_langfuse_handler(session_id: str, step: str) -> CallbackHandler:
