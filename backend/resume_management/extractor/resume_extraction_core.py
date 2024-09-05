@@ -81,7 +81,11 @@ async def generate_resume_summary(
 
 
 async def process_resume(
-    resume_content: str, resume_id: str, session_id: str = None
+    resume_content: str,
+    resume_id: str,
+    session_id: str = None,
+    file_type: str = "url",
+    file_or_url: str = "",
 ) -> Dict[str, Any]:
     if session_id is None:
         session_id = str(uuid.uuid4())
@@ -94,11 +98,6 @@ async def process_resume(
         personal_education, work_project, summary = await asyncio.gather(
             personal_education_task, work_project_task, summary_task
         )
-
-        # 添加 logging 以展示变量结果
-        logging.info(f"个人信息和教育背景: {personal_education}")
-        logging.info(f"工作经历和项目经历: {work_project}")
-        logging.info(f"简历概述: {summary}")
 
         complete_resume = {
             "id": resume_id,
@@ -114,6 +113,8 @@ async def process_resume(
             "characteristics": summary.get("summary", {}).get("characteristics", ""),
             "experience_summary": summary.get("summary", {}).get("experience", ""),
             "skills_overview": summary.get("summary", {}).get("skills_overview", ""),
+            "resume_format": file_type,
+            "file_or_url": file_or_url,
         }
 
         return complete_resume

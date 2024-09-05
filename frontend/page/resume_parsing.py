@@ -9,6 +9,7 @@ from bs4 import BeautifulSoup
 from PIL import Image
 import uuid
 import asyncio
+import pandas as pd
 
 # 添加项目根目录到 Python 路径
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -58,7 +59,9 @@ def extract_text_from_url(url):
         return None
 
 
-async def extract_resume_info(file_content, resume_id, file_type, session_id):
+async def extract_resume_info(
+    file_content, resume_id, file_type, session_id, file_or_url
+):
     """提取简历信息"""
     if file_type == "html":
         content = clean_html(file_content)
@@ -70,7 +73,7 @@ async def extract_resume_info(file_content, resume_id, file_type, session_id):
         st.error("不支持的文件类型")
         return None
 
-    return await process_resume(content, resume_id, session_id)
+    return await process_resume(content, resume_id, session_id, file_type, file_or_url)
 
 
 def display_resume_info(resume_data):
@@ -192,6 +195,43 @@ def display_workflow():
             )
 
 
+def process_batch_resumes(batch_file):
+    if batch_file is not None:
+        df = (
+            pd.read_csv(batch_file)
+            if batch_file.name.endswith(".csv")
+            else pd.read_excel(batch_file)
+        )
+        urls = df["URL"].tolist()  # 假设表格文件中有一列名为 'URL'
+
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+
+        for i, url in enumerate(urls):
+            status_text.text(f"正在处理 URL {i+1}/{len(urls)}: {url}")
+
+            resume_id = calculate_resume_hash(url)
+            existing_resume = get_full_resume(resume_id)
+
+            if existing_resume:
+                st.warning(f"URL {url} 的简历已存在,跳过处理。")
+            else:
+                resume_data = asyncio.run(
+                    process_resume(
+                        url, resume_id, st.session_state.session_id, "url", url
+                    )
+                )
+                resume_data["resume_format"] = "url"
+                resume_data["file_or_url"] = url
+
+                store_resume(resume_data)
+
+            progress_bar.progress((i + 1) / len(urls))
+
+        status_text.text("批量处理完成!")
+        st.success(f"成功处理了 {len(urls)} 个URL的简历。")
+
+
 def main():
     """主函数，包含 Streamlit 应用的主要逻辑"""
     # 初始化 session_state
@@ -210,64 +250,76 @@ def main():
 
     st.markdown("## 简历提取")
 
-    with st.container(border=True):
-        uploaded_file = st.file_uploader("上传简历文件", type=["html", "pdf"])
-        url_input = st.text_input("或输入简历URL")
+    tab1, tab2 = st.tabs(["单份简历", "批量解析"])
 
-        if uploaded_file is not None:
-            file_type = uploaded_file.type.split("/")[-1]
-            file_content = uploaded_file.read()
-            resume_id = calculate_resume_hash(
-                file_content.decode("utf-8", errors="ignore")
-            )
+    with tab1:
+        with st.container(border=True):
+            uploaded_file = st.file_uploader("上传简历文件", type=["html", "pdf"])
+            url_input = st.text_input("或输入简历URL")
 
-            # 检查是否存在重复的简历
-            existing_resume = get_full_resume(resume_id)
-            if existing_resume:
-                st.warning("检测到重复的简历。正在从数据库中获取已解析的信息。")
-                st.session_state.resume_data = existing_resume
-                st.session_state.is_from_database = True
-            else:
-                st.session_state.is_from_database = False
-                if st.button("提取信息", key="file"):
-                    with st.spinner("正在提取简历信息..."):
-                        resume_data = asyncio.run(
-                            extract_resume_info(
-                                file_content,
-                                resume_id,
-                                file_type,
-                                st.session_state.session_id,
+            if uploaded_file is not None:
+                file_type = uploaded_file.type.split("/")[-1]
+                file_content = uploaded_file.read()
+                resume_id = calculate_resume_hash(
+                    file_content.decode("utf-8", errors="ignore")
+                )
+
+                # 检查是否存在重复的简历
+                existing_resume = get_full_resume(resume_id)
+                if existing_resume:
+                    st.warning("检测到重复的简历。正在从数据库中获取已解析的信息。")
+                    st.session_state.resume_data = existing_resume
+                    st.session_state.is_from_database = True
+                else:
+                    st.session_state.is_from_database = False
+                    if st.button("提取信息", key="file"):
+                        with st.spinner("正在提取简历信息..."):
+                            resume_data = asyncio.run(
+                                extract_resume_info(
+                                    file_content,
+                                    resume_id,
+                                    file_type,
+                                    st.session_state.session_id,
+                                    uploaded_file.name,
+                                )
                             )
-                        )
-                        resume_data["resume_format"] = file_type
-                        resume_data["file_or_url"] = uploaded_file.name
-                        st.session_state.resume_data = resume_data
-        elif url_input:
-            file_type = "url"
-            file_content = url_input
-            resume_id = calculate_resume_hash(url_input)
+                            resume_data["resume_format"] = file_type
+                            resume_data["file_or_url"] = uploaded_file.name
+                            st.session_state.resume_data = resume_data
+            elif url_input:
+                file_type = "url"
+                file_content = url_input
+                resume_id = calculate_resume_hash(url_input)
 
-            # 检查是否存在重复的简历
-            existing_resume = get_full_resume(resume_id)
-            if existing_resume:
-                st.warning("检测到重复的简历。正在从数据库中获取已解析的信息。")
-                st.session_state.resume_data = existing_resume
-                st.session_state.is_from_database = True
-            else:
-                st.session_state.is_from_database = False
-                if st.button("提取信息", key="url"):
-                    with st.spinner("正在提取简历信息..."):
-                        resume_data = asyncio.run(
-                            extract_resume_info(
-                                file_content,
-                                resume_id,
-                                file_type,
-                                st.session_state.session_id,
+                # 检查是否存在重复的简历
+                existing_resume = get_full_resume(resume_id)
+                if existing_resume:
+                    st.warning("检测到重复的简历。正在从数据库中获取已解析的信息。")
+                    st.session_state.resume_data = existing_resume
+                    st.session_state.is_from_database = True
+                else:
+                    st.session_state.is_from_database = False
+                    if st.button("提取信息", key="url"):
+                        with st.spinner("正在提取简历信息..."):
+                            resume_data = asyncio.run(
+                                extract_resume_info(
+                                    file_content,
+                                    resume_id,
+                                    file_type,
+                                    st.session_state.session_id,
+                                    url_input,
+                                )
                             )
-                        )
-                        resume_data["resume_format"] = "url"
-                        resume_data["file_or_url"] = url_input
-                        st.session_state.resume_data = resume_data
+                            resume_data["resume_format"] = "url"
+                            resume_data["file_or_url"] = url_input
+                            st.session_state.resume_data = resume_data
+
+    with tab2:
+        with st.container(border=True):
+            batch_file = st.file_uploader("上传包含URL的表格文件", type=["csv", "xlsx"])
+            if batch_file is not None:
+                if st.button("开始批量处理"):
+                    process_batch_resumes(batch_file)
 
     if st.session_state.resume_data is not None:
         st.markdown("---")
