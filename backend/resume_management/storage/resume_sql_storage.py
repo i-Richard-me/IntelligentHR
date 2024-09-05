@@ -6,9 +6,11 @@ import json
 DB_PATH = os.path.join("data", "datasets", "resume.db")
 
 
-def init_full_resume_table():
+def init_all_tables():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
+
+    # 创建 full_resume 表
     cursor.execute(
         """
     CREATE TABLE IF NOT EXISTS full_resume (
@@ -19,12 +21,18 @@ def init_full_resume_table():
         project_experiences TEXT,
         characteristics TEXT,
         experience_summary TEXT,
-        skills_overview TEXT
+        skills_overview TEXT,
+        resume_format TEXT,
+        file_or_url TEXT
     )
     """
     )
+
     conn.commit()
     conn.close()
+
+
+init_all_tables()
 
 
 def store_full_resume(resume_data: Dict[str, Any]):
@@ -34,8 +42,8 @@ def store_full_resume(resume_data: Dict[str, Any]):
         """
     INSERT OR REPLACE INTO full_resume 
     (resume_id, personal_info, education, work_experiences, project_experiences, 
-    characteristics, experience_summary, skills_overview) 
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    characteristics, experience_summary, skills_overview, resume_format, file_or_url) 
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """,
         (
             resume_data["id"],
@@ -46,6 +54,8 @@ def store_full_resume(resume_data: Dict[str, Any]):
             resume_data.get("characteristics", ""),
             resume_data.get("experience_summary", ""),
             resume_data.get("skills_overview", ""),
+            resume_data.get("resume_format", ""),
+            resume_data.get("file_or_url", ""),
         ),
     )
     conn.commit()
@@ -53,7 +63,7 @@ def store_full_resume(resume_data: Dict[str, Any]):
 
 
 def get_full_resume(resume_id: str) -> Optional[Dict[str, Any]]:
-    init_all_tables()  # 确保表已创建
+
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute(
@@ -75,29 +85,7 @@ def get_full_resume(resume_id: str) -> Optional[Dict[str, Any]]:
             "characteristics": result[5],
             "experience_summary": result[6],
             "skills_overview": result[7],
+            "resume_format": result[8],
+            "file_or_url": result[9],
         }
     return None
-
-
-def init_all_tables():
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-
-    # 创建 full_resume 表
-    cursor.execute(
-        """
-    CREATE TABLE IF NOT EXISTS full_resume (
-        resume_id TEXT PRIMARY KEY,
-        personal_info TEXT,
-        education TEXT,
-        work_experiences TEXT,
-        project_experiences TEXT,
-        characteristics TEXT,
-        experience_summary TEXT,
-        skills_overview TEXT
-    )
-    """
-    )
-
-    conn.commit()
-    conn.close()

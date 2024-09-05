@@ -231,7 +231,7 @@ def main():
                 st.session_state.is_from_database = False
                 if st.button("提取信息", key="file"):
                     with st.spinner("正在提取简历信息..."):
-                        st.session_state.resume_data = asyncio.run(
+                        resume_data = asyncio.run(
                             extract_resume_info(
                                 file_content,
                                 resume_id,
@@ -239,6 +239,9 @@ def main():
                                 st.session_state.session_id,
                             )
                         )
+                        resume_data["resume_format"] = file_type
+                        resume_data["file_or_url"] = uploaded_file.name
+                        st.session_state.resume_data = resume_data
         elif url_input:
             file_type = "url"
             file_content = url_input
@@ -254,7 +257,7 @@ def main():
                 st.session_state.is_from_database = False
                 if st.button("提取信息", key="url"):
                     with st.spinner("正在提取简历信息..."):
-                        st.session_state.resume_data = asyncio.run(
+                        resume_data = asyncio.run(
                             extract_resume_info(
                                 file_content,
                                 resume_id,
@@ -262,6 +265,9 @@ def main():
                                 st.session_state.session_id,
                             )
                         )
+                        resume_data["resume_format"] = "url"
+                        resume_data["file_or_url"] = url_input
+                        st.session_state.resume_data = resume_data
 
     if st.session_state.resume_data is not None:
         st.markdown("---")
