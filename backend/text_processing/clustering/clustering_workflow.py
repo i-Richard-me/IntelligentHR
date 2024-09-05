@@ -91,7 +91,11 @@ def batch_texts(df: pd.DataFrame, text_column: str, batch_size: int = 100) -> Li
 
 
 def generate_initial_categories(
-    texts: List[str], text_topic: str, category_count: int, session_id: str
+    texts: List[str],
+    text_topic: str,
+    category_count: int,
+    session_id: str,
+    additional_requirements: Optional[str] = None,
 ) -> List[Dict]:
     """
     生成初始类别
@@ -101,6 +105,7 @@ def generate_initial_categories(
         text_topic: 文本主题或背景
         category_count: 期望生成的类别数量
         session_id: 会话ID
+        additional_requirements: 补充要求（可选）
 
     Returns:
         List[Dict]: 生成的初始类别列表
@@ -120,6 +125,7 @@ def generate_initial_categories(
                 "text_topic": text_topic,
                 "text_content": text_batch,
                 "category_count": category_count,
+                "additional_requirements": additional_requirements,
             },
             config={"callbacks": [langfuse_handler]},
         )
@@ -134,6 +140,7 @@ def merge_categories(
     min_categories: int,
     max_categories: int,
     session_id: str,
+    additional_requirements: Optional[str] = None,
 ) -> Dict:
     """
     合并生成的类别
@@ -144,6 +151,7 @@ def merge_categories(
         min_categories: 最小类别数量
         max_categories: 最大类别数量
         session_id: 会话ID
+        additional_requirements: 补充要求（可选）
 
     Returns:
         Dict: 合并后的类别字典
@@ -162,6 +170,7 @@ def merge_categories(
             "classification_results": categories_list,
             "min_categories": min_categories,
             "max_categories": max_categories,
+            "additional_requirements": additional_requirements,
         },
         config={"callbacks": [langfuse_handler]},
     )
@@ -178,6 +187,7 @@ def generate_categories(
     max_categories: int,
     batch_size: int = 100,
     session_id: Optional[str] = None,
+    additional_requirements: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     生成类别的主函数
@@ -191,6 +201,7 @@ def generate_categories(
         max_categories: 最大类别数量
         batch_size: 批处理大小
         session_id: 会话ID（可选）
+        additional_requirements: 补充要求（可选）
 
     Returns:
         Dict[str, Any]: 包含生成的类别、预处理后的DataFrame和会话ID的字典
@@ -201,10 +212,19 @@ def generate_categories(
     preprocessed_df = preprocess_data(df, text_column)
     batched_texts = batch_texts(preprocessed_df, text_column, batch_size)
     initial_categories = generate_initial_categories(
-        batched_texts, text_topic, initial_category_count, session_id
+        batched_texts,
+        text_topic,
+        initial_category_count,
+        session_id,
+        additional_requirements,
     )
     merged_categories = merge_categories(
-        initial_categories, text_topic, min_categories, max_categories, session_id
+        initial_categories,
+        text_topic,
+        min_categories,
+        max_categories,
+        session_id,
+        additional_requirements,
     )
 
     return {
@@ -260,7 +280,7 @@ def classify_texts(
             config={"callbacks": [langfuse_handler]},
         )
         classification_results.extend(result["classifications"])
-        
+
         # 每处理完一个批次，保存临时文件
         save_temp_results(classification_results, task_id, "text_classification")
 
@@ -284,7 +304,9 @@ def save_temp_results(results: List[Dict], task_id: str, entity_type: str):
     """
     temp_dir = os.path.join("data", "temp")
     os.makedirs(temp_dir, exist_ok=True)
-    temp_file_path = os.path.join(temp_dir, f"classify_texts_{entity_type}_{task_id}.csv")
-    
+    temp_file_path = os.path.join(
+        temp_dir, f"classify_texts_{entity_type}_{task_id}.csv"
+    )
+
     df = pd.DataFrame(results)
     df.to_csv(temp_file_path, index=False, encoding="utf-8-sig")

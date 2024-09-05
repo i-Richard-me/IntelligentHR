@@ -35,6 +35,7 @@ def initialize_session_state():
         "session_id",
         "clustering_params",
         "use_custom_categories",
+        "additional_requirements",
     ]
     for var in session_vars:
         if var not in st.session_state:
@@ -56,6 +57,10 @@ def initialize_session_state():
     # 初始化 use_custom_categories
     if st.session_state.use_custom_categories is None:
         st.session_state.use_custom_categories = False
+
+    # 初始化 additional_requirements
+    if st.session_state.additional_requirements is None:
+        st.session_state.additional_requirements = None
 
 
 def display_info_message():
@@ -153,6 +158,16 @@ def handle_data_input_and_clustering():
             placeholder="例如：员工反馈、产品评论、客户意见等",
         )
 
+        st.session_state.additional_requirements = st.text_area(
+            "补充要求（可选）",
+            value=(
+                st.session_state.additional_requirements
+                if st.session_state.additional_requirements
+                else ""
+            ),
+            placeholder="例如：忽略员工对于薪酬福利的抱怨",
+        )
+
         uploaded_file = st.file_uploader("上传CSV文件", type="csv")
         if uploaded_file is not None:
             df = pd.read_csv(uploaded_file)
@@ -197,6 +212,12 @@ def handle_data_input_and_clustering():
                             ],
                             batch_size=st.session_state.clustering_params["batch_size"],
                             session_id=st.session_state.session_id,
+                            additional_requirements=(
+                                f"补充要求：\n{st.session_state.additional_requirements}"
+                                if st.session_state.additional_requirements
+                                and st.session_state.additional_requirements.strip()
+                                else ""
+                            ),
                         )
 
                     st.success("初始聚类完成！")

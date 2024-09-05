@@ -53,6 +53,8 @@ INITIAL_CATEGORY_GENERATION_SYSTEM_MESSAGE = """
    - 忽略质量不高或内容不清晰的文本。
 
 请严格遵循这些原则和要求，确保分类结果的准确性和实用性。
+
+{additional_requirements}
 """
 
 # 用于初始生成类别的人工消息模板
@@ -91,6 +93,8 @@ MERGE_CATEGORIES_SYSTEM_MESSAGE = """
 - 保持客观性，避免主观判断。
 - 对于频率较低的主题，考虑是否值得单独成类或合并到其他类别。
 - 最终的分类方案应具有普遍适用性，能够涵盖大多数文本内容。
+
+{additional_requirements}
 """
 
 # 用于合并和优化类别的人工消息模板
