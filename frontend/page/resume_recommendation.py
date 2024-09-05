@@ -3,6 +3,7 @@ import sys
 import os
 import pandas as pd
 from PIL import Image
+import uuid
 
 # 获取项目根目录的绝对路径
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -103,6 +104,7 @@ if "recommender" not in st.session_state:
     st.session_state.strategy_displayed = False
     st.session_state.refined_query = None
     st.session_state.top_n = 3  # 默认推荐数量
+    st.session_state.session_id = str(uuid.uuid4())
 
 # 主界面
 st.title("👥 智能简历推荐系统")
@@ -157,7 +159,9 @@ if prompt := st.chat_input("输入您的需求或回答"):
 
     if st.session_state.current_stage == "initial_query":
         with st.spinner("正在分析您的需求..."):
-            status = st.session_state.recommender.process_query(prompt)
+            status = st.session_state.recommender.process_query(
+                prompt, st.session_state.session_id
+            )
         st.session_state.current_stage = (
             "refining_query"
             if status == "need_more_info"
@@ -165,7 +169,9 @@ if prompt := st.chat_input("输入您的需求或回答"):
         )
     elif st.session_state.current_stage == "refining_query":
         with st.spinner("正在处理您的回答..."):
-            status = st.session_state.recommender.process_answer(prompt)
+            status = st.session_state.recommender.process_answer(
+                prompt, st.session_state.session_id
+            )
         if status == "ready":
             st.session_state.current_stage = "generating_recommendations"
 
@@ -196,7 +202,9 @@ if prompt := st.chat_input("输入您的需求或回答"):
 # 处理推荐生成过程
 if st.session_state.processing:
     with st.spinner("正在生成整体简历搜索策略..."):
-        st.session_state.recommender.generate_overall_search_strategy()
+        st.session_state.recommender.generate_overall_search_strategy(
+            st.session_state.session_id
+        )
 
     # 显示整体检索策略
     collection_relevances = st.session_state.recommender.get_overall_search_strategy()
@@ -230,7 +238,9 @@ if st.session_state.processing:
         st.session_state.strategy_displayed = True
 
     with st.spinner("正在生成详细的检索策略..."):
-        st.session_state.recommender.generate_detailed_search_strategy()
+        st.session_state.recommender.generate_detailed_search_strategy(
+            st.session_state.session_id
+        )
 
     with st.spinner("正在计算简历得分..."):
         st.session_state.recommender.calculate_resume_scores(st.session_state.top_n)
@@ -243,7 +253,9 @@ if st.session_state.processing:
         )
 
     with st.spinner("正在生成推荐理由..."):
-        st.session_state.recommender.generate_recommendation_reasons()
+        st.session_state.recommender.generate_recommendation_reasons(
+            st.session_state.session_id
+        )
 
     with st.spinner("正在准备最终推荐结果..."):
         st.session_state.recommender.prepare_final_recommendations()

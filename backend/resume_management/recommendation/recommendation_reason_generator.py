@@ -1,8 +1,13 @@
 from pydantic import BaseModel, Field
-from typing import List, Dict
+from typing import List, Dict, Optional
 import pandas as pd
 from utils.llm_tools import LanguageModelChain, init_language_model
 from utils.dataset_utils import load_df_from_csv, save_df_to_csv
+from langfuse.callback import CallbackHandler
+import uuid
+
+# 初始化语言模型
+language_model = init_language_model()
 
 
 class RecommendationReason(BaseModel):
@@ -48,8 +53,18 @@ class RecommendationReasonGenerator:
             self.language_model,
         )()
 
+    def create_langfuse_handler(self, session_id, step):
+        return CallbackHandler(
+            tags=["recommendation_reason"],
+            session_id=session_id,
+            metadata={"step": step},
+        )
+
     def generate_recommendation_reasons(
-        self, refined_query: str, resume_details_file: str
+        self,
+        refined_query: str,
+        resume_details_file: str,
+        session_id: Optional[str] = None,
     ) -> str:
         """
         为每份推荐的简历生成详细的推荐理由。
@@ -90,12 +105,16 @@ class RecommendationReasonGenerator:
                 "skills_overview": resume["skills_overview"],
             }
 
+            langfuse_handler = self.create_langfuse_handler(
+                session_id, "generate_recommendation_reason"
+            )
             reason_result = self.recommendation_reason_chain.invoke(
                 {
                     "refined_query": refined_query,
                     "resume_score": resume_score,
                     "resume_overview": resume_overview,
-                }
+                },
+                config={"callbacks": [langfuse_handler]},
             )
 
             reasons.append(

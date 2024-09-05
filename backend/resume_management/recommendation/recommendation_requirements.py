@@ -4,6 +4,8 @@ from backend.resume_management.recommendation.recommendation_state import (
     QueryRefinement,
 )
 from utils.llm_tools import LanguageModelChain, init_language_model
+from langfuse.callback import CallbackHandler
+import uuid
 
 # 初始化语言模型
 language_model = init_language_model()
@@ -14,6 +16,7 @@ class RecommendationRequirements:
         self.query_history: List[str] = []
         self.refined_query: Optional[str] = None
         self.current_question: Optional[str] = None
+        self.session_id: str = str(uuid.uuid4())
 
     system_message = """
     你是一个智能简历推荐系统的预处理助手。你的任务是评估并完善用户的查询，以生成精确的简历检索策略。请遵循以下指南：
@@ -54,16 +57,29 @@ class RecommendationRequirements:
         QueryRefinement, system_message, human_message_template, language_model
     )()
 
-    def confirm_requirements(self, user_input: Optional[str] = None) -> str:
+    def create_langfuse_handler(self, session_id, step):
+        return CallbackHandler(
+            tags=["resume_search_strategy"],
+            session_id=session_id,
+            metadata={"step": step},
+        )
+
+    def confirm_requirements(
+        self, user_input: Optional[str] = None, session_id: Optional[str] = None
+    ) -> str:
         """
         确认并完善用户的查询需求。
 
         Args:
             user_input (Optional[str]): 用户输入的新查询或回答
+            session_id (Optional[str]): 会话ID
 
         Returns:
             str: 下一步操作的状态，可能是 "ready" 或 "need_more_info"
         """
+        if session_id is None:
+            session_id = self.session_id
+
         if user_input:
             self.query_history.append(user_input)
             latest_response = user_input
@@ -72,11 +88,13 @@ class RecommendationRequirements:
 
         query_history_for_model = self.query_history[:-1]
 
+        langfuse_handler = self.create_langfuse_handler(session_id, "query_refinement")
         refinement_result = self.query_refiner.invoke(
             {
                 "query_history": "\n".join(query_history_for_model),
                 "latest_response": latest_response,
             },
+            config={"callbacks": [langfuse_handler]},
         )
 
         refined_query = QueryRefinement(**refinement_result)

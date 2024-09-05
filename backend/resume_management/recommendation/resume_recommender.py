@@ -16,6 +16,8 @@ from backend.resume_management.recommendation.recommendation_output_generator im
     RecommendationOutputGenerator,
 )
 from utils.dataset_utils import load_df_from_csv
+from langfuse.callback import CallbackHandler
+import uuid
 
 
 class ResumeRecommender:
@@ -33,18 +35,27 @@ class ResumeRecommender:
         self.resume_details_file: Optional[str] = None
         self.recommendation_reasons_file: Optional[str] = None
         self.final_recommendations_file: Optional[str] = None
+        self.session_id: str = str(uuid.uuid4())
 
-    def process_query(self, query: str) -> str:
+    def create_langfuse_handler(self, session_id, step):
+        return CallbackHandler(
+            tags=["resume_search_strategy"],
+            session_id=session_id,
+            metadata={"step": step},
+        )
+
+    def process_query(self, query: str, session_id: Optional[str] = None) -> str:
         """
         处理用户的初始查询，启动推荐过程。
 
         Args:
             query (str): 用户的初始查询
+            session_id (Optional[str]): 会话ID
 
         Returns:
             str: 处理状态，可能是 'need_more_info' 或 'ready'
         """
-        return self.requirements.confirm_requirements(query)
+        return self.requirements.confirm_requirements(query, session_id)
 
     def get_next_question(self) -> Optional[str]:
         """
@@ -67,30 +78,46 @@ class ResumeRecommender:
         """
         return self.requirements.confirm_requirements(answer)
 
-    def generate_overall_search_strategy(self) -> None:
+    def generate_overall_search_strategy(
+        self, session_id: Optional[str] = None
+    ) -> None:
         """
         生成整体简历搜索策略。
+
+        Args:
+            session_id (Optional[str]): 会话ID
         """
+        if session_id is None:
+            session_id = self.session_id
+
         self.refined_query = self.requirements.get_refined_query()
         if not self.refined_query:
             raise ValueError("未找到精炼后的查询。无法生成搜索策略。")
 
         self.collection_relevances = (
             self.resume_search_strategy_generator.generate_resume_search_strategy(
-                self.refined_query
+                self.refined_query, session_id
             )
         )
         self.search_strategy = self.collection_relevances
 
-    def generate_detailed_search_strategy(self) -> None:
+    def generate_detailed_search_strategy(
+        self, session_id: Optional[str] = None
+    ) -> None:
         """
         生成详细的检索策略。
+
+        Args:
+            session_id (Optional[str]): 会话ID
         """
+        if session_id is None:
+            session_id = self.session_id
+
         if not self.refined_query or not self.collection_relevances:
             raise ValueError("缺少生成详细检索策略所需的信息。")
 
         self.collection_search_strategies = self.collection_search_strategy_generator.generate_collection_search_strategy(
-            self.refined_query, self.collection_relevances
+            self.refined_query, self.collection_relevances, session_id
         )
 
     def get_overall_search_strategy(self) -> Optional[List[Dict[str, float]]]:
@@ -125,16 +152,19 @@ class ResumeRecommender:
             )
         )
 
-    def generate_recommendation_reasons(self) -> None:
+    def generate_recommendation_reasons(self, session_id: Optional[str] = None) -> None:
         """
         生成推荐理由。
         """
+        if session_id is None:
+            session_id = self.session_id
+
         if not self.refined_query or not self.resume_details_file:
             raise ValueError("缺少生成推荐理由所需的信息。")
 
         self.recommendation_reasons_file = (
             self.reason_generator.generate_recommendation_reasons(
-                self.refined_query, self.resume_details_file
+                self.refined_query, self.resume_details_file, session_id
             )
         )
 

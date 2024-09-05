@@ -1,5 +1,7 @@
-from typing import List, Dict
+import uuid
+from typing import List, Dict, Optional
 from pydantic import BaseModel
+from langfuse.callback import CallbackHandler
 from backend.resume_management.recommendation.recommendation_state import (
     ResumeSearchStrategy,
     CollectionSearchStrategy,
@@ -54,8 +56,15 @@ class ResumeSearchStrategyGenerator:
             language_model,
         )()
 
+    def create_langfuse_handler(self, session_id, step):
+        return CallbackHandler(
+            tags=["resume_search_strategy"],
+            session_id=session_id,
+            metadata={"step": step},
+        )
+
     def generate_resume_search_strategy(
-        self, refined_query: str
+        self, refined_query: str, session_id: Optional[str] = None
     ) -> List[Dict[str, float]]:
         """
         生成整体的简历搜索策略。
@@ -69,11 +78,17 @@ class ResumeSearchStrategyGenerator:
         Raises:
             ValueError: 如果精炼后的查询为空
         """
+        if session_id is None:
+            session_id = str(uuid.uuid4())
+
         if not refined_query:
             raise ValueError("精炼后的查询不能为空。无法生成搜索策略。")
 
+        langfuse_handler = self.create_langfuse_handler(
+            session_id, "generate_search_strategy"
+        )
         search_strategy_result = self.resume_search_strategy_chain.invoke(
-            {"refined_query": refined_query},
+            {"refined_query": refined_query}, config={"callbacks": [langfuse_handler]}
         )
 
         # 将字典转换为 ResumeSearchStrategy 对象
@@ -225,8 +240,18 @@ class CollectionSearchStrategyGenerator:
         **query_content必须使用英文！**
         """
 
+    def create_langfuse_handler(self, session_id, step):
+        return CallbackHandler(
+            tags=["collection_search_strategy"],
+            session_id=session_id,
+            metadata={"step": step},
+        )
+
     def generate_collection_search_strategy(
-        self, refined_query: str, collection_relevances: List[Dict[str, float]]
+        self,
+        refined_query: str,
+        collection_relevances: List[Dict[str, float]],
+        session_id: Optional[str] = None,
     ) -> Dict[str, CollectionSearchStrategy]:
         """
         为每个相关的集合生成详细的搜索策略。
@@ -241,6 +266,10 @@ class CollectionSearchStrategyGenerator:
         Raises:
             ValueError: 如果精炼后的查询为空或集合相关性列表为空
         """
+
+        if session_id is None:
+            session_id = str(uuid.uuid4())
+
         if not refined_query or not collection_relevances:
             raise ValueError(
                 "精炼后的查询或集合相关性列表不能为空。无法生成集合搜索策略。"
@@ -268,8 +297,12 @@ class CollectionSearchStrategyGenerator:
                 language_model,
             )()
 
+            langfuse_handler = self.create_langfuse_handler(
+                session_id, f"generate_strategy_for_{collection_name}"
+            )
             search_strategy_result = collection_search_strategy_chain.invoke(
                 {"refined_query": refined_query, "collection_name": collection_name},
+                config={"callbacks": [langfuse_handler]},
             )
 
             collection_search_strategies[collection_name] = CollectionSearchStrategy(

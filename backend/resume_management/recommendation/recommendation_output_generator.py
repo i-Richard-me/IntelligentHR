@@ -1,7 +1,7 @@
 import pandas as pd
 from typing import Dict, List
 from utils.dataset_utils import load_df_from_csv, save_df_to_csv
-from backend.resume_management.storage.resume_sql_storage import get_resume_summary
+from backend.resume_management.storage.resume_sql_storage import get_full_resume
 
 
 class RecommendationOutputGenerator:
@@ -29,14 +29,16 @@ class RecommendationOutputGenerator:
 
         resume_details = []
         for resume_id in top_resume_ids:
-            summary = get_resume_summary(resume_id)
-            if summary:
-                resume_details.append({
-                    "resume_id": resume_id,
-                    "characteristics": summary["characteristics"],
-                    "experience": summary["experience_summary"],
-                    "skills_overview": summary["skills_overview"]
-                })
+            full_resume = get_full_resume(resume_id)
+            if full_resume:
+                resume_details.append(
+                    {
+                        "resume_id": resume_id,
+                        "characteristics": full_resume.get("characteristics", ""),
+                        "experience": full_resume.get("experience_summary", ""),
+                        "skills_overview": full_resume.get("skills_overview", ""),
+                    }
+                )
 
         resume_details_df = pd.DataFrame(resume_details)
 
