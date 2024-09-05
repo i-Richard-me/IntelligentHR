@@ -121,12 +121,32 @@ def perform_translation(
     """
     texts_to_translate = df[text_column].tolist()
     session_id = str(uuid.uuid4())
+    translated_texts = []
+    
+    async def translate_and_save(texts):
+        results = await batch_translate(texts, text_topic, session_id, max_concurrent)
+        translated_texts.extend(results)
+        
+        # 每翻译10个数据，保存一次临时结果
+        if len(translated_texts) % 10 == 0 or len(translated_texts) == len(texts_to_translate):
+            temp_df = df.copy()
+            temp_df["translated_text"] = translated_texts + [""] * (len(df) - len(translated_texts))
+            save_temp_results(temp_df, session_id)
+        
+        return results
+
     with st.spinner("正在批量翻译..."):
-        translated_texts = asyncio.run(
-            batch_translate(texts_to_translate, text_topic, session_id, max_concurrent)
-        )
+        asyncio.run(translate_and_save(texts_to_translate))
+    
     df["translated_text"] = translated_texts
     return df
+
+
+def save_temp_results(df: pd.DataFrame, session_id: str):
+    temp_dir = os.path.join("data", "temp")
+    os.makedirs(temp_dir, exist_ok=True)
+    temp_file_path = os.path.join(temp_dir, f"translation_results_{session_id}.csv")
+    df.to_csv(temp_file_path, index=False, encoding="utf-8-sig")
 
 
 def display_translation_results(translation_results: Any) -> None:
