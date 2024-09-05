@@ -63,29 +63,30 @@ class RecommendationReasonGenerator:
     def generate_recommendation_reasons(
         self,
         refined_query: str,
-        resume_details_file: str,
+        resume_details: pd.DataFrame,
         session_id: Optional[str] = None,
-    ) -> str:
+    ) -> pd.DataFrame:
         """
         为每份推荐的简历生成详细的推荐理由。
 
         Args:
             refined_query (str): 精炼后的用户查询
-            resume_details_file (str): 包含简历详细信息的CSV文件名
+            resume_details (pd.DataFrame): 包含简历详细信息的DataFrame
 
         Returns:
-            str: 包含生成的推荐理由的CSV文件名
+            pd.DataFrame: 包含生成的推荐理由的DataFrame
 
         Raises:
-            ValueError: 如果简历详细信息文件不存在或精炼后的查询为空
+            ValueError: 如果简历详细信息为空或精炼后的查询为空
         """
         if not refined_query:
             raise ValueError("精炼后的查询不能为空。无法生成推荐理由。")
 
-        resume_details_df = load_df_from_csv(resume_details_file)
+        if resume_details.empty:
+            raise ValueError("简历详细信息不能为空。无法生成推荐理由。")
 
         reasons = []
-        for _, resume in resume_details_df.iterrows():
+        for _, resume in resume_details.iterrows():
             resume_score = {
                 "resume_id": resume["resume_id"],
                 "total_score": resume["total_score"],
@@ -123,8 +124,5 @@ class RecommendationReasonGenerator:
 
         reasons_df = pd.DataFrame(reasons)
 
-        # 保存理由DataFrame为CSV并返回文件名
-        output_filename = save_df_to_csv(reasons_df, "recommendation_reasons.csv")
-
         print("已为每份推荐的简历生成详细的推荐理由")
-        return output_filename
+        return reasons_df

@@ -246,9 +246,9 @@ if st.session_state.processing:
         st.session_state.recommender.calculate_resume_scores(st.session_state.top_n)
 
     with st.spinner("正在获取简历详细信息..."):
-        st.session_state.recommender.resume_details_file = (
+        st.session_state.recommender.resume_details = (
             st.session_state.recommender.output_generator.fetch_resume_details(
-                st.session_state.recommender.ranked_resume_scores_file
+                st.session_state.recommender.ranked_resume_scores
             )
         )
 

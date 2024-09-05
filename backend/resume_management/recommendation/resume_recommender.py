@@ -23,18 +23,17 @@ import uuid
 class ResumeRecommender:
     def __init__(self):
         self.requirements = RecommendationRequirements()
-        self.resume_search_strategy_generator = ResumeSearchStrategyGenerator()
-        self.collection_search_strategy_generator = CollectionSearchStrategyGenerator()
-        self.resume_scorer = ResumeScorer()
-        self.reason_generator = RecommendationReasonGenerator()
+        self.strategy_generator = ResumeSearchStrategyGenerator()
+        self.collection_strategy_generator = CollectionSearchStrategyGenerator()
+        self.scorer = ResumeScorer()
         self.output_generator = RecommendationOutputGenerator()
-        self.refined_query: Optional[str] = None
-        self.collection_relevances: Optional[List[Dict[str, float]]] = None
-        self.collection_search_strategies: Optional[Dict] = None
-        self.ranked_resume_scores_file: Optional[str] = None
-        self.resume_details_file: Optional[str] = None
-        self.recommendation_reasons_file: Optional[str] = None
-        self.final_recommendations_file: Optional[str] = None
+        self.reason_generator = RecommendationReasonGenerator()
+        self.overall_search_strategy = None
+        self.detailed_search_strategy = None
+        self.ranked_resume_scores = None
+        self.resume_details = None
+        self.recommendation_reasons = None
+        self.final_recommendations = None
         self.session_id: str = str(uuid.uuid4())
 
     def create_langfuse_handler(self, session_id, step):
@@ -90,16 +89,15 @@ class ResumeRecommender:
         if session_id is None:
             session_id = self.session_id
 
-        self.refined_query = self.requirements.get_refined_query()
-        if not self.refined_query:
+        refined_query = self.requirements.get_refined_query()
+        if not refined_query:
             raise ValueError("未找到精炼后的查询。无法生成搜索策略。")
 
-        self.collection_relevances = (
-            self.resume_search_strategy_generator.generate_resume_search_strategy(
-                self.refined_query, session_id
+        self.overall_search_strategy = (
+            self.strategy_generator.generate_resume_search_strategy(
+                refined_query, session_id
             )
         )
-        self.search_strategy = self.collection_relevances
 
     def generate_detailed_search_strategy(
         self, session_id: Optional[str] = None
@@ -113,11 +111,15 @@ class ResumeRecommender:
         if session_id is None:
             session_id = self.session_id
 
-        if not self.refined_query or not self.collection_relevances:
+        if not self.overall_search_strategy:
             raise ValueError("缺少生成详细检索策略所需的信息。")
 
-        self.collection_search_strategies = self.collection_search_strategy_generator.generate_collection_search_strategy(
-            self.refined_query, self.collection_relevances, session_id
+        self.detailed_search_strategy = (
+            self.collection_strategy_generator.generate_collection_search_strategy(
+                self.requirements.get_refined_query(),
+                self.overall_search_strategy,
+                session_id,
+            )
         )
 
     def get_overall_search_strategy(self) -> Optional[List[Dict[str, float]]]:
@@ -127,69 +129,47 @@ class ResumeRecommender:
         Returns:
             Optional[List[Dict[str, float]]]: 整体搜索策略，如果尚未生成则返回 None
         """
-        return self.search_strategy
+        return self.overall_search_strategy
 
-    def calculate_resume_scores(self, top_n: int = 3) -> None:
-        """
-        计算简历得分。
+    def calculate_resume_scores(self, top_n: int = 3):
+        if not self.overall_search_strategy or not self.detailed_search_strategy:
+            raise ValueError("搜索策略尚未生成。无法计算简历得分。")
 
-        Args:
-            top_n (int): 要推荐的简历数量
-        """
-        if (
-            not self.refined_query
-            or not self.collection_relevances
-            or not self.collection_search_strategies
-        ):
-            raise ValueError("缺少生成简历得分所需的信息。")
-
-        self.ranked_resume_scores_file = (
-            self.resume_scorer.calculate_overall_resume_scores(
-                self.refined_query,
-                self.collection_relevances,
-                self.collection_search_strategies,
-                top_n,
-            )
+        self.ranked_resume_scores = self.scorer.calculate_overall_resume_scores(
+            self.requirements.get_refined_query(),
+            self.overall_search_strategy,
+            self.detailed_search_strategy,
+            top_n,
         )
 
-    def generate_recommendation_reasons(self, session_id: Optional[str] = None) -> None:
-        """
-        生成推荐理由。
-        """
-        if session_id is None:
-            session_id = self.session_id
+    def generate_recommendation_reasons(self, session_id: Optional[str] = None):
+        if self.resume_details is None:
+            self.resume_details = self.output_generator.fetch_resume_details(
+                self.ranked_resume_scores
+            )
 
-        if not self.refined_query or not self.resume_details_file:
-            raise ValueError("缺少生成推荐理由所需的信息。")
-
-        self.recommendation_reasons_file = (
+        self.recommendation_reasons = (
             self.reason_generator.generate_recommendation_reasons(
-                self.refined_query, self.resume_details_file, session_id
+                self.requirements.get_refined_query(),
+                self.resume_details,
+                session_id or self.session_id,
             )
         )
 
-    def prepare_final_recommendations(self) -> None:
-        """
-        准备最终的推荐结果。
-        """
-        if not self.resume_details_file or not self.recommendation_reasons_file:
-            raise ValueError("缺少准备最终推荐所需的信息。")
+    def prepare_final_recommendations(self):
+        if self.resume_details is None or self.recommendation_reasons is None:
+            raise ValueError("简历详情或推荐理由尚未生成。无法准备最终推荐结果。")
 
-        self.final_recommendations_file = self.output_generator.prepare_final_output(
-            self.resume_details_file, self.recommendation_reasons_file
+        self.final_recommendations = self.output_generator.prepare_final_output(
+            self.resume_details, self.recommendation_reasons
         )
 
-    def get_recommendations(self) -> Optional[List[Dict]]:
-        """
-        获取最终的推荐结果。
-
-        Returns:
-            Optional[List[Dict]]: 推荐结果列表，如果尚未生成则返回 None
-        """
-        if self.final_recommendations_file:
-            df = load_df_from_csv(self.final_recommendations_file)
-            return df.to_dict("records")
-        return None
+    def get_recommendations(self):
+        return (
+            self.final_recommendations.to_dict("records")
+            if self.final_recommendations is not None
+            else None
+        )
 
     def run_full_process(
         self, initial_query: str, top_n: int = 3
@@ -216,8 +196,8 @@ class ResumeRecommender:
 
             self.generate_overall_search_strategy()
             self.calculate_resume_scores(top_n)
-            self.resume_details_file = self.output_generator.fetch_resume_details(
-                self.ranked_resume_scores_file
+            self.resume_details = self.output_generator.fetch_resume_details(
+                self.ranked_resume_scores
             )
             self.generate_recommendation_reasons()
             self.prepare_final_recommendations()
@@ -226,18 +206,6 @@ class ResumeRecommender:
         except Exception as e:
             print(f"推荐过程中发生错误: {str(e)}")
             return None
-        finally:
-            self.cleanup_temp_files()
-
-    def cleanup_temp_files(self) -> None:
-        """
-        清理临时文件。
-        """
-        temp_dir = os.path.join("data", "temp")
-        if os.path.exists(temp_dir):
-            shutil.rmtree(temp_dir)
-        os.makedirs(temp_dir, exist_ok=True)
-        print("临时文件已清理。")
 
     def get_refined_query(self) -> Optional[str]:
         """
@@ -266,7 +234,7 @@ def main():
             print("无法获取精炼后的查询。")
 
         # 显示推荐结果
-        if recommendations:
+        if recommendations is not None and len(recommendations) > 0:
             print(f"\n推荐结果 (共 {len(recommendations)} 份):")
             for rec in recommendations:
                 print(f"简历ID: {rec['简历ID']}")
