@@ -5,13 +5,18 @@
 工作和项目经历提取，以及简历概述生成。
 """
 
-from typing import Dict, Any
+import asyncio
 import hashlib
+import logging
+import uuid
+from typing import Dict, Any
+
+from langfuse.callback import CallbackHandler
+
 from utils.llm_tools import LanguageModelChain, init_language_model
 from backend.resume_management.extractor.resume_data_models import (
     ResumePersonalEducation,
     ResumeWorkProject,
-    ResumeSummary,
     Summary,
 )
 from backend.resume_management.extractor.resume_extraction_prompts import (
@@ -25,12 +30,12 @@ from backend.resume_management.extractor.resume_extraction_prompts import (
 from backend.resume_management.storage.resume_vector_storage import (
     store_resume_in_milvus,
 )
-import logging
-from langfuse.callback import CallbackHandler
-import uuid
-import asyncio
+from backend.resume_management.storage.resume_sql_storage import (
+    init_all_tables,
+    store_full_resume,
+)
 
-# 配置 logging
+# 配置日志
 logging.basicConfig(level=logging.INFO)
 
 # 初始化语言模型
@@ -40,6 +45,16 @@ language_model = init_language_model()
 async def extract_personal_education(
     resume_content: str, session_id: str
 ) -> Dict[str, Any]:
+    """
+    提取简历中的个人信息和教育背景。
+
+    Args:
+        resume_content (str): 简历内容。
+        session_id (str): 会话ID。
+
+    Returns:
+        Dict[str, Any]: 包含个人信息和教育背景的字典。
+    """
     langfuse_handler = create_langfuse_handler(session_id, "extract_personal_education")
     extractor = LanguageModelChain(
         ResumePersonalEducation,
@@ -53,6 +68,16 @@ async def extract_personal_education(
 
 
 async def extract_work_project(resume_content: str, session_id: str) -> Dict[str, Any]:
+    """
+    提取简历中的工作和项目经历。
+
+    Args:
+        resume_content (str): 简历内容。
+        session_id (str): 会话ID。
+
+    Returns:
+        Dict[str, Any]: 包含工作和项目经历的字典。
+    """
     langfuse_handler = create_langfuse_handler(session_id, "extract_work_project")
     extractor = LanguageModelChain(
         ResumeWorkProject,
@@ -68,6 +93,16 @@ async def extract_work_project(resume_content: str, session_id: str) -> Dict[str
 async def generate_resume_summary(
     resume_content: str, session_id: str
 ) -> Dict[str, Any]:
+    """
+    生成简历概述。
+
+    Args:
+        resume_content (str): 简历内容。
+        session_id (str): 会话ID。
+
+    Returns:
+        Dict[str, Any]: 包含简历概述的字典。
+    """
     langfuse_handler = create_langfuse_handler(session_id, "generate_resume_summary")
     summarizer = LanguageModelChain(
         Summary,
@@ -87,8 +122,20 @@ async def process_resume(
     file_type: str = "url",
     file_or_url: str = "",
 ) -> Dict[str, Any]:
-    if session_id is None:
-        session_id = str(uuid.uuid4())
+    """
+    处理简历，提取所有相关信息。
+
+    Args:
+        resume_content (str): 简历内容。
+        resume_id (str): 简历ID。
+        session_id (str, optional): 会话ID。如果未提供，将生成新的UUID。
+        file_type (str, optional): 文件类型。默认为"url"。
+        file_or_url (str, optional): 文件路径或URL。默认为空字符串。
+
+    Returns:
+        Dict[str, Any]: 包含完整简历信息的字典。
+    """
+    session_id = session_id or str(uuid.uuid4())
 
     try:
         personal_education_task = extract_personal_education(resume_content, session_id)
@@ -150,11 +197,6 @@ def store_resume(resume_data: Dict[str, Any]) -> bool:
         store_resume_in_milvus(resume_data)
 
         # 存储到SQLite
-        from backend.resume_management.storage.resume_sql_storage import (
-            init_all_tables,
-            store_full_resume,
-        )
-
         init_all_tables()
 
         # 确保resume_data中包含所需的所有字段
@@ -172,11 +214,21 @@ def store_resume(resume_data: Dict[str, Any]) -> bool:
         store_full_resume(resume_data)
         return True
     except Exception as e:
-        print(f"存储简历数据时出错: {str(e)}")
+        logging.error(f"存储简历数据时出错: {str(e)}")
         return False
 
 
-def create_langfuse_handler(session_id, step):
+def create_langfuse_handler(session_id: str, step: str) -> CallbackHandler:
+    """
+    创建Langfuse回调处理器。
+
+    Args:
+        session_id (str): 会话ID。
+        step (str): 当前步骤。
+
+    Returns:
+        CallbackHandler: Langfuse回调处理器实例。
+    """
     return CallbackHandler(
         tags=["resume_extraction"], session_id=session_id, metadata={"step": step}
     )
