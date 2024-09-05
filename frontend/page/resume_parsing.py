@@ -85,66 +85,86 @@ def display_resume_info(resume_data):
 
     with st.container(border=True):
         # 简历概述
-        with st.container(border=True):
-            st.markdown("#### 简历概述")
-            st.markdown(f"**特点**: {resume_data.get('characteristics', '')}")
-            st.markdown(f"**经验**: {resume_data.get('experience_summary', '')}")
-            st.markdown(f"**技能概览**: {resume_data.get('skills_overview', '')}")
+        display_resume_summary(resume_data)
 
         # 个人信息
-        with st.container(border=True):
-            st.markdown("#### 个人信息")
-            personal_info = resume_data.get("personal_info", {})
-            col1, col2 = st.columns(2)
-            with col1:
-                st.markdown(f"**姓名:** {personal_info.get('name', 'N/A')}")
-                st.markdown(f"**邮箱:** {personal_info.get('email', 'N/A')}")
-            with col2:
-                st.markdown(f"**电话:** {personal_info.get('phone', 'N/A')}")
-                st.markdown(f"**地址:** {personal_info.get('address', 'N/A')}")
-            st.markdown(f"**个人简介:** {personal_info.get('summary', 'N/A')}")
-            if personal_info.get("skills"):
-                st.markdown("**技能:**")
-                st.markdown(", ".join(personal_info["skills"]))
+        display_personal_info(resume_data.get("personal_info", {}))
 
         # 教育背景
-        with st.container(border=True):
-            st.markdown("#### 教育背景")
-            for edu in resume_data.get("education", []):
-                st.markdown(
-                    f"**{edu['institution']}** - {edu['degree']} in {edu['major']}"
-                )
-                st.markdown(f"毕业年份: {edu['graduation_year']}")
-                st.markdown("---")
+        display_education(resume_data.get("education", []))
 
         # 工作经历
-        with st.container(border=True):
-            st.markdown("#### 工作经历")
-            for work in resume_data.get("work_experiences", []):
-                st.markdown(f"**{work['company']}** - {work['position']}")
-                st.markdown(f"{work['start_date']} to {work['end_date']}")
-                st.markdown("职责:")
-                for resp in work["responsibilities"]:
-                    st.markdown(f"- {resp}")
-                st.markdown("---")
+        display_work_experience(resume_data.get("work_experiences", []))
 
         # 项目经历
-        if "project_experiences" in resume_data and resume_data["project_experiences"]:
-            with st.container(border=True):
-                st.markdown("#### 项目经历")
-                for proj in resume_data["project_experiences"]:
-                    st.markdown(f"**{proj['name']}** - {proj['role']}")
-                    st.markdown(f"{proj['start_date']} to {proj['end_date']}")
-                    st.markdown("详情:")
-                    for detail in proj["details"]:
-                        st.markdown(f"- {detail}")
-                    st.markdown("---")
+        display_project_experience(resume_data.get("project_experiences", []))
+
+
+def display_resume_summary(resume_data):
+    """显示简历概述"""
+    with st.container(border=True):
+        st.markdown("#### 简历概述")
+        st.markdown(f"**特点**: {resume_data.get('characteristics', '')}")
+        st.markdown(f"**经验**: {resume_data.get('experience_summary', '')}")
+        st.markdown(f"**技能概览**: {resume_data.get('skills_overview', '')}")
+
+
+def display_personal_info(personal_info):
+    """显示个人信息"""
+    with st.container(border=True):
+        st.markdown("#### 个人信息")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown(f"**姓名:** {personal_info.get('name', 'N/A')}")
+            st.markdown(f"**邮箱:** {personal_info.get('email', 'N/A')}")
+        with col2:
+            st.markdown(f"**电话:** {personal_info.get('phone', 'N/A')}")
+            st.markdown(f"**地址:** {personal_info.get('address', 'N/A')}")
+        st.markdown(f"**个人简介:** {personal_info.get('summary', 'N/A')}")
+        if personal_info.get("skills"):
+            st.markdown("**技能:**")
+            st.markdown(", ".join(personal_info["skills"]))
+
+
+def display_education(education_list):
+    """显示教育背景"""
+    with st.container(border=True):
+        st.markdown("#### 教育背景")
+        for edu in education_list:
+            st.markdown(f"**{edu['institution']}** - {edu['degree']} in {edu['major']}")
+            st.markdown(f"毕业年份: {edu['graduation_year']}")
+            st.markdown("---")
+
+
+def display_work_experience(work_experiences):
+    """显示工作经历"""
+    with st.container(border=True):
+        st.markdown("#### 工作经历")
+        for work in work_experiences:
+            st.markdown(f"**{work['company']}** - {work['position']}")
+            st.markdown(f"{work['start_date']} to {work['end_date']}")
+            st.markdown("职责:")
+            for resp in work["responsibilities"]:
+                st.markdown(f"- {resp}")
+            st.markdown("---")
+
+
+def display_project_experience(project_experiences):
+    """显示项目经历"""
+    if project_experiences:
+        with st.container(border=True):
+            st.markdown("#### 项目经历")
+            for proj in project_experiences:
+                st.markdown(f"**{proj['name']}** - {proj['role']}")
+                st.markdown(f"{proj['start_date']} to {proj['end_date']}")
+                st.markdown("详情:")
+                for detail in proj["details"]:
+                    st.markdown(f"- {detail}")
+                st.markdown("---")
 
 
 def display_info_message():
-    """
-    显示智能简历解析系统的功能介绍。
-    """
+    """显示智能简历解析系统的功能介绍"""
     st.info(
         """
     智能简历解析系统利用大语言模型，实现对多种格式简历的高效解析。
@@ -155,13 +175,9 @@ def display_info_message():
 
 
 def display_workflow():
-    """
-    显示智能简历解析系统的工作流程。
-    """
+    """显示智能简历解析系统的工作流程"""
     with st.expander("📄 查看智能简历解析工作流程", expanded=False):
-
         col1, col2 = st.columns([1, 1])
-
         with col2:
             st.markdown(
                 """
@@ -196,6 +212,7 @@ def display_workflow():
 
 
 def process_batch_resumes(batch_file):
+    """处理批量简历"""
     if batch_file is not None:
         df = (
             pd.read_csv(batch_file)
@@ -214,7 +231,7 @@ def process_batch_resumes(batch_file):
             existing_resume = get_full_resume(resume_id)
 
             if existing_resume:
-                st.warning(f"URL {url} 的简历已存在,跳过处理。")
+                st.warning(f"URL {url} 的简历已存在，跳过处理。")
             else:
                 resume_data = asyncio.run(
                     process_resume(
@@ -253,101 +270,105 @@ def main():
     tab1, tab2 = st.tabs(["单份简历", "批量解析"])
 
     with tab1:
-        with st.container(border=True):
-            uploaded_file = st.file_uploader("上传简历文件", type=["html", "pdf"])
-            url_input = st.text_input("或输入简历URL")
-
-            if uploaded_file is not None:
-                file_type = uploaded_file.type.split("/")[-1]
-                file_content = uploaded_file.read()
-                resume_id = calculate_resume_hash(
-                    file_content.decode("utf-8", errors="ignore")
-                )
-
-                # 检查是否存在重复的简历
-                existing_resume = get_full_resume(resume_id)
-                if existing_resume:
-                    st.warning("检测到重复的简历。正在从数据库中获取已解析的信息。")
-                    st.session_state.resume_data = existing_resume
-                    st.session_state.is_from_database = True
-                else:
-                    st.session_state.is_from_database = False
-                    if st.button("提取信息", key="file"):
-                        with st.spinner("正在提取简历信息..."):
-                            resume_data = asyncio.run(
-                                extract_resume_info(
-                                    file_content,
-                                    resume_id,
-                                    file_type,
-                                    st.session_state.session_id,
-                                    uploaded_file.name,
-                                )
-                            )
-                            resume_data["resume_format"] = file_type
-                            resume_data["file_or_url"] = uploaded_file.name
-                            st.session_state.resume_data = resume_data
-            elif url_input:
-                file_type = "url"
-                file_content = url_input
-                resume_id = calculate_resume_hash(url_input)
-
-                # 检查是否存在重复的简历
-                existing_resume = get_full_resume(resume_id)
-                if existing_resume:
-                    st.warning("检测到重复的简历。正在从数据库中获取已解析的信息。")
-                    st.session_state.resume_data = existing_resume
-                    st.session_state.is_from_database = True
-                else:
-                    st.session_state.is_from_database = False
-                    if st.button("提取信息", key="url"):
-                        with st.spinner("正在提取简历信息..."):
-                            resume_data = asyncio.run(
-                                extract_resume_info(
-                                    file_content,
-                                    resume_id,
-                                    file_type,
-                                    st.session_state.session_id,
-                                    url_input,
-                                )
-                            )
-                            resume_data["resume_format"] = "url"
-                            resume_data["file_or_url"] = url_input
-                            st.session_state.resume_data = resume_data
+        handle_single_resume()
 
     with tab2:
-        with st.container(border=True):
-            batch_file = st.file_uploader("上传包含URL的表格文件", type=["csv", "xlsx"])
-            if batch_file is not None:
-                if st.button("开始批量处理"):
-                    process_batch_resumes(batch_file)
+        handle_batch_resumes()
 
     if st.session_state.resume_data is not None:
-        st.markdown("---")
-
-        display_resume_info(st.session_state.resume_data)
-
-        # 提供下载选项
-        json_string = json.dumps(
-            st.session_state.resume_data, ensure_ascii=False, indent=2
-        )
-        st.download_button(
-            label="下载JSON结果",
-            data=json_string,
-            file_name="resume_extracted_info.json",
-            mime="application/json",
-        )
-
-        # 只有当简历不是从数据库中检索的时候，才显示"存储简历到数据库"按钮
-        if not st.session_state.is_from_database:
-            if st.button("存储简历到数据库"):
-                with st.spinner("正在存储简历数据..."):
-                    if store_resume(st.session_state.resume_data):
-                        st.success("简历数据已成功存储到数据库")
-                    else:
-                        st.error("存储简历数据时出错，请稍后重试")
+        display_resume_results()
 
     # 页脚
     show_footer()
+
+
+def handle_single_resume():
+    """处理单份简历上传和URL输入"""
+    with st.container(border=True):
+        uploaded_file = st.file_uploader("上传简历文件", type=["html", "pdf"])
+        url_input = st.text_input("或输入简历URL")
+
+        if uploaded_file is not None:
+            process_uploaded_file(uploaded_file)
+        elif url_input:
+            process_url_input(url_input)
+
+
+def process_uploaded_file(uploaded_file):
+    """处理上传的文件"""
+    file_type = uploaded_file.type.split("/")[-1]
+    file_content = uploaded_file.read()
+    resume_id = calculate_resume_hash(file_content.decode("utf-8", errors="ignore"))
+
+    handle_resume_processing(resume_id, file_type, file_content, uploaded_file.name)
+
+
+def process_url_input(url_input):
+    """处理输入的URL"""
+    file_type = "url"
+    file_content = url_input
+    resume_id = calculate_resume_hash(url_input)
+
+    handle_resume_processing(resume_id, file_type, file_content, url_input)
+
+
+def handle_resume_processing(resume_id, file_type, file_content, file_or_url):
+    """处理简历提取和存储逻辑"""
+    existing_resume = get_full_resume(resume_id)
+    if existing_resume:
+        st.warning("检测到重复的简历。正在从数据库中获取已解析的信息。")
+        st.session_state.resume_data = existing_resume
+        st.session_state.is_from_database = True
+    else:
+        st.session_state.is_from_database = False
+        if st.button("提取信息", key=file_type):
+            with st.spinner("正在提取简历信息..."):
+                resume_data = asyncio.run(
+                    extract_resume_info(
+                        file_content,
+                        resume_id,
+                        file_type,
+                        st.session_state.session_id,
+                        file_or_url,
+                    )
+                )
+                resume_data["resume_format"] = file_type
+                resume_data["file_or_url"] = file_or_url
+                st.session_state.resume_data = resume_data
+
+
+def handle_batch_resumes():
+    """处理批量简历上传"""
+    with st.container(border=True):
+        batch_file = st.file_uploader("上传包含URL的表格文件", type=["csv", "xlsx"])
+        if batch_file is not None:
+            if st.button("开始批量处理"):
+                process_batch_resumes(batch_file)
+
+
+def display_resume_results():
+    """显示简历解析结果和相关操作"""
+    st.markdown("---")
+
+    display_resume_info(st.session_state.resume_data)
+
+    # 提供下载选项
+    json_string = json.dumps(st.session_state.resume_data, ensure_ascii=False, indent=2)
+    st.download_button(
+        label="下载JSON结果",
+        data=json_string,
+        file_name="resume_extracted_info.json",
+        mime="application/json",
+    )
+
+    # 只有当简历不是从数据库中检索的时候，才显示"存储简历到数据库"按钮
+    if not st.session_state.is_from_database:
+        if st.button("存储简历到数据库"):
+            with st.spinner("正在存储简历数据..."):
+                if store_resume(st.session_state.resume_data):
+                    st.success("简历数据已成功存储到数据库")
+                else:
+                    st.error("存储简历数据时出错，请稍后重试")
 
 
 main()
