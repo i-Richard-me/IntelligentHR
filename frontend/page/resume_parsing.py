@@ -20,6 +20,7 @@ from backend.resume_management.extractor.resume_extraction_core import (
     calculate_resume_hash,
     store_resume,
 )
+from backend.resume_management.storage.resume_sql_storage import get_full_resume
 
 st.query_params.role = st.session_state.role
 
@@ -48,7 +49,7 @@ def extract_text_from_pdf(pdf_file):
 
 def extract_text_from_url(url):
     """从URL中提取文本"""
-    jina_url = f'https://r.jina.ai/{url}'
+    jina_url = f"https://r.jina.ai/{url}"
     response = requests.get(jina_url)
     if response.status_code == 200:
         return response.text
@@ -83,10 +84,9 @@ def display_resume_info(resume_data):
         # 简历概述
         with st.container(border=True):
             st.markdown("#### 简历概述")
-            summary = resume_data.get("summary", {})
-            st.markdown(f"**特点**: {summary.get('characteristics', '')}")
-            st.markdown(f"**经验**: {summary.get('experience', '')}")
-            st.markdown(f"**技能概览**: {summary.get('skills_overview', '')}")
+            st.markdown(f"**特点**: {resume_data.get('characteristics', '')}")
+            st.markdown(f"**经验**: {resume_data.get('experience_summary', '')}")
+            st.markdown(f"**技能概览**: {resume_data.get('skills_overview', '')}")
 
         # 个人信息
         with st.container(border=True):
@@ -199,6 +199,8 @@ def main():
         st.session_state.resume_data = None
     if "session_id" not in st.session_state:
         st.session_state.session_id = str(uuid.uuid4())
+    if "is_from_database" not in st.session_state:
+        st.session_state.is_from_database = False
 
     st.title("📄 智能简历解析")
     st.markdown("---")
@@ -219,21 +221,47 @@ def main():
                 file_content.decode("utf-8", errors="ignore")
             )
 
-            if st.button("提取信息", key="file"):
-                with st.spinner("正在提取简历信息..."):
-                    st.session_state.resume_data = asyncio.run(extract_resume_info(
-                        file_content, resume_id, file_type, st.session_state.session_id
-                    ))
+            # 检查是否存在重复的简历
+            existing_resume = get_full_resume(resume_id)
+            if existing_resume:
+                st.warning("检测到重复的简历。正在从数据库中获取已解析的信息。")
+                st.session_state.resume_data = existing_resume
+                st.session_state.is_from_database = True
+            else:
+                st.session_state.is_from_database = False
+                if st.button("提取信息", key="file"):
+                    with st.spinner("正在提取简历信息..."):
+                        st.session_state.resume_data = asyncio.run(
+                            extract_resume_info(
+                                file_content,
+                                resume_id,
+                                file_type,
+                                st.session_state.session_id,
+                            )
+                        )
         elif url_input:
             file_type = "url"
             file_content = url_input
             resume_id = calculate_resume_hash(url_input)
 
-            if st.button("提取信息", key="url"):
-                with st.spinner("正在提取简历信息..."):
-                    st.session_state.resume_data = asyncio.run(extract_resume_info(
-                        file_content, resume_id, file_type, st.session_state.session_id
-                    ))
+            # 检查是否存在重复的简历
+            existing_resume = get_full_resume(resume_id)
+            if existing_resume:
+                st.warning("检测到重复的简历。正在从数据库中获取已解析的信息。")
+                st.session_state.resume_data = existing_resume
+                st.session_state.is_from_database = True
+            else:
+                st.session_state.is_from_database = False
+                if st.button("提取信息", key="url"):
+                    with st.spinner("正在提取简历信息..."):
+                        st.session_state.resume_data = asyncio.run(
+                            extract_resume_info(
+                                file_content,
+                                resume_id,
+                                file_type,
+                                st.session_state.session_id,
+                            )
+                        )
 
     if st.session_state.resume_data is not None:
         st.markdown("---")
@@ -251,13 +279,14 @@ def main():
             mime="application/json",
         )
 
-        # 添加存储到数据库的按钮
-        if st.button("存储简历到数据库"):
-            with st.spinner("正在存储简历数据..."):
-                if store_resume(st.session_state.resume_data):
-                    st.success("简历数据已成功存储到数据库")
-                else:
-                    st.error("存储简历数据时出错，请稍后重试")
+        # 只有当简历不是从数据库中检索的时候，才显示"存储简历到数据库"按钮
+        if not st.session_state.is_from_database:
+            if st.button("存储简历到数据库"):
+                with st.spinner("正在存储简历数据..."):
+                    if store_resume(st.session_state.resume_data):
+                        st.success("简历数据已成功存储到数据库")
+                    else:
+                        st.error("存储简历数据时出错，请稍后重试")
 
     # 页脚
     show_footer()

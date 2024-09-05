@@ -147,16 +147,28 @@ def store_resume(resume_data: Dict[str, Any]) -> bool:
     try:
         # 存储到Milvus
         store_resume_in_milvus(resume_data)
-        
+
         # 存储到SQLite
-        from backend.resume_management.storage.resume_sql_storage import init_sqlite_db, store_resume_summary
-        init_sqlite_db()
-        store_resume_summary(
-            resume_data['id'],
-            resume_data.get('characteristics', ''),
-            resume_data.get('experience_summary', ''),
-            resume_data.get('skills_overview', '')
+        from backend.resume_management.storage.resume_sql_storage import (
+            init_all_tables,
+            store_full_resume,
         )
+
+        init_all_tables()
+
+        # 确保resume_data中包含所需的所有字段
+        if "summary" in resume_data:
+            resume_data["characteristics"] = resume_data["summary"].get(
+                "characteristics", ""
+            )
+            resume_data["experience_summary"] = resume_data["summary"].get(
+                "experience", ""
+            )
+            resume_data["skills_overview"] = resume_data["summary"].get(
+                "skills_overview", ""
+            )
+
+        store_full_resume(resume_data)
         return True
     except Exception as e:
         print(f"存储简历数据时出错: {str(e)}")
