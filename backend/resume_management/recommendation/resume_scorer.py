@@ -50,8 +50,8 @@ class ResumeScorer:
         scoring_method: str = "hybrid",
         max_results: int = 100,
         top_similarities_count: int = 3,
-        similarity_threshold: float = 0.3,
-        decay_factor: float = 0.3,
+        similarity_threshold: float = 0.5,
+        decay_factor: float = 0.35,
     ) -> List[Tuple[str, float]]:
         """
         计算单个集合中简历的得分。
@@ -63,8 +63,8 @@ class ResumeScorer:
             scoring_method (str): 评分方法，默认为'hybrid'
             max_results (int): 最大结果数，默认为100
             top_similarities_count (int): 考虑的最高相似度数量，默认为3
-            similarity_threshold (float): 相似度阈值，默认为0.3
-            decay_factor (float): 衰减因子，默认为0.3
+            similarity_threshold (float): 相似度阈值，默认为0.5
+            decay_factor (float): 衰减因子，默认为0.35
 
         Returns:
             List[Tuple[str, float]]: 简历ID和得分的列表
@@ -187,8 +187,8 @@ class ResumeScorer:
                 scoring_method="hybrid",
                 max_results=collection.num_entities,
                 top_similarities_count=3,
-                similarity_threshold=0.3,
-                decay_factor=0.3,
+                similarity_threshold=0.5,
+                decay_factor=0.35,
             )
 
             for resume_id, score in collection_scores:

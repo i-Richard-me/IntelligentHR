@@ -65,7 +65,7 @@ class ResumeRecommender:
         """
         return self.requirements.get_current_question()
 
-    def process_answer(self, answer: str) -> str:
+    def process_answer(self, answer: str, session_id: Optional[str] = None) -> str:
         """
         处理用户对问题的回答，继续推荐过程。
 
@@ -75,7 +75,7 @@ class ResumeRecommender:
         Returns:
             str: 处理状态，可能是 'need_more_info' 或 'ready'
         """
-        return self.requirements.confirm_requirements(answer)
+        return self.requirements.confirm_requirements(answer, session_id)
 
     def generate_overall_search_strategy(
         self, session_id: Optional[str] = None
