@@ -5,6 +5,7 @@ import os
 from utils.llm_tools import LanguageModelChain, init_language_model
 from langfuse.callback import CallbackHandler
 import uuid
+import asyncio
 
 
 class RecommendationReason(BaseModel):
@@ -65,7 +66,49 @@ class RecommendationReasonGenerator:
             metadata={"step": step},
         )
 
-    def generate_recommendation_reasons(
+    async def generate_single_recommendation_reason(
+        self,
+        refined_query: str,
+        resume: pd.Series,
+        session_id: str,
+        semaphore: asyncio.Semaphore,
+    ) -> Dict[str, str]:
+        """为单个简历生成推荐理由"""
+        async with semaphore:
+            resume_score = {
+                "resume_id": resume["resume_id"],
+                "total_score": resume["total_score"],
+            }
+            for dimension in [
+                "work_experiences",
+                "skills",
+                "educations",
+                "personal_infos",
+            ]:
+                if dimension in resume:
+                    resume_score[dimension] = resume[dimension]
+
+            resume_overview = {
+                "characteristics": resume["characteristics"],
+                "experience": resume["experience"],
+                "skills_overview": resume["skills_overview"],
+            }
+
+            langfuse_handler = self.create_langfuse_handler(
+                session_id, "generate_recommendation_reason"
+            )
+            reason_result = await self.recommendation_reason_chain.ainvoke(
+                {
+                    "refined_query": refined_query,
+                    "resume_score": resume_score,
+                    "resume_overview": resume_overview,
+                },
+                config={"callbacks": [langfuse_handler]},
+            )
+
+            return {"resume_id": resume["resume_id"], "reason": reason_result["reason"]}
+
+    async def generate_recommendation_reasons(
         self,
         refined_query: str,
         resume_details: pd.DataFrame,
@@ -91,43 +134,17 @@ class RecommendationReasonGenerator:
         if resume_details.empty:
             raise ValueError("简历详细信息不能为空。无法生成推荐理由。")
 
-        reasons = []
-        for _, resume in resume_details.iterrows():
-            resume_score = {
-                "resume_id": resume["resume_id"],
-                "total_score": resume["total_score"],
-            }
-            for dimension in [
-                "work_experiences",
-                "skills",
-                "educations",
-                "personal_infos",
-            ]:
-                if dimension in resume:
-                    resume_score[dimension] = resume[dimension]
+        session_id = session_id or str(uuid.uuid4())
+        semaphore = asyncio.Semaphore(3)  # 限制并发数为3
 
-            resume_overview = {
-                "characteristics": resume["characteristics"],
-                "experience": resume["experience"],
-                "skills_overview": resume["skills_overview"],
-            }
-
-            langfuse_handler = self.create_langfuse_handler(
-                session_id or str(uuid.uuid4()), "generate_recommendation_reason"
+        tasks = [
+            self.generate_single_recommendation_reason(
+                refined_query, resume, session_id, semaphore
             )
-            reason_result = self.recommendation_reason_chain.invoke(
-                {
-                    "refined_query": refined_query,
-                    "resume_score": resume_score,
-                    "resume_overview": resume_overview,
-                },
-                config={"callbacks": [langfuse_handler]},
-            )
+            for _, resume in resume_details.iterrows()
+        ]
 
-            reasons.append(
-                {"resume_id": resume["resume_id"], "reason": reason_result["reason"]}
-            )
-
+        reasons = await asyncio.gather(*tasks)
         reasons_df = pd.DataFrame(reasons)
 
         print("已为每份推荐的简历生成详细的推荐理由")

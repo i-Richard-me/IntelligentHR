@@ -4,14 +4,15 @@ import time
 import numpy as np
 from pymilvus import Collection, connections
 from typing import List, Dict, Tuple
-from openai import OpenAI
+from openai import AsyncOpenAI
+import asyncio
 
 
 class ResumeScorer:
     """简历评分器，负责计算简历的得分"""
 
     def __init__(self):
-        self.client = OpenAI(
+        self.client = AsyncOpenAI(
             base_url="https://api.siliconflow.cn/v1",
             api_key=os.getenv("EMBEDDING_API_KEY"),
         )
@@ -21,9 +22,9 @@ class ResumeScorer:
             "db_name": os.getenv("VECTOR_DB_DATABASE_RESUME", "resume"),
         }
 
-    def get_embedding(self, text: str) -> List[float]:
+    async def get_embedding(self, text: str) -> List[float]:
         """
-        获取文本的嵌入向量。
+        异步获取文本的嵌入向量。
 
         Args:
             text (str): 输入文本
@@ -34,20 +35,20 @@ class ResumeScorer:
         max_retries = 3
         for _ in range(max_retries):
             try:
-                response = self.client.embeddings.create(
+                response = await self.client.embeddings.create(
                     model=os.getenv("EMBEDDING_MODEL", ""), input=text
                 )
-                time.sleep(0.07)  # 避免频繁请求
+                await asyncio.sleep(0.07)  # 避免频繁请求
                 return response.data[0].embedding
             except Exception as e:
                 print(f"获取嵌入向量时出错：{e}")
                 if len(text) <= 1:
                     return None
                 text = text[: int(len(text) * 0.9)]  # 缩短文本长度并重试
-                time.sleep(0.07)
+                await asyncio.sleep(0.07)
         return None
 
-    def calculate_resume_scores_for_collection(
+    async def calculate_resume_scores_for_collection(
         self,
         collection: Collection,
         query_contents: List[Dict[str, str]],
@@ -59,7 +60,7 @@ class ResumeScorer:
         decay_factor: float = 0.35,
     ) -> List[Tuple[str, float]]:
         """
-        计算单个集合中简历的得分。
+        异步计算单个集合中简历的得分。
 
         Args:
             collection (Collection): Milvus集合
@@ -78,7 +79,7 @@ class ResumeScorer:
 
         for query in query_contents:
             field_name = query["field_name"]
-            query_vector = self.get_embedding(query["query_content"])
+            query_vector = await self.get_embedding(query["query_content"])
             if query_vector is None:
                 print(f"无法为字段 {field_name} 获取嵌入向量，跳过此查询")
                 continue
@@ -139,7 +140,7 @@ class ResumeScorer:
         sorted_scores = sorted(final_scores.items(), key=lambda x: x[1], reverse=True)
         return sorted_scores[:max_results]
 
-    def calculate_overall_resume_scores(
+    async def calculate_overall_resume_scores(
         self,
         refined_query: str,
         collection_relevances: List[Dict],
@@ -147,7 +148,7 @@ class ResumeScorer:
         top_n: int = 3,
     ) -> pd.DataFrame:
         """
-        计算所有集合的综合简历得分并返回前N个简历。
+        异步计算所有集合的综合简历得分并返回前N个简历。
 
         Args:
             refined_query (str): 精炼后的查询
@@ -166,12 +167,12 @@ class ResumeScorer:
 
         all_scores = {}
 
-        for collection_info in collection_relevances:
+        async def process_collection(collection_info):
             collection_name = collection_info["collection_name"]
             collection_weight = collection_info["relevance_score"]
 
             if collection_weight == 0:
-                continue
+                return
 
             collection = Collection(collection_name)
             collection_strategy = collection_search_strategies[collection_name]
@@ -187,7 +188,7 @@ class ResumeScorer:
                 )
                 field_relevance_scores[query.field_name] = query.relevance_score
 
-            collection_scores = self.calculate_resume_scores_for_collection(
+            collection_scores = await self.calculate_resume_scores_for_collection(
                 collection=collection,
                 query_contents=query_contents,
                 field_relevance_scores=field_relevance_scores,
@@ -198,11 +199,19 @@ class ResumeScorer:
                 decay_factor=0.35,
             )
 
-            for resume_id, score in collection_scores:
-                if resume_id not in all_scores:
-                    all_scores[resume_id] = {"total_score": 0}
-                all_scores[resume_id][collection_name] = score * collection_weight
-                all_scores[resume_id]["total_score"] += score * collection_weight
+            return collection_name, collection_weight, collection_scores
+
+        tasks = [process_collection(info) for info in collection_relevances]
+        results = await asyncio.gather(*tasks)
+
+        for result in results:
+            if result is not None:
+                collection_name, collection_weight, collection_scores = result
+                for resume_id, score in collection_scores:
+                    if resume_id not in all_scores:
+                        all_scores[resume_id] = {"total_score": 0}
+                    all_scores[resume_id][collection_name] = score * collection_weight
+                    all_scores[resume_id]["total_score"] += score * collection_weight
 
         df = pd.DataFrame.from_dict(all_scores, orient="index")
         df.index.name = "resume_id"

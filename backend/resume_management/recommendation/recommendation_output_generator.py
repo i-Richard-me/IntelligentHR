@@ -2,6 +2,7 @@ import pandas as pd
 from typing import Dict, List
 from utils.dataset_utils import load_df_from_csv, save_df_to_csv
 from backend.resume_management.storage.resume_sql_storage import get_full_resume
+import asyncio
 
 
 class RecommendationOutputGenerator:
@@ -10,9 +11,31 @@ class RecommendationOutputGenerator:
     def __init__(self):
         pass
 
-    def fetch_resume_details(self, ranked_resume_scores: pd.DataFrame) -> pd.DataFrame:
+    async def fetch_single_resume_details(self, resume_id: str) -> Dict:
         """
-        获取排名后的简历的详细信息。
+        异步获取单个简历的详细信息。
+
+        Args:
+            resume_id (str): 简历ID
+
+        Returns:
+            Dict: 包含简历详细信息的字典
+        """
+        full_resume = await asyncio.to_thread(get_full_resume, resume_id)
+        if full_resume:
+            return {
+                "resume_id": resume_id,
+                "characteristics": full_resume.get("characteristics", ""),
+                "experience": full_resume.get("experience_summary", ""),
+                "skills_overview": full_resume.get("skills_overview", ""),
+            }
+        return None
+
+    async def fetch_resume_details(
+        self, ranked_resume_scores: pd.DataFrame
+    ) -> pd.DataFrame:
+        """
+        异步获取排名后的简历的详细信息。
 
         Args:
             ranked_resume_scores (pd.DataFrame): 包含排名后的简历得分的DataFrame。
@@ -28,18 +51,11 @@ class RecommendationOutputGenerator:
 
         top_resume_ids = ranked_resume_scores["resume_id"].tolist()
 
-        resume_details = []
-        for resume_id in top_resume_ids:
-            full_resume = get_full_resume(resume_id)
-            if full_resume:
-                resume_details.append(
-                    {
-                        "resume_id": resume_id,
-                        "characteristics": full_resume.get("characteristics", ""),
-                        "experience": full_resume.get("experience_summary", ""),
-                        "skills_overview": full_resume.get("skills_overview", ""),
-                    }
-                )
+        tasks = [
+            self.fetch_single_resume_details(resume_id) for resume_id in top_resume_ids
+        ]
+        resume_details = await asyncio.gather(*tasks)
+        resume_details = [detail for detail in resume_details if detail is not None]
 
         resume_details_df = pd.DataFrame(resume_details)
 
@@ -50,11 +66,11 @@ class RecommendationOutputGenerator:
         print("已获取候选简历的详细信息")
         return merged_df
 
-    def prepare_final_output(
+    async def prepare_final_output(
         self, resume_details: pd.DataFrame, recommendation_reasons: pd.DataFrame
     ) -> pd.DataFrame:
         """
-        准备最终的推荐输出。
+        异步准备最终的推荐输出。
 
         Args:
             resume_details (pd.DataFrame): 包含简历详细信息的DataFrame。
@@ -74,8 +90,9 @@ class RecommendationOutputGenerator:
         ):
             raise ValueError("简历详细信息或推荐理由不能为空。无法准备最终输出。")
 
-        final_recommendations = pd.merge(
-            resume_details, recommendation_reasons, on="resume_id", how="left"
+        # 使用 asyncio.to_thread 来异步执行 pandas 操作
+        final_recommendations = await asyncio.to_thread(
+            pd.merge, resume_details, recommendation_reasons, on="resume_id", how="left"
         )
 
         columns_order = [
@@ -88,8 +105,8 @@ class RecommendationOutputGenerator:
         ]
         final_recommendations = final_recommendations[columns_order]
 
-        final_recommendations = final_recommendations.sort_values(
-            "total_score", ascending=False
+        final_recommendations = await asyncio.to_thread(
+            final_recommendations.sort_values, "total_score", ascending=False
         )
 
         final_recommendations = final_recommendations.rename(

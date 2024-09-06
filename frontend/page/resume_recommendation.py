@@ -4,6 +4,7 @@ import os
 import pandas as pd
 from typing import Dict, List, Optional
 import uuid
+import asyncio
 
 # 获取项目根目录的绝对路径
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -15,6 +16,24 @@ from backend.resume_management.recommendation.resume_recommender import (
     ResumeRecommender,
 )
 from frontend.ui_components import show_sidebar, show_footer, apply_common_styles
+
+# 初始化会话状态
+if "recommender" not in st.session_state:
+    st.session_state.recommender = ResumeRecommender()
+    st.session_state.messages = [
+        {
+            "role": "assistant",
+            "content": "您好，我是智能简历推荐助手。请告诉我您的招聘需求。",
+        }
+    ]
+    st.session_state.current_stage = "initial_query"
+    st.session_state.search_strategy = None
+    st.session_state.recommendations = None
+    st.session_state.processing = False
+    st.session_state.strategy_displayed = False
+    st.session_state.refined_query = None
+    st.session_state.top_n = 3  # 默认推荐数量
+    st.session_state.session_id = str(uuid.uuid4())
 
 st.query_params.role = st.session_state.role
 
@@ -107,14 +126,14 @@ def display_chat_history():
                                 st.write(f"推荐理由: {rec['推荐理由']}")
 
 
-def process_user_input(prompt: str):
+async def process_user_input(prompt: str):
     """处理用户输入"""
     st.session_state.messages.append({"role": "user", "content": prompt})
     display_chat_history()
 
     if st.session_state.current_stage == "initial_query":
         with st.spinner("正在分析您的需求..."):
-            status = st.session_state.recommender.process_query(
+            status = await st.session_state.recommender.process_query(
                 prompt, st.session_state.session_id
             )
         st.session_state.current_stage = (
@@ -124,7 +143,7 @@ def process_user_input(prompt: str):
         )
     elif st.session_state.current_stage == "refining_query":
         with st.spinner("正在处理您的回答..."):
-            status = st.session_state.recommender.process_answer(
+            status = await st.session_state.recommender.process_answer(
                 prompt, st.session_state.session_id
             )
         if status == "ready":
@@ -154,24 +173,6 @@ def process_user_input(prompt: str):
     st.rerun()
 
 
-# 初始化会话状态
-if "recommender" not in st.session_state:
-    st.session_state.recommender = ResumeRecommender()
-    st.session_state.messages = [
-        {
-            "role": "assistant",
-            "content": "您好，我是智能简历推荐助手。请告诉我您的招聘需求。",
-        }
-    ]
-    st.session_state.current_stage = "initial_query"
-    st.session_state.search_strategy = None
-    st.session_state.recommendations = None
-    st.session_state.processing = False
-    st.session_state.strategy_displayed = False
-    st.session_state.refined_query = None
-    st.session_state.top_n = 3  # 默认推荐数量
-    st.session_state.session_id = str(uuid.uuid4())
-
 # 主界面
 st.title("👥 智能简历推荐系统")
 st.markdown("---")
@@ -195,94 +196,105 @@ display_chat_history()
 
 # 处理用户输入
 if prompt := st.chat_input("输入您的需求或回答"):
-    process_user_input(prompt)
+    asyncio.run(process_user_input(prompt))
 
 # 处理推荐生成过程
 if st.session_state.processing:
-    with st.spinner("正在生成整体简历搜索策略..."):
-        st.session_state.recommender.generate_overall_search_strategy(
-            st.session_state.session_id
-        )
 
-    # 显示整体检索策略
-    collection_relevances = st.session_state.recommender.get_overall_search_strategy()
-    if collection_relevances and not st.session_state.strategy_displayed:
-        dimension_descriptions = {
-            "work_experiences": "工作经历",
-            "skills": "专业技能",
-            "educations": "教育背景",
-            "project_experiences": "项目经验",
-            "personal_infos": "个人概况",
-        }
-        table_data = [
-            {
-                "维度": dimension_descriptions.get(
-                    relevance["collection_name"], relevance["collection_name"]
-                ),
-                "重要程度": f"{relevance['relevance_score'] * 100:.0f}%",
+    async def generate_recommendations():
+        with st.spinner("正在生成整体简历搜索策略..."):
+            await st.session_state.recommender.generate_overall_search_strategy(
+                st.session_state.session_id
+            )
+
+        # 显示整体检索策略
+        collection_relevances = (
+            st.session_state.recommender.get_overall_search_strategy()
+        )
+        if collection_relevances and not st.session_state.strategy_displayed:
+            dimension_descriptions = {
+                "work_experiences": "工作经历",
+                "skills": "专业技能",
+                "educations": "教育背景",
+                "project_experiences": "项目经验",
+                "personal_infos": "个人概况",
             }
-            for relevance in collection_relevances
-        ]
-        st.session_state.search_strategy = pd.DataFrame(table_data)
+            table_data = [
+                {
+                    "维度": dimension_descriptions.get(
+                        relevance["collection_name"], relevance["collection_name"]
+                    ),
+                    "重要程度": f"{relevance['relevance_score'] * 100:.0f}%",
+                }
+                for relevance in collection_relevances
+            ]
+            st.session_state.search_strategy = pd.DataFrame(table_data)
 
-        strategy_message = {
-            "type": "search_strategy",
-            "data": st.session_state.search_strategy,
-        }
-        st.session_state.messages.append(
-            {"role": "assistant", "content": strategy_message}
-        )
-        display_chat_history()
-        st.session_state.strategy_displayed = True
+            strategy_message = {
+                "type": "search_strategy",
+                "data": st.session_state.search_strategy,
+            }
+            st.session_state.messages.append(
+                {"role": "assistant", "content": strategy_message}
+            )
+            display_chat_history()
+            st.session_state.strategy_displayed = True
 
-    with st.spinner("正在生成详细的检索策略..."):
-        st.session_state.recommender.generate_detailed_search_strategy(
-            st.session_state.session_id
-        )
+        with st.spinner("正在生成详细的检索策略..."):
+            await st.session_state.recommender.generate_detailed_search_strategy(
+                st.session_state.session_id
+            )
 
-    with st.spinner("正在计算简历得分..."):
-        st.session_state.recommender.calculate_resume_scores(st.session_state.top_n)
+        with st.spinner("正在计算简历得分..."):
+            await st.session_state.recommender.calculate_resume_scores(
+                st.session_state.top_n
+            )
 
-    with st.spinner("正在获取简历详细信息..."):
-        st.session_state.recommender.resume_details = (
-            st.session_state.recommender.output_generator.fetch_resume_details(
+        with st.spinner("正在获取简历详细信息..."):
+            st.session_state.recommender.resume_details = await st.session_state.recommender.output_generator.fetch_resume_details(
                 st.session_state.recommender.ranked_resume_scores
             )
-        )
 
-    with st.spinner("正在生成推荐理由..."):
-        st.session_state.recommender.generate_recommendation_reasons(
-            st.session_state.session_id
-        )
+        with st.spinner("正在生成推荐理由..."):
+            await st.session_state.recommender.generate_recommendation_reasons(
+                st.session_state.session_id
+            )
 
-    with st.spinner("正在准备最终推荐结果..."):
-        st.session_state.recommender.prepare_final_recommendations()
+        with st.spinner("正在准备最终推荐结果..."):
+            await st.session_state.recommender.prepare_final_recommendations()
 
-    st.success("处理完成！")
+        st.success("处理完成！")
 
-    # 更新推荐结果
-    recommendations = st.session_state.recommender.get_recommendations()
-    if recommendations:
-        st.session_state.recommendations = recommendations
+        # 更新推荐结果
+        recommendations = st.session_state.recommender.get_recommendations()
+        if recommendations:
+            st.session_state.recommendations = recommendations
 
-        recommendation_message = {"type": "recommendations", "data": recommendations}
+            recommendation_message = {
+                "type": "recommendations",
+                "data": recommendations,
+            }
 
-        st.session_state.messages.append(
-            {"role": "assistant", "content": recommendation_message}
-        )
-        display_chat_history()
+            st.session_state.messages.append(
+                {"role": "assistant", "content": recommendation_message}
+            )
+            display_chat_history()
 
-        st.info(
-            f"以上是为您推荐的 {len(recommendations)} 份简历，您可以展开查看详细信息。如需进行新的查询，请在下方输入框中输入新的需求。"
-        )
-    else:
-        st.warning("抱歉，我们没有找到符合您要求的简历。您可以尝试调整一下需求再试试。")
+            st.info(
+                f"以上是为您推荐的 {len(recommendations)} 份简历，您可以展开查看详细信息。如需进行新的查询，请在下方输入框中输入新的需求。"
+            )
+        else:
+            st.warning(
+                "抱歉，我们没有找到符合您要求的简历。您可以尝试调整一下需求再试试。"
+            )
 
-    st.session_state.current_stage = "initial_query"
-    st.session_state.processing = False
-    st.session_state.strategy_displayed = False
+        st.session_state.current_stage = "initial_query"
+        st.session_state.processing = False
+        st.session_state.strategy_displayed = False
 
-    st.rerun()
+        st.rerun()
+
+    asyncio.run(generate_recommendations())
 
 # 页脚
 show_footer()

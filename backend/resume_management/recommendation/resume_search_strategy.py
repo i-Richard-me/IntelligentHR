@@ -1,3 +1,4 @@
+import asyncio
 import uuid
 import os
 from typing import List, Dict, Optional
@@ -69,7 +70,7 @@ class ResumeSearchStrategyGenerator:
             metadata={"step": step},
         )
 
-    def generate_resume_search_strategy(
+    async def generate_resume_search_strategy(
         self, refined_query: str, session_id: Optional[str] = None
     ) -> List[Dict[str, float]]:
         """
@@ -93,7 +94,7 @@ class ResumeSearchStrategyGenerator:
             session_id, "generate_search_strategy"
         )
 
-        search_strategy_result = self.resume_search_strategy_chain.invoke(
+        search_strategy_result = await self.resume_search_strategy_chain.ainvoke(
             {"refined_query": refined_query}, config={"callbacks": [langfuse_handler]}
         )
 
@@ -255,37 +256,15 @@ class CollectionSearchStrategyGenerator:
             metadata={"step": step},
         )
 
-    def generate_collection_search_strategy(
+    async def generate_single_collection_strategy(
         self,
+        collection_name: str,
         refined_query: str,
-        collection_relevances: List[Dict[str, float]],
-        session_id: Optional[str] = None,
+        session_id: str,
+        semaphore: asyncio.Semaphore,
     ) -> Dict[str, CollectionSearchStrategy]:
-        """
-        为每个相关的集合生成详细的搜索策略。
-
-        Args:
-            refined_query (str): 精炼后的用户查询
-            collection_relevances (List[Dict[str, float]]): 集合相关性列表
-            session_id (Optional[str]): 会话ID
-
-        Returns:
-            Dict[str, CollectionSearchStrategy]: 每个集合的搜索策略
-
-        Raises:
-            ValueError: 如果精炼后的查询为空或集合相关性列表为空
-        """
-        if not refined_query or not collection_relevances:
-            raise ValueError(
-                "精炼后的查询或集合相关性列表不能为空。无法生成集合搜索策略。"
-            )
-
-        session_id = session_id or str(uuid.uuid4())
-        collection_search_strategies = {}
-
-        for collection_info in collection_relevances:
-            collection_name = collection_info["collection_name"]
-
+        """为单个集合生成搜索策略"""
+        async with semaphore:
             system_message = self.collection_specific_system_message_template.format(
                 collection_name=collection_name,
                 field_descriptions=self.collection_specific_instructions[
@@ -306,14 +285,52 @@ class CollectionSearchStrategyGenerator:
             langfuse_handler = self.create_langfuse_handler(
                 session_id, f"generate_strategy_for_{collection_name}"
             )
-            search_strategy_result = collection_search_strategy_chain.invoke(
+            search_strategy_result = await collection_search_strategy_chain.ainvoke(
                 {"refined_query": refined_query, "collection_name": collection_name},
                 config={"callbacks": [langfuse_handler]},
             )
 
-            collection_search_strategies[collection_name] = CollectionSearchStrategy(
-                **search_strategy_result
+            return {collection_name: CollectionSearchStrategy(**search_strategy_result)}
+
+    async def generate_collection_search_strategy(
+        self,
+        refined_query: str,
+        collection_relevances: List[Dict[str, float]],
+        session_id: Optional[str] = None,
+    ) -> Dict[str, CollectionSearchStrategy]:
+        """
+        并行为每个相关的集合生成详细的搜索策略。
+
+        Args:
+            refined_query (str): 精炼后的用户查询
+            collection_relevances (List[Dict[str, float]]): 集合相关性列表
+            session_id (Optional[str]): 会话ID
+
+        Returns:
+            Dict[str, CollectionSearchStrategy]: 每个集合的搜索策略
+
+        Raises:
+            ValueError: 如果精炼后的查询为空或集合相关性列表为空
+        """
+        if not refined_query or not collection_relevances:
+            raise ValueError(
+                "精炼后的查询或集合相关性列表不能为空。无法生成集合搜索策略。"
             )
+
+        session_id = session_id or str(uuid.uuid4())
+        semaphore = asyncio.Semaphore(3)  # 限制并发数为3
+
+        tasks = [
+            self.generate_single_collection_strategy(
+                collection_info["collection_name"], refined_query, session_id, semaphore
+            )
+            for collection_info in collection_relevances
+        ]
+
+        results = await asyncio.gather(*tasks)
+        collection_search_strategies = {}
+        for result in results:
+            collection_search_strategies.update(result)
 
         print("已完成详细的简历搜索策略制定")
         return collection_search_strategies

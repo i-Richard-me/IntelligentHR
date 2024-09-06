@@ -7,6 +7,7 @@ from utils.llm_tools import LanguageModelChain, init_language_model
 from langfuse.callback import CallbackHandler
 import uuid
 import os
+import asyncio
 
 # 初始化语言模型
 language_model = init_language_model(
@@ -70,7 +71,7 @@ class RecommendationRequirements:
             metadata={"step": step},
         )
 
-    def confirm_requirements(
+    async def confirm_requirements(
         self, user_input: Optional[str] = None, session_id: Optional[str] = None
     ) -> str:
         """
@@ -95,7 +96,7 @@ class RecommendationRequirements:
         query_history_for_model = self.query_history[:-1]
 
         langfuse_handler = self.create_langfuse_handler(session_id, "query_refinement")
-        refinement_result = self.query_refiner.invoke(
+        refinement_result = await self.query_refiner.ainvoke(
             {
                 "query_history": "\n".join(query_history_for_model),
                 "latest_response": latest_response,
