@@ -10,6 +10,8 @@ from PIL import Image
 import uuid
 import asyncio
 import pandas as pd
+import aiohttp
+from typing import List
 
 # 添加项目根目录到 Python 路径
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -24,6 +26,9 @@ from backend.resume_management.extractor.resume_extraction_core import (
 from backend.resume_management.storage.resume_sql_storage import get_full_resume
 
 st.query_params.role = st.session_state.role
+
+# 设置最大并发数
+MAX_CONCURRENT_TASKS = 1
 
 # 应用自定义样式
 apply_common_styles()
@@ -48,15 +53,14 @@ def extract_text_from_pdf(pdf_file):
     return text
 
 
-def extract_text_from_url(url):
-    """从URL中提取文本"""
+async def extract_text_from_url(url: str, session: aiohttp.ClientSession) -> str:
+    """从URL中异步提取文本"""
     jina_url = f"https://r.jina.ai/{url}"
-    response = requests.get(jina_url)
-    if response.status_code == 200:
-        return response.text
-    else:
-        st.error("无法从URL提取内容")
-        return None
+    async with session.get(jina_url) as response:
+        if response.status == 200:
+            return await response.text()
+        else:
+            raise Exception(f"无法从URL提取内容: {url}")
 
 
 async def extract_resume_info(
@@ -211,42 +215,41 @@ def display_workflow():
             )
 
 
-def process_batch_resumes(batch_file):
-    """处理批量简历"""
-    if batch_file is not None:
-        df = (
-            pd.read_csv(batch_file)
-            if batch_file.name.endswith(".csv")
-            else pd.read_excel(batch_file)
-        )
-        urls = df["URL"].tolist()  # 假设表格文件中有一列名为 'URL'
-
-        progress_bar = st.progress(0)
-        status_text = st.empty()
-
-        for i, url in enumerate(urls):
-            status_text.text(f"正在处理 URL {i+1}/{len(urls)}: {url}")
-
-            resume_id = calculate_resume_hash(url)
+async def process_single_resume(
+    url: str,
+    session_id: str,
+    semaphore: asyncio.Semaphore,
+    session: aiohttp.ClientSession,
+) -> None:
+    """处理单个简历URL"""
+    async with semaphore:  # 使用信号量控制并发
+        try:
+            resume_content = await extract_text_from_url(url, session)
+            resume_id = calculate_resume_hash(resume_content)
             existing_resume = get_full_resume(resume_id)
 
             if existing_resume:
                 st.warning(f"URL {url} 的简历已存在，跳过处理。")
             else:
-                resume_data = asyncio.run(
-                    process_resume(
-                        url, resume_id, st.session_state.session_id, "url", url
-                    )
+                resume_data = await process_resume(
+                    resume_content, resume_id, session_id, "url", url
                 )
                 resume_data["resume_format"] = "url"
                 resume_data["file_or_url"] = url
-
                 store_resume(resume_data)
+                st.success(f"成功处理 URL: {url}")
+        except Exception as e:
+            st.error(f"处理 URL {url} 时出错: {str(e)}")
 
-            progress_bar.progress((i + 1) / len(urls))
 
-        status_text.text("批量处理完成!")
-        st.success(f"成功处理了 {len(urls)} 个URL的简历。")
+async def process_batch_resumes(urls: List[str], session_id: str) -> None:
+    """异步处理批量简历，控制并发数"""
+    semaphore = asyncio.Semaphore(MAX_CONCURRENT_TASKS)
+    async with aiohttp.ClientSession() as session:
+        tasks = [
+            process_single_resume(url, session_id, semaphore, session) for url in urls
+        ]
+        await asyncio.gather(*tasks)
 
 
 def main():
@@ -343,7 +346,38 @@ def handle_batch_resumes():
         batch_file = st.file_uploader("上传包含URL的表格文件", type=["csv", "xlsx"])
         if batch_file is not None:
             if st.button("开始批量处理"):
-                process_batch_resumes(batch_file)
+                df = (
+                    pd.read_csv(batch_file)
+                    if batch_file.name.endswith(".csv")
+                    else pd.read_excel(batch_file)
+                )
+                urls = df["URL"].tolist()
+
+                progress_bar = st.progress(0)
+                status_text = st.empty()
+
+                async def process_with_progress():
+                    total = len(urls)
+                    completed = 0
+                    semaphore = asyncio.Semaphore(MAX_CONCURRENT_TASKS)
+                    async with aiohttp.ClientSession() as session:
+                        tasks = [
+                            process_single_resume(
+                                url, st.session_state.session_id, semaphore, session
+                            )
+                            for url in urls
+                        ]
+                        for task in asyncio.as_completed(tasks):
+                            await task
+                            completed += 1
+                            progress = completed / total
+                            progress_bar.progress(progress)
+                            status_text.text(f"已处理 {completed}/{total} 个URL")
+
+                asyncio.run(process_with_progress())
+
+                status_text.text("批量处理完成!")
+                st.success(f"成功处理了 {len(urls)} 个URL的简历。")
 
 
 def display_resume_results():
