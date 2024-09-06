@@ -18,6 +18,8 @@ from backend.text_processing.classification.classification_core import (
     ClassificationResult,
 )
 
+import uuid
+
 st.query_params.role = st.session_state.role
 
 # 应用自定义样式
@@ -46,6 +48,7 @@ def initialize_session_state():
         "progress": 0,
         "total_rows": 0,
         "is_processing": False,
+        "session_id": str(uuid.uuid4()),
     }
     for key, value in default_states.items():
         if key not in st.session_state:
@@ -68,8 +71,7 @@ def display_classification_result(result: ClassificationResult):
 
 
 def batch_classify(texts: List[str], context: str) -> List[Dict[str, Any]]:
-    """批量分类文本"""
-    results = workflow.batch_classify(texts, context)
+    results = workflow.batch_classify(texts, context, st.session_state.session_id)
     return [result.dict() for result in results]
 
 
@@ -146,12 +148,17 @@ def main():
 
                 if submit_button:
                     if text_to_classify and st.session_state.context:
+                        st.session_state.session_id = str(
+                            uuid.uuid4()
+                        )  # 为单个分类任务生成新的session_id
                         with st.spinner("正在分类..."):
                             input_data = ClassificationInput(
                                 text=text_to_classify,
                                 context=st.session_state.context,
                             )
-                            result = workflow.classify_text(input_data)
+                            result = workflow.classify_text(
+                                input_data, st.session_state.session_id
+                            )
                         st.session_state.classification_results = result
                     else:
                         st.warning("请输入文本、上下文和标签")
@@ -170,6 +177,9 @@ def main():
 
                     if st.button("开始批量分类"):
                         if st.session_state.context:
+                            st.session_state.session_id = str(
+                                uuid.uuid4()
+                            )  # 为整个批量任务生成新的session_id
                             st.session_state.filtered_df = st.session_state.df[
                                 [text_column]
                             ].copy()
