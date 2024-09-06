@@ -8,6 +8,8 @@ from openai import OpenAI
 
 
 class ResumeScorer:
+    """简历评分器，负责计算简历的得分"""
+
     def __init__(self):
         self.client = OpenAI(
             base_url="https://api.siliconflow.cn/v1",
@@ -27,20 +29,23 @@ class ResumeScorer:
             text (str): 输入文本
 
         Returns:
-            List[float]: 嵌入向量
+            List[float]: 嵌入向量，如果出现错误则返回 None
         """
-        while True:
+        max_retries = 3
+        for _ in range(max_retries):
             try:
                 response = self.client.embeddings.create(
                     model=os.getenv("EMBEDDING_MODEL", ""), input=text
                 )
-                time.sleep(0.07)
+                time.sleep(0.07)  # 避免频繁请求
                 return response.data[0].embedding
             except Exception as e:
+                print(f"获取嵌入向量时出错：{e}")
                 if len(text) <= 1:
                     return None
-                text = text[: int(len(text) * 0.9)]
+                text = text[: int(len(text) * 0.9)]  # 缩短文本长度并重试
                 time.sleep(0.07)
+        return None
 
     def calculate_resume_scores_for_collection(
         self,
@@ -74,9 +79,11 @@ class ResumeScorer:
         for query in query_contents:
             field_name = query["field_name"]
             query_vector = self.get_embedding(query["query_content"])
+            if query_vector is None:
+                print(f"无法为字段 {field_name} 获取嵌入向量，跳过此查询")
+                continue
 
             search_params = {"metric_type": "IP", "params": {"nprobe": 10}}
-
             limit = max(collection.num_entities, 1)
 
             print(
@@ -215,97 +222,3 @@ class ResumeScorer:
         print(f"已完成简历评分，正在筛选最佳匹配的 {top_n} 份简历")
 
         return df
-
-
-if __name__ == "__main__":
-
-    import unittest
-    from unittest.mock import Mock, patch
-
-    class TestResumeScorer(unittest.TestCase):
-        def setUp(self):
-            self.resume_scorer = ResumeScorer()
-
-        @patch("resume_scorer.Collection")
-        @patch("resume_scorer.connections")
-        @patch("resume_scorer.ResumeScorer.get_embedding")
-        def test_calculate_overall_resume_scores(
-            self, mock_get_embedding, mock_connections, mock_collection
-        ):
-            # 模拟 Milvus Collection
-            mock_collection_instance = Mock()
-            mock_collection_instance.num_entities = 10
-            mock_collection_instance.search.return_value = [
-                [
-                    Mock(entity={"resume_id": f"resume_{i}"}, score=0.8 - i * 0.05)
-                    for i in range(5)
-                ]
-            ]
-            mock_collection.return_value = mock_collection_instance
-
-            # 模拟嵌入向量
-            mock_get_embedding.return_value = [0.1] * 10
-
-            # 模拟输入数据
-            refined_query = "寻找有5年以上Python开发经验的软件工程师"
-            collection_relevances = [
-                {"collection_name": "work_experiences", "relevance_score": 0.6},
-                {"collection_name": "skills", "relevance_score": 0.4},
-            ]
-            collection_search_strategies = {
-                "work_experiences": Mock(
-                    vector_field_queries=[
-                        Mock(
-                            field_name="position_vector",
-                            query_content="Senior Python Developer",
-                            relevance_score=0.7,
-                        ),
-                        Mock(
-                            field_name="responsibilities_vector",
-                            query_content="Develop and maintain Python applications",
-                            relevance_score=0.3,
-                        ),
-                    ]
-                ),
-                "skills": Mock(
-                    vector_field_queries=[
-                        Mock(
-                            field_name="skill_vector",
-                            query_content="Python, Django, Flask",
-                            relevance_score=1.0,
-                        )
-                    ]
-                ),
-            }
-
-            # 测试不同的 top_n 值
-            for top_n in [3, 5, 10]:
-                # 运行方法
-                result_df = self.resume_scorer.calculate_overall_resume_scores(
-                    refined_query,
-                    collection_relevances,
-                    collection_search_strategies,
-                    top_n,
-                )
-
-                # 验证结果
-                self.assertIsInstance(result_df, pd.DataFrame)
-
-                # 验证DataFrame的结构
-                self.assertIn("resume_id", result_df.columns)
-                self.assertIn("total_score", result_df.columns)
-                self.assertIn("work_experiences", result_df.columns)
-                self.assertIn("skills", result_df.columns)
-
-                # 验证结果数量
-                self.assertEqual(
-                    len(result_df), min(top_n, 10)
-                )  # 10 是模拟的总简历数量
-
-                # 验证分数排序
-                self.assertTrue(result_df["total_score"].is_monotonic_decreasing)
-
-                print(f"测试通过！top_n={top_n}，生成的DataFrame内容：")
-                print(result_df)
-
-    unittest.main()

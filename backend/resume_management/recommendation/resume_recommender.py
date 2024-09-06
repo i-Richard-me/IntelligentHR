@@ -1,5 +1,4 @@
 import os
-import shutil
 from typing import Dict, Optional, List
 from backend.resume_management.recommendation.recommendation_requirements import (
     RecommendationRequirements,
@@ -15,12 +14,15 @@ from backend.resume_management.recommendation.recommendation_reason_generator im
 from backend.resume_management.recommendation.recommendation_output_generator import (
     RecommendationOutputGenerator,
 )
-from utils.dataset_utils import load_df_from_csv
 from langfuse.callback import CallbackHandler
 import uuid
 
 
 class ResumeRecommender:
+    """
+    简历推荐系统的主类，整合了整个推荐流程的各个组件。
+    """
+
     def __init__(self):
         self.requirements = RecommendationRequirements()
         self.strategy_generator = ResumeSearchStrategyGenerator()
@@ -36,7 +38,8 @@ class ResumeRecommender:
         self.final_recommendations = None
         self.session_id: str = str(uuid.uuid4())
 
-    def create_langfuse_handler(self, session_id, step):
+    def create_langfuse_handler(self, session_id: str, step: str) -> CallbackHandler:
+        """创建 Langfuse 回调处理器"""
         return CallbackHandler(
             tags=["resume_search_strategy"],
             session_id=session_id,
@@ -71,6 +74,7 @@ class ResumeRecommender:
 
         Args:
             answer (str): 用户的回答
+            session_id (Optional[str]): 会话ID
 
         Returns:
             str: 处理状态，可能是 'need_more_info' 或 'ready'
@@ -132,6 +136,12 @@ class ResumeRecommender:
         return self.overall_search_strategy
 
     def calculate_resume_scores(self, top_n: int = 3):
+        """
+        计算简历得分。
+
+        Args:
+            top_n (int): 要返回的最佳匹配简历数量
+        """
         if not self.overall_search_strategy or not self.detailed_search_strategy:
             raise ValueError("搜索策略尚未生成。无法计算简历得分。")
 
@@ -143,6 +153,12 @@ class ResumeRecommender:
         )
 
     def generate_recommendation_reasons(self, session_id: Optional[str] = None):
+        """
+        生成推荐理由。
+
+        Args:
+            session_id (Optional[str]): 会话ID
+        """
         if self.resume_details is None:
             self.resume_details = self.output_generator.fetch_resume_details(
                 self.ranked_resume_scores
@@ -157,6 +173,7 @@ class ResumeRecommender:
         )
 
     def prepare_final_recommendations(self):
+        """准备最终推荐结果。"""
         if self.resume_details is None or self.recommendation_reasons is None:
             raise ValueError("简历详情或推荐理由尚未生成。无法准备最终推荐结果。")
 
@@ -164,7 +181,13 @@ class ResumeRecommender:
             self.resume_details, self.recommendation_reasons
         )
 
-    def get_recommendations(self):
+    def get_recommendations(self) -> Optional[List[Dict]]:
+        """
+        获取最终的推荐结果。
+
+        Returns:
+            Optional[List[Dict]]: 推荐结果列表，如果尚未生成则返回 None
+        """
         return (
             self.final_recommendations.to_dict("records")
             if self.final_recommendations is not None
@@ -218,6 +241,7 @@ class ResumeRecommender:
 
 
 def main():
+    """主函数，用于测试 ResumeRecommender 类"""
     recommender = ResumeRecommender()
 
     try:

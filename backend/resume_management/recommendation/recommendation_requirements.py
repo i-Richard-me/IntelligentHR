@@ -15,6 +15,8 @@ language_model = init_language_model(
 
 
 class RecommendationRequirements:
+    """处理和完善用户的查询需求"""
+
     def __init__(self):
         self.query_history: List[str] = []
         self.refined_query: Optional[str] = None
@@ -60,7 +62,8 @@ class RecommendationRequirements:
         QueryRefinement, system_message, human_message_template, language_model
     )()
 
-    def create_langfuse_handler(self, session_id, step):
+    def create_langfuse_handler(self, session_id: str, step: str) -> CallbackHandler:
+        """创建 Langfuse 回调处理器"""
         return CallbackHandler(
             tags=["resume_search_strategy"],
             session_id=session_id,
@@ -129,28 +132,3 @@ class RecommendationRequirements:
             Optional[str]: 精炼后的查询，如果尚未生成则返回 None
         """
         return self.refined_query
-
-
-if __name__ == "__main__":
-
-    def test_recommendation_requirements():
-        req = RecommendationRequirements()
-
-        # 测试初始查询
-        initial_query = "我想要招一个HR"
-        status = req.confirm_requirements(initial_query)
-        print(f"初始查询状态: {status}")
-        print(f"当前问题: {req.get_current_question()}")
-        print(f"精炼后的查询: {req.get_refined_query()}")
-        print("---")
-
-        # 测试回答问题
-        if status == "need_more_info" and req.get_current_question():
-            answer = "5-10年工作经验，具备良好的数据分析技能，最好做过薪酬方案设计和人力成本预算管理，教育背景和行业不限。"
-            status = req.confirm_requirements(answer)
-            print(f"回答后状态: {status}")
-            print(f"当前问题: {req.get_current_question()}")
-            print(f"精炼后的查询: {req.get_refined_query()}")
-            print("---")
-
-    test_recommendation_requirements()

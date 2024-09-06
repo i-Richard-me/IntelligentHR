@@ -1,14 +1,28 @@
 import pandas as pd
-from typing import Dict, List, Optional
+from typing import Dict, List
 from utils.dataset_utils import load_df_from_csv, save_df_to_csv
 from backend.resume_management.storage.resume_sql_storage import get_full_resume
 
 
 class RecommendationOutputGenerator:
+    """简历推荐输出生成器，负责获取简历详细信息和准备最终输出。"""
+
     def __init__(self):
         pass
 
     def fetch_resume_details(self, ranked_resume_scores: pd.DataFrame) -> pd.DataFrame:
+        """
+        获取排名后的简历的详细信息。
+
+        Args:
+            ranked_resume_scores (pd.DataFrame): 包含排名后的简历得分的DataFrame。
+
+        Returns:
+            pd.DataFrame: 包含简历详细信息的DataFrame。
+
+        Raises:
+            ValueError: 如果输入的DataFrame为空。
+        """
         if ranked_resume_scores is None or ranked_resume_scores.empty:
             raise ValueError("排名后的简历得分数据不能为空。无法获取简历详细信息。")
 
@@ -39,6 +53,19 @@ class RecommendationOutputGenerator:
     def prepare_final_output(
         self, resume_details: pd.DataFrame, recommendation_reasons: pd.DataFrame
     ) -> pd.DataFrame:
+        """
+        准备最终的推荐输出。
+
+        Args:
+            resume_details (pd.DataFrame): 包含简历详细信息的DataFrame。
+            recommendation_reasons (pd.DataFrame): 包含推荐理由的DataFrame。
+
+        Returns:
+            pd.DataFrame: 包含最终推荐结果的DataFrame。
+
+        Raises:
+            ValueError: 如果输入的DataFrame为空。
+        """
         if (
             resume_details is None
             or resume_details.empty

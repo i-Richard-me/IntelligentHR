@@ -16,6 +16,8 @@ language_model = init_language_model(
 
 
 class ResumeSearchStrategyGenerator:
+    """生成整体简历搜索策略的类"""
+
     def __init__(self):
         self.system_message = """
         你是一个智能简历推荐系统的搜索策略生成器。你的任务是分析用户的查询需求，确定哪些 Milvus 数据库中的简历数据 collection 与查询最相关，并为每个相关的 collection 分配一个相关性分数。
@@ -59,7 +61,8 @@ class ResumeSearchStrategyGenerator:
             language_model,
         )()
 
-    def create_langfuse_handler(self, session_id, step):
+    def create_langfuse_handler(self, session_id: str, step: str) -> CallbackHandler:
+        """创建 Langfuse 回调处理器"""
         return CallbackHandler(
             tags=["resume_search_strategy"],
             session_id=session_id,
@@ -74,6 +77,7 @@ class ResumeSearchStrategyGenerator:
 
         Args:
             refined_query (str): 精炼后的用户查询
+            session_id (Optional[str]): 会话ID
 
         Returns:
             List[Dict[str, float]]: 包含集合名称和相关性分数的字典列表
@@ -81,20 +85,18 @@ class ResumeSearchStrategyGenerator:
         Raises:
             ValueError: 如果精炼后的查询为空
         """
-        if session_id is None:
-            session_id = str(uuid.uuid4())
-
         if not refined_query:
             raise ValueError("精炼后的查询不能为空。无法生成搜索策略。")
 
+        session_id = session_id or str(uuid.uuid4())
         langfuse_handler = self.create_langfuse_handler(
             session_id, "generate_search_strategy"
         )
+
         search_strategy_result = self.resume_search_strategy_chain.invoke(
             {"refined_query": refined_query}, config={"callbacks": [langfuse_handler]}
         )
 
-        # 将字典转换为 ResumeSearchStrategy 对象
         resume_search_strategy = ResumeSearchStrategy(**search_strategy_result)
 
         collection_relevances = [
@@ -111,6 +113,8 @@ class ResumeSearchStrategyGenerator:
 
 
 class CollectionSearchStrategyGenerator:
+    """生成特定集合搜索策略的类"""
+
     def __init__(self):
         self.collection_specific_instructions = {
             "work_experiences": {
@@ -243,7 +247,8 @@ class CollectionSearchStrategyGenerator:
         **query_content必须使用英文！**
         """
 
-    def create_langfuse_handler(self, session_id, step):
+    def create_langfuse_handler(self, session_id: str, step: str) -> CallbackHandler:
+        """创建 Langfuse 回调处理器"""
         return CallbackHandler(
             tags=["collection_search_strategy"],
             session_id=session_id,
@@ -262,6 +267,7 @@ class CollectionSearchStrategyGenerator:
         Args:
             refined_query (str): 精炼后的用户查询
             collection_relevances (List[Dict[str, float]]): 集合相关性列表
+            session_id (Optional[str]): 会话ID
 
         Returns:
             Dict[str, CollectionSearchStrategy]: 每个集合的搜索策略
@@ -269,15 +275,12 @@ class CollectionSearchStrategyGenerator:
         Raises:
             ValueError: 如果精炼后的查询为空或集合相关性列表为空
         """
-
-        if session_id is None:
-            session_id = str(uuid.uuid4())
-
         if not refined_query or not collection_relevances:
             raise ValueError(
                 "精炼后的查询或集合相关性列表不能为空。无法生成集合搜索策略。"
             )
 
+        session_id = session_id or str(uuid.uuid4())
         collection_search_strategies = {}
 
         for collection_info in collection_relevances:
@@ -314,50 +317,3 @@ class CollectionSearchStrategyGenerator:
 
         print("已完成详细的简历搜索策略制定")
         return collection_search_strategies
-
-
-if __name__ == "__main__":
-
-    def test_resume_search_strategy():
-        # 初始化生成器
-        resume_strategy_generator = ResumeSearchStrategyGenerator()
-        collection_strategy_generator = CollectionSearchStrategyGenerator()
-
-        # 示例精炼后的查询
-        refined_query = """
-        我们正在寻找一名有经验的高级数据分析师。理想候选人应具有以下资质：
-        1. 拥有至少5年的数据分析经验，特别是在电子商务或金融科技行业。
-        2. 精通Python、SQL，熟悉大数据处理工具如Hadoop和Spark。
-        3. 有强大的统计分析能力，能够设计和实施A/B测试。
-        4. 具有数据可视化经验，熟悉Tableau或Power BI等工具。
-        5. 良好的沟通能力，能够向非技术人员清晰地解释复杂的数据概念。
-        6. 本科及以上学历，计算机科学、统计学或相关领域优先。
-        7. 有带领小型团队的经验是加分项。
-        """
-
-        # 生成整体搜索策略
-        print("生成整体搜索策略...")
-        collection_relevances = (
-            resume_strategy_generator.generate_resume_search_strategy(refined_query)
-        )
-        print("集合相关性：")
-        for relevance in collection_relevances:
-            print(f"{relevance['collection_name']}: {relevance['relevance_score']}")
-
-        print("\n生成集合特定搜索策略...")
-        collection_strategies = (
-            collection_strategy_generator.generate_collection_search_strategy(
-                refined_query, collection_relevances
-            )
-        )
-
-        # 打印每个集合的搜索策略
-        for collection_name, strategy in collection_strategies.items():
-            print(f"\n{collection_name} 集合的搜索策略：")
-            for query in strategy.vector_field_queries:
-                print(f"字段: {query.field_name}")
-                print(f"查询内容: {query.query_content}")
-                print(f"相关性分数: {query.relevance_score}")
-                print("---")
-
-    test_resume_search_strategy()

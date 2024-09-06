@@ -2,7 +2,7 @@ import streamlit as st
 import sys
 import os
 import pandas as pd
-from PIL import Image
+from typing import Dict, List, Optional
 import uuid
 
 # 获取项目根目录的绝对路径
@@ -24,23 +24,23 @@ apply_common_styles()
 # 显示侧边栏
 show_sidebar()
 
-
 # 定义节点名称到用户友好描述的映射
-def get_node_description(node_name):
-    node_descriptions = {
-        "generate_search_strategy": "生成简历搜索策略",
-        "calculate_resume_scores": "计算总体简历得分",
-        "fetch_resume_details": "获取简历详细信息",
-        "generate_recommendation_reasons": "生成推荐理由",
-        "prepare_final_recommendations": "准备最终输出",
-    }
-    return node_descriptions.get(node_name, "处理中...")
+NODE_DESCRIPTIONS = {
+    "generate_search_strategy": "生成简历搜索策略",
+    "calculate_resume_scores": "计算总体简历得分",
+    "fetch_resume_details": "获取简历详细信息",
+    "generate_recommendation_reasons": "生成推荐理由",
+    "prepare_final_recommendations": "准备最终输出",
+}
+
+
+def get_node_description(node_name: str) -> str:
+    """获取节点的用户友好描述"""
+    return NODE_DESCRIPTIONS.get(node_name, "处理中...")
 
 
 def display_info_message():
-    """
-    显示智能简历推荐系统的功能介绍。
-    """
+    """显示智能简历推荐系统的功能介绍"""
     st.info(
         """
     **👥 智能简历推荐系统**
@@ -53,13 +53,9 @@ def display_info_message():
 
 
 def display_workflow():
-    """
-    显示智能简历推荐系统的工作流程。
-    """
+    """显示智能简历推荐系统的工作流程"""
     with st.expander("👥 查看简历推荐工作流程", expanded=False):
-
         col1, col2 = st.columns([1, 1])
-
         with col2:
             st.markdown(
                 """
@@ -86,6 +82,76 @@ def display_workflow():
                 """,
                 unsafe_allow_html=True,
             )
+
+
+def display_chat_history():
+    """显示聊天历史"""
+    with chat_container.container():
+        for msg in st.session_state.messages:
+            with st.chat_message(msg["role"]):
+                if isinstance(msg["content"], str):
+                    st.write(msg["content"])
+                elif isinstance(msg["content"], dict):
+                    if msg["content"]["type"] == "search_strategy":
+                        st.write("根据您的需求，我们生成了以下检索策略：")
+                        st.table(msg["content"]["data"])
+                    elif msg["content"]["type"] == "recommendations":
+                        st.write("以下是根据您的需求推荐的简历：")
+                        for idx, rec in enumerate(msg["content"]["data"], 1):
+                            with st.expander(
+                                f"推荐 {idx}: 简历ID {rec['简历ID']} (总分: {rec['总分']:.2f})"
+                            ):
+                                st.write(f"个人特征: {rec['个人特征']}")
+                                st.write(f"工作经验: {rec['工作经验']}")
+                                st.write(f"技能概览: {rec['技能概览']}")
+                                st.write(f"推荐理由: {rec['推荐理由']}")
+
+
+def process_user_input(prompt: str):
+    """处理用户输入"""
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    display_chat_history()
+
+    if st.session_state.current_stage == "initial_query":
+        with st.spinner("正在分析您的需求..."):
+            status = st.session_state.recommender.process_query(
+                prompt, st.session_state.session_id
+            )
+        st.session_state.current_stage = (
+            "refining_query"
+            if status == "need_more_info"
+            else "generating_recommendations"
+        )
+    elif st.session_state.current_stage == "refining_query":
+        with st.spinner("正在处理您的回答..."):
+            status = st.session_state.recommender.process_answer(
+                prompt, st.session_state.session_id
+            )
+        if status == "ready":
+            st.session_state.current_stage = "generating_recommendations"
+
+    next_question = st.session_state.recommender.get_next_question()
+    if next_question:
+        st.session_state.messages.append(
+            {"role": "assistant", "content": next_question}
+        )
+        display_chat_history()
+    elif st.session_state.current_stage == "generating_recommendations":
+        refined_query = st.session_state.recommender.get_refined_query()
+        if refined_query:
+            st.session_state.refined_query = refined_query
+            st.session_state.messages.append(
+                {
+                    "role": "assistant",
+                    "content": f"根据您的需求，我们总结出以下招聘描述：\n\n{refined_query}",
+                }
+            )
+            display_chat_history()
+
+        st.session_state.processing = True
+        st.session_state.strategy_displayed = False
+
+    st.rerun()
 
 
 # 初始化会话状态
@@ -124,80 +190,12 @@ with st.expander("高级设置", expanded=False):
 # 创建一个容器来显示聊天历史
 chat_container = st.empty()
 
-
-# 显示聊天历史的函数
-def display_chat_history():
-    with chat_container.container():
-        for msg in st.session_state.messages:
-            with st.chat_message(msg["role"]):
-                if isinstance(msg["content"], str):
-                    st.write(msg["content"])
-                elif isinstance(msg["content"], dict):
-                    if "type" in msg["content"]:
-                        if msg["content"]["type"] == "search_strategy":
-                            st.write("根据您的需求，我们生成了以下检索策略：")
-                            st.table(msg["content"]["data"])
-                        elif msg["content"]["type"] == "recommendations":
-                            st.write("以下是根据您的需求推荐的简历：")
-                            for idx, rec in enumerate(msg["content"]["data"], 1):
-                                with st.expander(
-                                    f"推荐 {idx}: 简历ID {rec['简历ID']} (总分: {rec['总分']:.2f})"
-                                ):
-                                    st.write(f"个人特征: {rec['个人特征']}")
-                                    st.write(f"工作经验: {rec['工作经验']}")
-                                    st.write(f"技能概览: {rec['技能概览']}")
-                                    st.write(f"推荐理由: {rec['推荐理由']}")
-
-
 # 初始显示聊天历史
 display_chat_history()
 
 # 处理用户输入
 if prompt := st.chat_input("输入您的需求或回答"):
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    display_chat_history()
-
-    if st.session_state.current_stage == "initial_query":
-        with st.spinner("正在分析您的需求..."):
-            status = st.session_state.recommender.process_query(
-                prompt, st.session_state.session_id
-            )
-        st.session_state.current_stage = (
-            "refining_query"
-            if status == "need_more_info"
-            else "generating_recommendations"
-        )
-    elif st.session_state.current_stage == "refining_query":
-        with st.spinner("正在处理您的回答..."):
-            status = st.session_state.recommender.process_answer(
-                prompt, st.session_state.session_id
-            )
-        if status == "ready":
-            st.session_state.current_stage = "generating_recommendations"
-
-    # 获取系统的下一个问题或推荐结果
-    next_question = st.session_state.recommender.get_next_question()
-    if next_question:
-        st.session_state.messages.append(
-            {"role": "assistant", "content": next_question}
-        )
-        display_chat_history()
-    elif st.session_state.current_stage == "generating_recommendations":
-        refined_query = st.session_state.recommender.get_refined_query()
-        if refined_query:
-            st.session_state.refined_query = refined_query
-            st.session_state.messages.append(
-                {
-                    "role": "assistant",
-                    "content": f"根据您的需求，我们总结出以下招聘描述：\n\n{refined_query}",
-                }
-            )
-            display_chat_history()
-
-        st.session_state.processing = True
-        st.session_state.strategy_displayed = False
-
-    st.rerun()
+    process_user_input(prompt)
 
 # 处理推荐生成过程
 if st.session_state.processing:
