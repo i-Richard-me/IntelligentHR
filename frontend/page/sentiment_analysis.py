@@ -61,18 +61,15 @@ def display_classification_result(result: ClassificationResult):
         {
             "有效性": [result.validity],
             "情感倾向": [result.sentiment_class],
-            "主题": [", ".join(result.topic)],
             "是否包含敏感信息": [result.sensitive_info],
         }
     )
     st.table(df)
 
 
-def batch_classify(
-    texts: List[str], context: str, labels: List[str]
-) -> List[Dict[str, Any]]:
+def batch_classify(texts: List[str], context: str) -> List[Dict[str, Any]]:
     """批量分类文本"""
-    results = workflow.batch_classify(texts, context, labels)
+    results = workflow.batch_classify(texts, context)
     return [result.dict() for result in results]
 
 
@@ -85,8 +82,7 @@ def display_info_message():
     主要功能包括：
     - 文本有效性判断
     - 情感倾向分析
-    - 主题分类
-    - 敏感信息识别
+    - 是否敏感信息识别
     
     通过交互式界面，用户可以轻松上传数据、查看分类结果，并下载分析报告。
     这个工具适用于各种需要快速理解和分类大量文本数据的场景，如客户反馈分析、社交媒体监控等。
@@ -109,7 +105,6 @@ def display_workflow():
             2. **文本分类**:
                - 系统自动判断文本有效性
                - 分析文本的情感倾向
-               - 根据预定义标签进行主题分类
                - 识别可能的敏感信息
             
             3. **结果展示**:
@@ -141,15 +136,6 @@ def main():
             value=st.session_state.context,
             placeholder="例如：员工调研",
         )
-        labels_input = st.text_area(
-            "请输入预设的分类标签（每行一个）",
-            value="\n".join(st.session_state.labels),
-            placeholder="例如：\n职业发展\n工作生活平衡\n薪酬福利\n团队氛围",
-            height=150,
-        )
-        st.session_state.labels = [
-            label.strip() for label in labels_input.split("\n") if label.strip()
-        ]
 
         tab1, tab2 = st.tabs(["直接输入", "上传CSV文件"])
 
@@ -159,16 +145,11 @@ def main():
                 submit_button = st.form_submit_button("分类")
 
                 if submit_button:
-                    if (
-                        text_to_classify
-                        and st.session_state.context
-                        and st.session_state.labels
-                    ):
+                    if text_to_classify and st.session_state.context:
                         with st.spinner("正在分类..."):
                             input_data = ClassificationInput(
                                 text=text_to_classify,
                                 context=st.session_state.context,
-                                labels=st.session_state.labels,
                             )
                             result = workflow.classify_text(input_data)
                         st.session_state.classification_results = result
@@ -188,7 +169,7 @@ def main():
                     )
 
                     if st.button("开始批量分类"):
-                        if st.session_state.context and st.session_state.labels:
+                        if st.session_state.context:
                             st.session_state.filtered_df = st.session_state.df[
                                 [text_column]
                             ].copy()
@@ -200,7 +181,7 @@ def main():
                             st.session_state.is_processing = True
                             st.rerun()
                         else:
-                            st.warning("请输入上下文和标签")
+                            st.warning("请输入上下文")
 
                 except Exception as e:
                     st.error(f"处理CSV文件时出错：{str(e)}")
@@ -221,9 +202,7 @@ def main():
             texts_to_classify = current_batch[text_column].tolist()
 
             with st.spinner("正在批量分类..."):
-                results = batch_classify(
-                    texts_to_classify, st.session_state.context, st.session_state.labels
-                )
+                results = batch_classify(texts_to_classify, st.session_state.context)
 
             for i, result in enumerate(results):
                 st.session_state.filtered_df.loc[start_index + i, "有效性"] = result[
@@ -232,9 +211,6 @@ def main():
                 st.session_state.filtered_df.loc[start_index + i, "情感倾向"] = result[
                     "sentiment_class"
                 ]
-                st.session_state.filtered_df.loc[start_index + i, "主题"] = ", ".join(
-                    result["topic"]
-                )
                 st.session_state.filtered_df.loc[
                     start_index + i, "是否包含敏感信息"
                 ] = result["sensitive_info"]
