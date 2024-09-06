@@ -1,18 +1,18 @@
-import os
 import logging
-from pydantic import BaseModel, Field
-from typing import Dict, Any
-from utils.llm_tools import init_language_model, LanguageModelChain
+import os
 import uuid
+from typing import Dict, Any
+
 from langfuse.callback import CallbackHandler
+from pydantic import BaseModel, Field
+
+from utils.llm_tools import init_language_model, LanguageModelChain
 
 logger = logging.getLogger(__name__)
 
 
 class TranslatedText(BaseModel):
-    """
-    表示翻译后的文本的数据模型。
-    """
+    """表示翻译后的文本的数据模型。"""
 
     translated_text: str = Field(..., description="翻译成中文的文本内容")
 
@@ -44,13 +44,25 @@ HUMAN_MESSAGE_TEMPLATE = """
 """
 
 
-def create_langfuse_handler(session_id, step):
+def create_langfuse_handler(session_id: str, step: str) -> CallbackHandler:
+    """
+    创建Langfuse回调处理器。
+
+    Args:
+        session_id (str): 会话ID。
+        step (str): 当前步骤。
+
+    Returns:
+        CallbackHandler: Langfuse回调处理器实例。
+    """
     return CallbackHandler(
         tags=["translation"], session_id=session_id, metadata={"step": step}
     )
 
 
 class Translator:
+    """翻译器类，用于处理文本翻译任务。"""
+
     def __init__(self, temperature: float = 0.0):
         """
         初始化翻译器。

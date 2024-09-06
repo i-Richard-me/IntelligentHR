@@ -1,11 +1,12 @@
-import streamlit as st
-import pandas as pd
 import asyncio
-from asyncio import Semaphore
-from typing import List, Dict, Any, Tuple
 import os
 import sys
 import uuid
+from typing import List, Tuple, Optional
+
+import pandas as pd
+import streamlit as st
+from asyncio import Semaphore
 
 # 获取项目根目录的绝对路径
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -65,7 +66,7 @@ async def batch_translate(
     """
     semaphore = Semaphore(max_concurrent)
 
-    async def translate_with_semaphore(text):
+    async def translate_with_semaphore(text: str) -> str:
         async with semaphore:
             return await translator.translate(text, text_topic, session_id)
 
@@ -73,29 +74,30 @@ async def batch_translate(
     return await asyncio.gather(*tasks)
 
 
-def display_translation_info():
+def display_translation_info() -> None:
+    """显示翻译功能的介绍信息。"""
     st.info(
         """
-    智能语境翻译是一个高效的多语言翻译工具，专为批量处理文本设计。它支持单条文本和CSV文件的翻译，
-    通过上下文理解提高翻译准确性。该工具利用异步处理功能，确保大规模翻译任务的稳定性。
-    智能语境翻译适用于需要快速、准确翻译大量文本的各类场景，如国际化文档处理或多语言数据分析。
+    智能语境翻译是一个高效的多语言翻译工具，专为批量处理文本设计，通过上下文理解提高翻译准确性。
+
+    智能语境翻译适用于需要快速、准确翻译大量文本的各类场景，如多语言数据分析。
     """
     )
 
 
-def upload_and_process_file() -> Tuple[pd.DataFrame, str]:
+def upload_and_process_file() -> Tuple[Optional[pd.DataFrame], Optional[str]]:
     """
     上传并处理CSV文件。
 
     Returns:
-        Tuple[pd.DataFrame, str]: 包含上传的数据框和选中的文本列名。
+        Tuple[Optional[pd.DataFrame], Optional[str]]: 包含上传的数据框和选中的文本列名。
     """
     uploaded_file = st.file_uploader("上传CSV文件", type="csv")
     if uploaded_file is not None:
         try:
             df = pd.read_csv(uploaded_file)
             st.write("预览上传的数据：")
-            st.dataframe(df.head())
+            st.dataframe(df)
 
             text_column = st.selectbox("选择包含要翻译文本的列", df.columns)
             return df, text_column
@@ -122,39 +124,50 @@ def perform_translation(
     texts_to_translate = df[text_column].tolist()
     session_id = str(uuid.uuid4())
     translated_texts = []
-    
-    async def translate_and_save(texts):
+
+    async def translate_and_save(texts: List[str]) -> List[str]:
         results = await batch_translate(texts, text_topic, session_id, max_concurrent)
         translated_texts.extend(results)
-        
+
         # 每翻译10个数据，保存一次临时结果
-        if len(translated_texts) % 10 == 0 or len(translated_texts) == len(texts_to_translate):
+        if len(translated_texts) % 10 == 0 or len(translated_texts) == len(
+            texts_to_translate
+        ):
             temp_df = df.copy()
-            temp_df["translated_text"] = translated_texts + [""] * (len(df) - len(translated_texts))
+            temp_df["translated_text"] = translated_texts + [""] * (
+                len(df) - len(translated_texts)
+            )
             save_temp_results(temp_df, session_id)
-        
+
         return results
 
     with st.spinner("正在批量翻译..."):
         asyncio.run(translate_and_save(texts_to_translate))
-    
+
     df["translated_text"] = translated_texts
     return df
 
 
-def save_temp_results(df: pd.DataFrame, session_id: str):
+def save_temp_results(df: pd.DataFrame, session_id: str) -> None:
+    """
+    保存临时翻译结果到CSV文件。
+
+    Args:
+        df (pd.DataFrame): 包含翻译结果的数据框。
+        session_id (str): 会话ID，用于生成唯一的文件名。
+    """
     temp_dir = os.path.join("data", "temp")
     os.makedirs(temp_dir, exist_ok=True)
     temp_file_path = os.path.join(temp_dir, f"translation_results_{session_id}.csv")
     df.to_csv(temp_file_path, index=False, encoding="utf-8-sig")
 
 
-def display_translation_results(translation_results: Any) -> None:
+def display_translation_results(translation_results: pd.DataFrame) -> None:
     """
     显示翻译结果。
 
     Args:
-        translation_results (Any): 翻译结果，可能是字典或DataFrame。
+        translation_results (pd.DataFrame): 包含翻译结果的数据框。
     """
     st.markdown("## 翻译结果")
     with st.container(border=True):
@@ -178,7 +191,7 @@ def display_translation_results(translation_results: Any) -> None:
             )
 
 
-def main():
+def main() -> None:
     """主函数，包含智能语境翻译的整个流程。"""
     st.title("🌐 智能语境翻译")
     st.markdown("---")
