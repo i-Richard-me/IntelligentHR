@@ -4,6 +4,7 @@ import numpy as np
 import sys
 import os
 from typing import List, Dict, Any
+import asyncio
 
 # 添加项目根目录到 Python 路径
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -31,9 +32,6 @@ show_sidebar()
 # 初始化文本分类工作流
 workflow = TextClassificationWorkflow()
 
-# 设置批处理大小
-BATCH_SIZE = 5
-
 
 # 初始化会话状态
 def initialize_session_state():
@@ -43,12 +41,8 @@ def initialize_session_state():
         "df": None,
         "filtered_df": None,
         "context": "",
-        "labels": [],
-        "current_batch_index": 0,
-        "progress": 0,
-        "total_rows": 0,
-        "is_processing": False,
         "session_id": str(uuid.uuid4()),
+        "is_processing": False,
     }
     for key, value in default_states.items():
         if key not in st.session_state:
@@ -70,9 +64,25 @@ def display_classification_result(result: ClassificationResult):
     st.table(df)
 
 
-def batch_classify(texts: List[str], context: str) -> List[Dict[str, Any]]:
-    results = workflow.batch_classify(texts, context, st.session_state.session_id)
-    return [result.dict() for result in results]
+async def batch_classify(texts: List[str], context: str, progress_bar, status_area):
+    total_texts = len(texts)
+    results = []
+    for i, text in enumerate(texts):
+        result = await workflow.async_classify_text(
+            ClassificationInput(text=text, context=context), st.session_state.session_id
+        )
+        results.append(result.dict())
+
+        # 更新进度条和状态信息
+        progress = (i + 1) / total_texts
+        progress_bar.progress(progress)
+        status_message = f"已处理: {i + 1}/{total_texts}"
+        status_area.info(status_message)
+
+        # 添加小延迟以允许UI更新
+        await asyncio.sleep(0.05)
+
+    return results
 
 
 def display_info_message():
@@ -87,7 +97,7 @@ def display_info_message():
     - 是否敏感信息识别
     
     通过交互式界面，用户可以轻松上传数据、查看分类结果，并下载分析报告。
-    这个工具适用于各种需要快速理解和分类大量文本数据的场景，如客户反馈分析、社交媒体监控等。
+    这个工具适用于各类需要快速理解和分类大量文本数据的场景，如客户反馈分析、社交媒体监控等。
     """
     )
 
@@ -106,7 +116,7 @@ def display_workflow():
             
             2. **文本分类**:
                - 系统自动判断文本有效性
-               - 分析文本的情感倾向
+               - 分类文本的情感倾向
                - 识别可能的敏感信息
             
             3. **结果展示**:
@@ -189,7 +199,6 @@ def main():
                             )
                             st.session_state.progress = 0
                             st.session_state.is_processing = True
-                            st.rerun()
                         else:
                             st.warning("请输入上下文")
 
@@ -199,42 +208,35 @@ def main():
     if st.session_state.is_processing:
         st.markdown("## 批量分类进度")
         with st.container(border=True):
-            total_rows = st.session_state.total_rows
-            start_index = st.session_state.current_batch_index * BATCH_SIZE
-            end_index = min(start_index + BATCH_SIZE, total_rows)
+            total_rows = len(st.session_state.filtered_df)
 
-            progress_text = (
-                f"正在处理 {start_index + 1} 到 {end_index} 行，共 {total_rows} 行"
-            )
-            my_bar = st.progress(st.session_state.progress, text=progress_text)
+            progress_bar = st.progress(0)
+            status_area = st.empty()
 
-            current_batch = st.session_state.filtered_df.iloc[start_index:end_index]
-            texts_to_classify = current_batch[text_column].tolist()
+            texts_to_classify = st.session_state.filtered_df[text_column].tolist()
 
             with st.spinner("正在批量分类..."):
-                results = batch_classify(texts_to_classify, st.session_state.context)
+                results = asyncio.run(
+                    batch_classify(
+                        texts_to_classify,
+                        st.session_state.context,
+                        progress_bar,
+                        status_area,
+                    )
+                )
 
             for i, result in enumerate(results):
-                st.session_state.filtered_df.loc[start_index + i, "有效性"] = result[
-                    "validity"
-                ]
-                st.session_state.filtered_df.loc[start_index + i, "情感倾向"] = result[
+                st.session_state.filtered_df.loc[i, "有效性"] = result["validity"]
+                st.session_state.filtered_df.loc[i, "情感倾向"] = result[
                     "sentiment_class"
                 ]
-                st.session_state.filtered_df.loc[
-                    start_index + i, "是否包含敏感信息"
-                ] = result["sensitive_info"]
+                st.session_state.filtered_df.loc[i, "是否包含敏感信息"] = result[
+                    "sensitive_info"
+                ]
 
-            st.session_state.progress = end_index / total_rows
-            my_bar.progress(st.session_state.progress, text=progress_text)
-
-            if end_index < total_rows:
-                st.session_state.current_batch_index += 1
-                st.rerun()
-            else:
-                st.success("批量分类完成！")
-                st.session_state.classification_results = st.session_state.filtered_df
-                st.session_state.is_processing = False
+            st.success("批量分类完成！")
+            st.session_state.classification_results = st.session_state.filtered_df
+            st.session_state.is_processing = False
 
     # 显示分类结果
     if st.session_state.classification_results is not None:

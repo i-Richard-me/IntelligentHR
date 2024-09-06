@@ -1,9 +1,13 @@
-from pydantic import BaseModel, Field
 from typing import List, Literal
+from pydantic import BaseModel, Field
 
 
 class ClassificationResult(BaseModel):
-    """定义文本分类的输出格式。"""
+    """
+    定义文本分类的输出格式。
+
+    包含回复的有效性、情感倾向和是否包含敏感信息。
+    """
 
     validity: Literal["有效", "无效"] = Field(
         ..., description="回复的有效性。必须为`有效`或`无效`。"
@@ -17,7 +21,11 @@ class ClassificationResult(BaseModel):
 
 
 class ClassificationInput(BaseModel):
-    """定义文本分类的输入格式。"""
+    """
+    定义文本分类的输入格式。
+
+    包含需要分类的文本和文本的上下文或主题。
+    """
 
     text: str = Field(..., description="需要分类的文本")
     context: str = Field(..., description="文本的上下文或主题")
