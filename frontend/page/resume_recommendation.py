@@ -78,28 +78,13 @@ def display_workflow():
         with col2:
             st.markdown(
                 """
-                <div class="workflow-container">
-                    <div class="workflow-step">
-                        <strong>1. 对话式需求分析</strong>: 通过智能对话，深入理解用户的招聘需求，构建理想候选人画像。
-                    </div>
-                    <div class="workflow-step">
-                        <strong>2. 候选人画像生成</strong>: 基于对话内容，自动生成全面的理想候选人特征描述。
-                    </div>
-                    <div class="workflow-step">
-                        <strong>3. 搜索策略制定</strong>: 根据候选人画像，创建精准的简历搜索和匹配策略。
-                    </div>
-                    <div class="workflow-step">
-                        <strong>4. 多维度简历评分</strong>: 利用向量匹配技术，对简历进行全方位的相似度评估。
-                    </div>
-                    <div class="workflow-step">
-                        <strong>5. 结果筛选与排序</strong>: 综合评分结果，筛选并排序最匹配的候选人简历。
-                    </div>
-                    <div class="workflow-step">
-                        <strong>6. 推荐结果展示</strong>: 以清晰、直观的方式呈现推荐结果，支持进一步筛选和分析。
-                    </div>
-                </div>
-                """,
-                unsafe_allow_html=True,
+                1. **对话式需求分析**: 通过智能对话，深入理解用户的招聘需求，构建理想候选人画像。
+                2. **候选人画像生成**: 基于对话内容，自动生成全面的理想候选人特征描述。
+                3. **搜索策略制定**: 根据候选人画像，创建精准的简历搜索和匹配策略。
+                4. **多维度简历评分**: 利用向量匹配技术，对简历进行全方位的相似度评估。
+                5. **结果筛选与排序**: 综合评分结果，筛选并排序最匹配的候选人简历。
+                6. **推荐结果展示**: 以清晰、直观的方式呈现推荐结果，支持进一步筛选和分析。
+                """
             )
 
 
@@ -116,14 +101,30 @@ def display_chat_history():
                         st.table(msg["content"]["data"])
                     elif msg["content"]["type"] == "recommendations":
                         st.write("以下是根据您的需求推荐的简历：")
-                        for idx, rec in enumerate(msg["content"]["data"], 1):
-                            with st.expander(
-                                f"推荐 {idx}: 简历ID {rec['简历ID']} (总分: {rec['总分']:.2f})"
-                            ):
-                                st.write(f"个人特征: {rec['个人特征']}")
-                                st.write(f"工作经验: {rec['工作经验']}")
-                                st.write(f"技能概览: {rec['技能概览']}")
-                                st.write(f"推荐理由: {rec['推荐理由']}")
+                        display_recommendations(msg["content"]["data"])
+
+
+def display_recommendations(recommendations):
+    """优化显示推荐的简历"""
+    for idx, rec in enumerate(recommendations, 1):
+        with st.expander(
+            f"推荐 {idx}: 简历ID {rec['简历ID']} (总分: {rec['总分']:.2f})"
+        ):
+            col1, col2 = st.columns([2, 5])
+
+            with col1:
+                st.markdown("#### 推荐理由")
+                st.info(rec["推荐理由"])
+
+            with col2:
+                st.markdown("#### 个人概况")
+                st.write(rec["个人特征"])
+
+                st.markdown("#### 工作经验")
+                st.write(rec["工作经验"])
+
+                st.markdown("#### 技能概览")
+                st.write(rec["技能概览"])
 
 
 async def process_user_input(prompt: str):
@@ -169,8 +170,6 @@ async def process_user_input(prompt: str):
 
         st.session_state.processing = True
         st.session_state.strategy_displayed = False
-
-    st.rerun()
 
 
 # 主界面
@@ -263,8 +262,6 @@ if st.session_state.processing:
         with st.spinner("正在准备最终推荐结果..."):
             await st.session_state.recommender.prepare_final_recommendations()
 
-        st.success("处理完成！")
-
         # 更新推荐结果
         recommendations = st.session_state.recommender.get_recommendations()
         if recommendations:
@@ -291,8 +288,6 @@ if st.session_state.processing:
         st.session_state.current_stage = "initial_query"
         st.session_state.processing = False
         st.session_state.strategy_displayed = False
-
-        st.rerun()
 
     asyncio.run(generate_recommendations())
 
