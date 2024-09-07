@@ -3,6 +3,7 @@ import pandas as pd
 import sys
 import os
 import uuid
+import asyncio
 from typing import Dict, Any, Optional
 
 # 添加项目根目录到 Python 路径
@@ -41,11 +42,9 @@ def initialize_session_state():
         if var not in st.session_state:
             st.session_state[var] = None
 
-    # 确保session_id总是有值
     if st.session_state.session_id is None:
         st.session_state.session_id = str(uuid.uuid4())
 
-    # 初始化 clustering_params
     if st.session_state.clustering_params is None:
         st.session_state.clustering_params = {
             "min_categories": 10,
@@ -54,22 +53,18 @@ def initialize_session_state():
             "classification_batch_size": 20,
         }
 
-    # 初始化 use_custom_categories
     if st.session_state.use_custom_categories is None:
         st.session_state.use_custom_categories = False
 
-    # 初始化 additional_requirements
     if st.session_state.additional_requirements is None:
         st.session_state.additional_requirements = None
 
 
 def display_info_message():
-    """显示表格处理助手的信息消息"""
+    """显示文本聚类分析工具的信息消息"""
     st.info(
         """
         文本聚类分析工具利用大语言模型的语义理解能力，自动化地从大量文本中识别和归类主要主题。
-
-        工具采用分批处理和多阶段聚类策略，能够高效处理大规模文本数据。支持自定义类别数量范围，并提供交互式的类别审核和编辑功能，让用户能够根据具体需求优化聚类结果。
         
         适用于各类文本内容分析场景，如用户反馈归类、话题趋势分析等。
         """
@@ -91,60 +86,49 @@ def display_workflow_introduction():
         )
 
 
-def get_clustering_parameters() -> Dict[str, int]:
-    """获取聚类参数设置"""
+def get_clustering_parameters():
+    """获取并更新聚类参数设置"""
     with st.expander("自动聚类参数设置"):
-        min_categories = st.slider(
+        st.session_state.clustering_params["min_categories"] = st.slider(
             "最小类别数量",
             5,
             15,
-            st.session_state.clustering_params["min_categories"],
+            st.session_state.clustering_params.get("min_categories", 10),
             key="min_categories_slider",
         )
-        max_categories = st.slider(
+        st.session_state.clustering_params["max_categories"] = st.slider(
             "最大类别数量",
-            min_categories,
+            st.session_state.clustering_params["min_categories"],
             20,
-            st.session_state.clustering_params["max_categories"],
+            st.session_state.clustering_params.get("max_categories", 15),
             key="max_categories_slider",
         )
-        batch_size = st.slider(
+        st.session_state.clustering_params["batch_size"] = st.slider(
             "聚类批处理大小",
             10,
             1000,
-            st.session_state.clustering_params["batch_size"],
+            st.session_state.clustering_params.get("batch_size", 100),
             key="batch_size_slider",
         )
-        classification_batch_size = st.slider(
+        st.session_state.clustering_params["classification_batch_size"] = st.slider(
             "分类批处理大小",
             10,
             100,
-            st.session_state.clustering_params["classification_batch_size"],
+            st.session_state.clustering_params.get("classification_batch_size", 20),
             key="classification_batch_size_slider",
         )
 
-    return {
-        "min_categories": min_categories,
-        "max_categories": max_categories,
-        "batch_size": batch_size,
-        "classification_batch_size": classification_batch_size,
-    }
 
-
-def get_custom_classification_parameters() -> Dict[str, int]:
-    """获取自定义分类参数设置"""
+def get_custom_classification_parameters():
+    """获取并更新自定义分类参数设置"""
     with st.expander("自定义类别分类参数设置"):
-        classification_batch_size = st.slider(
+        st.session_state.clustering_params["classification_batch_size"] = st.slider(
             "分类批处理大小",
             10,
             100,
-            st.session_state.clustering_params["classification_batch_size"],
+            st.session_state.clustering_params.get("classification_batch_size", 20),
             key="custom_classification_batch_size_slider",
         )
-
-    return {
-        "classification_batch_size": classification_batch_size,
-    }
 
 
 def handle_data_input_and_clustering():
@@ -175,9 +159,12 @@ def handle_data_input_and_clustering():
             st.session_state.df_preprocessed = df
 
             st.write("预览上传的数据：")
-            st.write(df.head())
+            st.dataframe(df, height=250)
             st.session_state.text_column = st.selectbox("选择包含文本的列", df.columns)
 
+            previous_use_custom_categories = st.session_state.get(
+                "use_custom_categories", False
+            )
             st.session_state.use_custom_categories = (
                 st.radio(
                     "选择聚类方式",
@@ -189,42 +176,63 @@ def handle_data_input_and_clustering():
                 == "使用自定义类别"
             )
 
+            # 检查是否切换了聚类方式
+            if st.session_state.use_custom_categories != previous_use_custom_categories:
+                # 重置clustering_params为默认值
+                st.session_state.clustering_params = {
+                    "min_categories": 10,
+                    "max_categories": 15,
+                    "batch_size": 100,
+                    "classification_batch_size": 20,
+                }
+
             if st.session_state.use_custom_categories:
-                st.session_state.clustering_params = (
-                    get_custom_classification_parameters()
-                )
+                get_custom_classification_parameters()
             else:
-                st.session_state.clustering_params = get_clustering_parameters()
+                get_clustering_parameters()
+
+            if st.session_state.use_custom_categories:
+                st.info("请在下方设置自定义类别")
+            else:
                 if st.button("开始初始聚类"):
                     with st.spinner("正在进行初始聚类..."):
-                        result = generate_categories(
-                            df=df,
-                            text_column=st.session_state.text_column,
-                            text_topic=st.session_state.text_topic,
-                            initial_category_count=st.session_state.clustering_params[
-                                "max_categories"
-                            ],
-                            min_categories=st.session_state.clustering_params[
-                                "min_categories"
-                            ],
-                            max_categories=st.session_state.clustering_params[
-                                "max_categories"
-                            ],
-                            batch_size=st.session_state.clustering_params["batch_size"],
-                            session_id=st.session_state.session_id,
-                            additional_requirements=(
-                                f"补充要求：\n{st.session_state.additional_requirements}"
-                                if st.session_state.additional_requirements
-                                and st.session_state.additional_requirements.strip()
-                                else ""
-                            ),
-                        )
+                        try:
+                            result = asyncio.run(
+                                generate_categories(
+                                    df=df,
+                                    text_column=st.session_state.text_column,
+                                    text_topic=st.session_state.text_topic,
+                                    initial_category_count=st.session_state.clustering_params[
+                                        "max_categories"
+                                    ],
+                                    min_categories=st.session_state.clustering_params[
+                                        "min_categories"
+                                    ],
+                                    max_categories=st.session_state.clustering_params[
+                                        "max_categories"
+                                    ],
+                                    batch_size=st.session_state.clustering_params[
+                                        "batch_size"
+                                    ],
+                                    session_id=st.session_state.session_id,
+                                    additional_requirements=(
+                                        f"补充要求：\n{st.session_state.additional_requirements}"
+                                        if st.session_state.additional_requirements
+                                        and st.session_state.additional_requirements.strip()
+                                        else ""
+                                    ),
+                                )
+                            )
 
-                    st.success("初始聚类完成！")
+                            st.success("初始聚类完成！")
 
-                    # 保存结果到 session state
-                    st.session_state.df_preprocessed = result["preprocessed_df"]
-                    st.session_state.categories = result["categories"]["categories"]
+                            # 保存结果到 session state
+                            st.session_state.df_preprocessed = result["preprocessed_df"]
+                            st.session_state.categories = result["categories"][
+                                "categories"
+                            ]
+                        except Exception as e:
+                            st.error(f"初始聚类过程中发生错误：{str(e)}")
 
             st.session_state.df_preprocessed = df
 
@@ -260,7 +268,8 @@ def handle_custom_categories():
                 categories_text = st.text_area(
                     "请输入自定义类别（每行一个类别，格式：类别名称,类别描述）",
                     height=200,
-                    placeholder="工作环境,描述员工对公司工作环境的感受，包括舒适度、设备和软件的先进性等。\n薪资与福利,讨论员工对薪资水平和福利待遇的看法，包括与行业水平的比较、提升空间和健康保险等。",
+                    placeholder="工作环境,描述员工对公司工作环境的感受，包括舒适度、设备和软件的先进性等。\n"
+                    "薪资与福利,讨论员工对薪资水平和福利待遇的看法，包括与行业水平的比较、提升空间和健康保险等。",
                 )
                 if categories_text:
                     categories_list = [
@@ -317,20 +326,25 @@ def review_clustering_results():
                     st.error("请先设置聚类参数")
                 else:
                     with st.spinner("正在进行文本分类..."):
-                        df_result = classify_texts(
-                            df=st.session_state.df_preprocessed,
-                            text_column=st.session_state.text_column,
-                            id_column="unique_id",
-                            categories={"categories": edited_categories},
-                            text_topic=st.session_state.text_topic,
-                            session_id=st.session_state.session_id,
-                            classification_batch_size=st.session_state.clustering_params[
-                                "classification_batch_size"
-                            ],
-                        )
+                        try:
+                            df_result = asyncio.run(
+                                classify_texts(
+                                    df=st.session_state.df_preprocessed,
+                                    text_column=st.session_state.text_column,
+                                    id_column="unique_id",
+                                    categories={"categories": edited_categories},
+                                    text_topic=st.session_state.text_topic,
+                                    session_id=st.session_state.session_id,
+                                    classification_batch_size=st.session_state.clustering_params[
+                                        "classification_batch_size"
+                                    ],
+                                )
+                            )
 
-                    st.session_state.df_result = df_result
-                    st.success("文本分类完成！")
+                            st.session_state.df_result = df_result
+                            st.success("文本分类完成！")
+                        except Exception as e:
+                            st.error(f"文本分类过程中发生错误：{str(e)}")
 
 
 def display_classification_results():

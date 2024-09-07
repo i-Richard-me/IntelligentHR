@@ -1,9 +1,13 @@
 import os
 import time
 import uuid
+import asyncio
 from typing import List, Dict, Any, Optional
+
 import pandas as pd
+import aiohttp
 from langfuse.callback import CallbackHandler
+
 from utils.llm_tools import LanguageModelChain, init_language_model
 from utils.text_utils import (
     clean_text_columns,
@@ -25,6 +29,10 @@ from backend.text_processing.clustering.clustering_core import (
 language_model = init_language_model(
     provider=os.getenv("SMART_LLM_PROVIDER"), model_name=os.getenv("SMART_LLM_MODEL")
 )
+
+# 创建异步信号量，限制并发任务数量
+MAX_CONCURRENT_TASKS = 3
+semaphore = asyncio.Semaphore(MAX_CONCURRENT_TASKS)
 
 
 def create_langfuse_handler(session_id: str, step: str) -> CallbackHandler:
@@ -92,7 +100,7 @@ def batch_texts(df: pd.DataFrame, text_column: str, batch_size: int = 100) -> Li
     ]
 
 
-def generate_initial_categories(
+async def generate_initial_categories(
     texts: List[str],
     text_topic: str,
     category_count: int,
@@ -100,7 +108,7 @@ def generate_initial_categories(
     additional_requirements: Optional[str] = None,
 ) -> List[Dict]:
     """
-    生成初始类别
+    异步生成初始类别
 
     Args:
         texts: 待分类的文本列表
@@ -120,23 +128,24 @@ def generate_initial_categories(
         language_model,
     )()
 
-    categories_list = []
-    for text_batch in texts:
-        result = category_chain.invoke(
-            {
-                "text_topic": text_topic,
-                "text_content": text_batch,
-                "category_count": category_count,
-                "additional_requirements": additional_requirements,
-            },
-            config={"callbacks": [langfuse_handler]},
-        )
-        categories_list.append(result)
+    async with semaphore:
+        categories_list = []
+        for text_batch in texts:
+            result = await category_chain.ainvoke(
+                {
+                    "text_topic": text_topic,
+                    "text_content": text_batch,
+                    "category_count": category_count,
+                    "additional_requirements": additional_requirements,
+                },
+                config={"callbacks": [langfuse_handler]},
+            )
+            categories_list.append(result)
 
     return categories_list
 
 
-def merge_categories(
+async def merge_categories(
     categories_list: List[Dict],
     text_topic: str,
     min_categories: int,
@@ -145,7 +154,7 @@ def merge_categories(
     additional_requirements: Optional[str] = None,
 ) -> Dict:
     """
-    合并生成的类别
+    异步合并生成的类别
 
     Args:
         categories_list: 初始类别列表
@@ -166,7 +175,7 @@ def merge_categories(
         language_model,
     )()
 
-    result = merge_chain.invoke(
+    result = await merge_chain.ainvoke(
         {
             "text_topic": text_topic,
             "classification_results": categories_list,
@@ -180,7 +189,7 @@ def merge_categories(
     return result
 
 
-def generate_categories(
+async def generate_categories(
     df: pd.DataFrame,
     text_column: str,
     text_topic: str,
@@ -192,7 +201,7 @@ def generate_categories(
     additional_requirements: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
-    生成类别的主函数
+    异步生成类别的主函数
 
     Args:
         df: 输入的DataFrame
@@ -213,14 +222,14 @@ def generate_categories(
 
     preprocessed_df = preprocess_data(df, text_column)
     batched_texts = batch_texts(preprocessed_df, text_column, batch_size)
-    initial_categories = generate_initial_categories(
+    initial_categories = await generate_initial_categories(
         batched_texts,
         text_topic,
         initial_category_count,
         session_id,
         additional_requirements,
     )
-    merged_categories = merge_categories(
+    merged_categories = await merge_categories(
         initial_categories,
         text_topic,
         min_categories,
@@ -236,7 +245,41 @@ def generate_categories(
     }
 
 
-def classify_texts(
+async def classify_single_batch(
+    text_batch: str,
+    categories: Dict,
+    text_topic: str,
+    session_id: str,
+    langfuse_handler: CallbackHandler,
+    classification_chain: LanguageModelChain,
+) -> List[Dict]:
+    """
+    对单个批次的文本进行分类
+
+    Args:
+        text_batch: 文本批次
+        categories: 类别字典
+        text_topic: 文本主题或背景
+        session_id: 会话ID
+        langfuse_handler: Langfuse回调处理器
+        classification_chain: 分类链
+
+    Returns:
+        List[Dict]: 分类结果列表
+    """
+    async with semaphore:
+        result = await classification_chain.ainvoke(
+            {
+                "text_topic": text_topic,
+                "categories": categories,
+                "text_table": text_batch,
+            },
+            config={"callbacks": [langfuse_handler]},
+        )
+    return result["classifications"]
+
+
+async def classify_texts(
     df: pd.DataFrame,
     text_column: str,
     id_column: str,
@@ -246,7 +289,7 @@ def classify_texts(
     classification_batch_size: int = 20,
 ) -> pd.DataFrame:
     """
-    对文本进行分类
+    异步对文本进行分类
 
     Args:
         df: 包含文本数据的DataFrame
@@ -273,18 +316,24 @@ def classify_texts(
         df, [id_column, text_column], rows_per_table=classification_batch_size
     )
 
-    classification_results = []
-    task_id = time.strftime("%Y%m%d-%H%M%S")
-
-    for i, table in enumerate(markdown_tables):
-        result = classification_chain.invoke(
-            {"text_topic": text_topic, "categories": categories, "text_table": table},
-            config={"callbacks": [langfuse_handler]},
+    tasks = [
+        classify_single_batch(
+            table,
+            categories,
+            text_topic,
+            session_id,
+            langfuse_handler,
+            classification_chain,
         )
-        classification_results.extend(result["classifications"])
+        for table in markdown_tables
+    ]
 
+    classification_results = []
+    for completed_task in asyncio.as_completed(tasks):
+        result = await completed_task
+        classification_results.extend(result)
         # 每处理完一个批次，保存临时文件
-        save_temp_results(classification_results, task_id, "text_classification")
+        save_temp_results(classification_results, session_id, "text_classification")
 
     df_classifications = pd.DataFrame(classification_results)
     df_result = df.merge(
@@ -300,9 +349,9 @@ def save_temp_results(results: List[Dict], task_id: str, entity_type: str):
     保存临时结果到文件。
 
     Args:
-        results (List[Dict]): 分类结果列表。
-        task_id (str): 任务ID。
-        entity_type (str): 实体类型。
+        results: 分类结果列表
+        task_id: 任务ID
+        entity_type: 实体类型
     """
     temp_dir = os.path.join("data", "temp")
     os.makedirs(temp_dir, exist_ok=True)
