@@ -31,7 +31,7 @@ class WorkExperience(BaseModel):
     position: str = Field(..., description="职位名称")
     start_date: str = Field(..., description="工作开始时间")
     end_date: str = Field(..., description="工作结束时间")
-    responsibilities: List[str] = Field(..., description="主要职责和成就等")
+    responsibilities: List[str] = Field(..., description="工作职责和成就等。**包含原文中的全部相关信息**")
 
 
 class ProjectExperience(BaseModel):
@@ -41,7 +41,7 @@ class ProjectExperience(BaseModel):
     role: str = Field(..., description="在项目中担任的角色")
     start_date: str = Field(..., description="项目开始时间")
     end_date: str = Field(..., description="项目结束时间")
-    details: List[str] = Field(..., description="项目详情，包括描述、职责和成就等")
+    details: List[str] = Field(..., description="项目详情，包括描述、职责和成就等。**包含原文中的全部相关信息**")
 
 
 class ResumeSummary(BaseModel):
