@@ -18,7 +18,7 @@ embeddings = VectorEncoder(model="BAAI/bge-m3")
 
 # 加载集合配置
 collections_config_path = "data/config/collections_config.json"
-with open(collections_config_path, 'r', encoding='utf-8') as f:
+with open(collections_config_path, "r", encoding="utf-8") as f:
     collections_config = json.load(f)["collections"]
 
 

@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import List, Optional
+from typing import List, Optional, Literal
 
 
 class PersonalInfo(BaseModel):
@@ -31,7 +31,12 @@ class WorkExperience(BaseModel):
     position: str = Field(..., description="职位名称")
     start_date: str = Field(..., description="工作开始时间")
     end_date: str = Field(..., description="工作结束时间")
-    responsibilities: List[str] = Field(..., description="工作职责和成就等。**包含原文中的全部相关信息**")
+    responsibilities: List[str] = Field(
+        ..., description="工作职责和成就等。**包含原文中的全部相关信息**"
+    )
+    experience_type: Literal["正式", "实习"] = Field(
+        ..., description="工作经历类型（正式或实习）"
+    )
 
 
 class ProjectExperience(BaseModel):
@@ -41,7 +46,10 @@ class ProjectExperience(BaseModel):
     role: str = Field(..., description="在项目中担任的角色")
     start_date: str = Field(..., description="项目开始时间")
     end_date: str = Field(..., description="项目结束时间")
-    details: List[str] = Field(..., description="项目详情，包括描述、职责和成就等。**包含原文中的全部相关信息**")
+    details: List[str] = Field(
+        ...,
+        description="项目详情，包括描述、职责和成就等。**包含原文中的全部相关信息**",
+    )
 
 
 class ResumeSummary(BaseModel):
@@ -51,10 +59,12 @@ class ResumeSummary(BaseModel):
     experience: str = Field(..., description="工作和项目经历概述")
     skills_overview: str = Field(..., description="技能概述")
 
+
 class Summary(BaseModel):
     """简历概述数据模型。"""
 
     summary: ResumeSummary = Field(..., description="简历概述")
+
 
 class ResumePersonalEducation(BaseModel):
     """个人信息和教育背景数据模型。"""
@@ -70,6 +80,3 @@ class ResumeWorkProject(BaseModel):
     project_experiences: Optional[List[ProjectExperience]] = Field(
         None, description="项目经历列表"
     )
-
-
-
