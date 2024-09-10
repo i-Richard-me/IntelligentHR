@@ -22,9 +22,8 @@ class CorrectionItem(BaseModel):
 
 
 class DocumentCheck(BaseModel):
-    page_number: int = Field(..., description="文档页码")
     corrections: List[CorrectionItem] = Field(
-        default=[], description="检测到的需要修改的内容列表"
+        default=[], description="检测到的需要修改的内容列表(不需要返回无需修改的内容)"
     )
 
 
@@ -48,8 +47,9 @@ def create_langfuse_handler(session_id: str, step: str) -> CallbackHandler:
     )
 
 
-async def check_page(page_elements: List[dict], session_id: str) -> Dict[str, Any]:
-    page_number = page_elements[0]["metadata"]["page_number"]
+async def check_page(
+    page_elements: List[dict], session_id: str, page_number: int
+) -> Dict[str, Any]:
     langfuse_handler = create_langfuse_handler(session_id, f"check_page_{page_number}")
 
     formatted_content = "\n".join(
@@ -60,11 +60,11 @@ async def check_page(page_elements: List[dict], session_id: str) -> Dict[str, An
     )
 
     result = await document_checker.ainvoke(
-        {"page_number": page_number, "document_content": formatted_content},
+        {"document_content": formatted_content},
         config={"callbacks": [langfuse_handler]},
     )
 
-    return result
+    return {"page_number": page_number, **result}
 
 
 async def check_document(
@@ -77,11 +77,21 @@ async def check_document(
             pages[page_number] = []
         pages[page_number].append(element)
 
-    results = []
-    for page_number, page_elements in pages.items():
-        page_result = await check_page(page_elements, session_id)
-        results.append(page_result)
+    async def process_pages(page_items):
+        tasks = []
+        semaphore = asyncio.Semaphore(3)  # 限制同时处理的页面数为3
 
+        async def check_with_semaphore(page_number, page_elements):
+            async with semaphore:
+                return await check_page(page_elements, session_id, page_number)
+
+        for page_number, page_elements in page_items:
+            task = asyncio.create_task(check_with_semaphore(page_number, page_elements))
+            tasks.append(task)
+
+        return await asyncio.gather(*tasks)
+
+    results = await process_pages(pages.items())
     return results
 
 
