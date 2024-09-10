@@ -20,7 +20,12 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def init_language_model(temperature: float = 0.0, provider: Optional[str] = None, model_name: Optional[str] = None, **kwargs: Any) -> ChatOpenAI:
+def init_language_model(
+    temperature: float = 0.0,
+    provider: Optional[str] = None,
+    model_name: Optional[str] = None,
+    **kwargs: Any,
+) -> ChatOpenAI:
     """
     初始化语言模型，支持OpenAI模型和其他模型供应商。
 
@@ -36,7 +41,9 @@ def init_language_model(temperature: float = 0.0, provider: Optional[str] = None
     Raises:
         ValueError: 当提供的参数无效或缺少必要的配置时抛出。
     """
-    provider = provider.lower() if provider else os.getenv("LLM_PROVIDER", "openai").lower()
+    provider = (
+        provider.lower() if provider else os.getenv("LLM_PROVIDER", "openai").lower()
+    )
     model_name = model_name or os.getenv("LLM_MODEL", "gpt-4")
 
     api_key_env_var = f"OPENAI_API_KEY_{provider.upper()}"
@@ -104,11 +111,10 @@ Output your answer as a JSON object that conforms to the following schema:
 ```
 
 Important instructions:
-1. Wrap your entire response between ```json and ``` tags.
-2. Ensure your JSON is valid and properly formatted.
-3. Do not include the schema definition in your answer.
-4. Only output the data instance that matches the schema.
-5. Do not include any explanations or comments within the JSON output.
+1. Ensure your JSON is valid and properly formatted.
+2. Do not include the schema definition in your answer.
+3. Only output the data instance that matches the schema.
+4. Do not include any explanations or comments within the JSON output.
         """
 
         self.prompt_template = ChatPromptTemplate.from_messages(
