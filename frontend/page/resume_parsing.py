@@ -56,7 +56,7 @@ def extract_text_from_pdf(pdf_file):
 async def extract_text_from_url(url: str, session: aiohttp.ClientSession) -> str:
     """从URL中异步提取文本"""
     jina_url = f"https://r.jina.ai/{url}"
-    async with session.get(jina_url) as response:
+    async with session.get(jina_url, ssl=False) as response:
         if response.status == 200:
             return await response.text()
         else:
@@ -72,7 +72,7 @@ async def extract_resume_info(
     elif file_type == "pdf":
         content = extract_text_from_pdf(io.BytesIO(file_content))
     elif file_type == "url":
-        content = extract_text_from_url(file_content)
+        content = file_content
     else:
         st.error("不支持的文件类型")
         return None
@@ -145,7 +145,9 @@ def display_work_experience(work_experiences):
     with st.container(border=True):
         st.markdown("#### 工作经历")
         for work in work_experiences:
-            st.markdown(f"**{work['company']}** - {work['position']}")
+            st.markdown(
+                f"**{work['company']}** - {work['position']} ({work['experience_type']})"
+            )
             st.markdown(f"{work['start_date']} to {work['end_date']}")
             st.markdown("职责:")
             for resp in work["responsibilities"]:
@@ -294,7 +296,15 @@ def handle_single_resume():
         if uploaded_file is not None:
             process_uploaded_file(uploaded_file)
         elif url_input:
-            process_url_input(url_input)
+            asyncio.run(process_url_input(url_input))
+
+
+async def process_url_input(url_input: str):
+    """处理输入的URL"""
+    async with aiohttp.ClientSession() as session:
+        file_content = await extract_text_from_url(url_input, session)
+        resume_id = calculate_resume_hash(file_content)
+        await handle_resume_processing(resume_id, "url", file_content, url_input)
 
 
 def process_uploaded_file(uploaded_file):
@@ -306,16 +316,7 @@ def process_uploaded_file(uploaded_file):
     handle_resume_processing(resume_id, file_type, file_content, uploaded_file.name)
 
 
-def process_url_input(url_input):
-    """处理输入的URL"""
-    file_type = "url"
-    file_content = url_input
-    resume_id = calculate_resume_hash(url_input)
-
-    handle_resume_processing(resume_id, file_type, file_content, url_input)
-
-
-def handle_resume_processing(resume_id, file_type, file_content, file_or_url):
+async def handle_resume_processing(resume_id, file_type, file_content, file_or_url):
     """处理简历提取和存储逻辑"""
     existing_resume = get_full_resume(resume_id)
     if existing_resume:
@@ -326,14 +327,12 @@ def handle_resume_processing(resume_id, file_type, file_content, file_or_url):
         st.session_state.is_from_database = False
         if st.button("提取信息", key=file_type):
             with st.spinner("正在提取简历信息..."):
-                resume_data = asyncio.run(
-                    extract_resume_info(
-                        file_content,
-                        resume_id,
-                        file_type,
-                        st.session_state.session_id,
-                        file_or_url,
-                    )
+                resume_data = await extract_resume_info(
+                    file_content,
+                    resume_id,
+                    file_type,
+                    st.session_state.session_id,
+                    file_or_url,
                 )
                 resume_data["resume_format"] = file_type
                 resume_data["file_or_url"] = file_or_url
