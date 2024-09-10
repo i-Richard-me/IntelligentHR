@@ -44,6 +44,11 @@ data_cleaning = st.Page(
     title="自动化数据清洗",
     icon=":material/mop:",
 )
+document_check = st.Page(
+    "page/document_check.py",
+    title="报告质量检验",
+    icon=":material/verified:",
+)
 ai_translation = st.Page(
     "page/ai_translation.py",
     title="智能语境翻译",
@@ -51,7 +56,7 @@ ai_translation = st.Page(
 )
 sentiment_analysis = st.Page(
     "page/sentiment_analysis.py",
-    title="情感分析与文本标注",
+    title="情感分析与标注",
     icon=":material/family_star:",
 )
 text_clustering = st.Page(
@@ -89,6 +94,7 @@ account_pages = [logout_page, home_page]
 request_pages = [
     table_operation,
     data_cleaning,
+    document_check,
     ai_translation,
     sentiment_analysis,
     text_clustering,

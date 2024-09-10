@@ -53,7 +53,7 @@ initialize_session_state()
 
 
 def display_classification_result(result: ClassificationResult):
-    """将分类结果显示为表格"""
+    """将分析结果显示为表格"""
     df = pd.DataFrame(
         {
             "有效性": [result.validity],
@@ -86,25 +86,24 @@ async def batch_classify(texts: List[str], context: str, progress_bar, status_ar
 
 
 def display_info_message():
-    """显示文本分类与标注工具的信息消息。"""
+    """显示情感分析与标注工具的信息消息。"""
     st.info(
         """
-    情感分析与文本标注功能使用先进的自然语言处理技术，帮助用户快速分析和分类大量文本数据。
+    情感分析与标注功能使用大语言模型处理技术，帮助用户快速分析和分类大量文本数据。
     
     主要功能包括：
     - 文本有效性判断
     - 情感倾向分析
     - 是否敏感信息识别
     
-    通过交互式界面，用户可以轻松上传数据、查看分类结果，并下载分析报告。
-    这个工具适用于各类需要快速理解和分类大量文本数据的场景，如客户反馈分析、社交媒体监控等。
+    适用于各类需要快速理解和分类大量文本数据的场景，如客户反馈分析、社交媒体监控等。
     """
     )
 
 
 def display_workflow():
-    """显示文本分类与标注的工作流程。"""
-    with st.expander("📋 查看文本分类与标注工作流程", expanded=False):
+    """显示情感分析与标注的工作流程。"""
+    with st.expander("📋 查看情感分析与标注工作流程", expanded=False):
 
         with st.container(border=True):
             st.markdown(
@@ -135,13 +134,13 @@ def display_workflow():
 
 
 def main():
-    st.title("🏷️ 文本分类与标注")
+    st.title("🏷️ 情感分析与标注")
     st.markdown("---")
 
     display_info_message()
     display_workflow()
 
-    st.markdown("## 文本分类")
+    st.markdown("## 情感分析与标注")
     with st.container(border=True):
         st.session_state.context = st.text_input(
             "请输入文本上下文或主题",
@@ -153,15 +152,15 @@ def main():
 
         with tab1:
             with st.form("single_classification_form", border=False):
-                text_to_classify = st.text_area("请输入要分类的文本", height=150)
-                submit_button = st.form_submit_button("分类")
+                text_to_classify = st.text_area("请输入要分析的文本", height=150)
+                submit_button = st.form_submit_button("分析")
 
                 if submit_button:
                     if text_to_classify and st.session_state.context:
                         st.session_state.session_id = str(
                             uuid.uuid4()
                         )  # 为单个分类任务生成新的session_id
-                        with st.spinner("正在分类..."):
+                        with st.spinner("正在分析..."):
                             input_data = ClassificationInput(
                                 text=text_to_classify,
                                 context=st.session_state.context,
@@ -171,7 +170,7 @@ def main():
                             )
                         st.session_state.classification_results = result
                     else:
-                        st.warning("请输入文本、上下文和标签")
+                        st.warning("请输入文本和上下文")
 
         with tab2:
             uploaded_file = st.file_uploader("上传CSV文件", type="csv")
@@ -182,10 +181,10 @@ def main():
                     st.dataframe(st.session_state.df.head())
 
                     text_column = st.selectbox(
-                        "选择包含要分类文本的列", st.session_state.df.columns
+                        "选择包含要分析文本的列", st.session_state.df.columns
                     )
 
-                    if st.button("开始批量分类"):
+                    if st.button("开始批量分析"):
                         if st.session_state.context:
                             st.session_state.session_id = str(
                                 uuid.uuid4()
@@ -206,7 +205,7 @@ def main():
                     st.error(f"处理CSV文件时出错：{str(e)}")
 
     if st.session_state.is_processing:
-        st.markdown("## 批量分类进度")
+        st.markdown("## 批量分析进度")
         with st.container(border=True):
             total_rows = len(st.session_state.filtered_df)
 
@@ -215,7 +214,7 @@ def main():
 
             texts_to_classify = st.session_state.filtered_df[text_column].tolist()
 
-            with st.spinner("正在批量分类..."):
+            with st.spinner("正在批量分析..."):
                 results = asyncio.run(
                     batch_classify(
                         texts_to_classify,
@@ -234,13 +233,13 @@ def main():
                     "sensitive_info"
                 ]
 
-            st.success("批量分类完成！")
+            st.success("批量分析完成！")
             st.session_state.classification_results = st.session_state.filtered_df
             st.session_state.is_processing = False
 
     # 显示分类结果
     if st.session_state.classification_results is not None:
-        st.markdown("## 分类结果")
+        st.markdown("## 分析结果")
         with st.container(border=True):
             if isinstance(
                 st.session_state.classification_results, ClassificationResult
@@ -256,9 +255,9 @@ def main():
                     index=False
                 ).encode("utf-8-sig")
                 st.download_button(
-                    label="下载分类结果CSV",
+                    label="下载分析结果CSV",
                     data=csv,
-                    file_name="classification_results.csv",
+                    file_name="sentiment_analysis_results.csv",
                     mime="text/csv",
                 )
 
