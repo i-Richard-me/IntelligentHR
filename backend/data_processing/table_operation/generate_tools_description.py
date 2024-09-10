@@ -15,10 +15,18 @@ def get_tools_description(tools):
     """获取工具函数的描述。"""
     descriptions = []
     for tool in tools:
+        full_description = tool.description
+        # 提取 Use cases 及之前的内容
+        description_parts = full_description.split("Use cases:")
+        description = description_parts[0].strip()
+        if len(description_parts) > 1:
+            description += "\n\nUse cases:" + description_parts[1].split("\n\n")[0]
+
         descriptions.append(
             {
                 "tool_name": tool.name,
-                "description": tool.description,
+                "description": description,
+                "full_description": full_description,
                 "args": str(tool.args),
             }
         )
@@ -30,7 +38,7 @@ def generate_csv(tools, output_file):
     descriptions = get_tools_description(tools)
 
     with open(output_file, "w", newline="", encoding="utf-8") as csvfile:
-        fieldnames = ["tool_name", "description", "args"]
+        fieldnames = ["tool_name", "description", "full_description", "args"]
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
 
         writer.writeheader()
@@ -39,7 +47,9 @@ def generate_csv(tools, output_file):
 
 
 if __name__ == "__main__":
-    tools = [tool for tool in globals().values() if callable(tool) and hasattr(tool, 'name')]
+    tools = [
+        tool for tool in globals().values() if callable(tool) and hasattr(tool, "name")
+    ]
 
     output_file = os.path.join("data", "datasets", "tools_description.csv")
     generate_csv(tools, output_file)
