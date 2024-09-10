@@ -56,6 +56,11 @@
                     "is_vector": true
                 },
                 {
+                    "name": "full_description",
+                    "type": "str",
+                    "description": "Full description of the tool function"
+                },
+                {
                     "name": "args",
                     "type": "str",
                     "description": "Arguments of the tool function"
@@ -186,6 +191,11 @@
                     "type": "str",
                     "description": "职位",
                     "is_vector": true
+                },
+                {
+                    "name": "experience_type",
+                    "type": "str",
+                    "description": "工作经历类型（正式或实习）"
                 },
                 {
                     "name": "start_date",

@@ -137,8 +137,8 @@ def get_similar_tools(query: str, top_k: int = 3) -> str:
 
     tools_description = ""
     for result in results:
-        tools_description += f"函数名：\n{result['tool_name']}\n"
-        tools_description += f"描述：\n{result['description']}\n"
+        tools_description += f"函数名：\n{result['tool_name']}\n\n"
+        tools_description += f"描述：\n{result['full_description']}\n\n"
         tools_description += f"参数：\n{result['args']}\n\n"
 
     return tools_description.strip()
