@@ -169,3 +169,9 @@ data/datasets/*
 data/temp/*
 !data/temp/.gitkeep
 data/ml_models/*
+
+# Test
+test/
+
+# MacOS
+.DS_Store
