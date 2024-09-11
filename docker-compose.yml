@@ -15,6 +15,27 @@ services:
     command: streamlit run frontend/app.py --server.port=8510 --server.address=0.0.0.0
     restart: always
 
+  mysql:
+    image: docker.io/bitnami/mysql:9.0
+    ports:
+      - '3306:3306'
+    volumes:
+      - '../data/mysql:/bitnami/mysql/data'
+    environment:
+      - MYSQL_ROOT_PASSWORD=rootpassword
+      - MYSQL_DATABASE=resume_db
+      - MYSQL_USER=resumeuser
+      - MYSQL_PASSWORD=resumepassword
+      - TZ=Asia/Shanghai
+    healthcheck:
+      test: ['CMD', '/opt/bitnami/scripts/mysql/healthcheck.sh']
+      interval: 15s
+      timeout: 5s
+      retries: 6
+    restart: always
+    profiles:
+      - mysql
+
   langfuse-server:
     image: langfuse/langfuse:2
     depends_on:
