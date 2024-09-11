@@ -151,15 +151,11 @@ async def process_resume(
 
         complete_resume = {
             "id": resume_id,
-            "personal_info": personal_education.get("personal_info")
-            or personal_education.get("PersonalInfo"),
-            "education": personal_education.get("education")
-            or personal_education.get("Education"),
-            "work_experiences": work_project["work_experiences"]
-            or work_project.get("WorkExperience"),
-            "project_experiences": work_project.get("project_experiences", [])
-            or work_project.get("ProjectExperience", []),
-            "summary": summary.get("summary", {}) or summary.get("Summary", {}),
+            "personal_info": personal_education.get("personal_info", {}),
+            "education": personal_education.get("education", []),
+            "work_experiences": work_project.get("work_experiences", []),
+            "project_experiences": work_project.get("project_experiences", []),
+            "summary": summary.get("summary", {}),
             "characteristics": summary.get("summary", {}).get("characteristics", ""),
             "experience_summary": summary.get("summary", {}).get("experience", ""),
             "skills_overview": summary.get("summary", {}).get("skills_overview", ""),
@@ -169,6 +165,7 @@ async def process_resume(
 
         return complete_resume
     except Exception as e:
+        logging.error(f"处理简历时出错: {str(e)}")
         return {"error": f"处理简历时出错: {str(e)}"}
 
 
@@ -201,19 +198,6 @@ def store_resume(resume_data: Dict[str, Any]) -> bool:
 
         # 存储到SQLite
         init_all_tables()
-
-        # 确保resume_data中包含所需的所有字段
-        if "summary" in resume_data:
-            resume_data["characteristics"] = resume_data["summary"].get(
-                "characteristics", ""
-            )
-            resume_data["experience_summary"] = resume_data["summary"].get(
-                "experience", ""
-            )
-            resume_data["skills_overview"] = resume_data["summary"].get(
-                "skills_overview", ""
-            )
-
         store_full_resume(resume_data)
         return True
     except Exception as e:
