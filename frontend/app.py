@@ -13,7 +13,7 @@ if "role" in st.query_params:
 if "role" not in st.session_state:
     st.session_state.role = None
 
-ROLES = [None, "Requester", "Responder", "Admin"]
+ROLES = [None, "User", "Admin", "Recruiter"]
 
 
 def login():
@@ -64,6 +64,11 @@ text_clustering = st.Page(
     title="文本聚类分析",
     icon=":material/folder_open:",
 )
+resume_upload = st.Page(
+    "page/resume_upload.py",
+    title="简历上传系统",
+    icon=":material/upload:",
+)
 resume_parsing = st.Page(
     "page/resume_parsing.py",
     title="智能简历解析",
@@ -98,11 +103,10 @@ request_pages = [
     ai_translation,
     sentiment_analysis,
     text_clustering,
-    resume_parsing,
-    resume_recommendation,
     ai_research,
     modeling_analysis,
 ]
+recruitment_pages = [resume_upload, resume_parsing, resume_recommendation]
 admin_pages = [vector_db_management]
 
 
@@ -112,8 +116,10 @@ admin_pages = [vector_db_management]
 # )
 
 page_dict = {}
-if st.session_state.role in ["Requester", "Admin"]:
+if st.session_state.role in ["User", "Recruiter", "Admin"]:
     page_dict["Request"] = request_pages
+if st.session_state.role in ["Recruiter", "Admin"]:
+    page_dict["Recruitment"] = recruitment_pages
 if st.session_state.role == "Admin":
     page_dict["Admin"] = admin_pages
 

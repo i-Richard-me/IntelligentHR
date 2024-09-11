@@ -34,8 +34,6 @@ from backend.resume_management.storage.resume_sql_storage import get_full_resume
 # 常量定义
 MAX_CONCURRENT_TASKS = 1
 
-# Streamlit 页面配置
-st.set_page_config(page_title="智能简历解析系统", page_icon="📄")
 st.query_params.role = st.session_state.role
 
 # 应用自定义样式
