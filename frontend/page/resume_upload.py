@@ -15,6 +15,7 @@ from backend.resume_management.storage.resume_storage_handler import (
     calculate_file_hash,
     extract_text_from_url,
     calculate_url_hash,
+    extract_text_from_pdf,
 )
 from backend.resume_management.storage.resume_db_operations import (
     store_resume_record,
@@ -72,7 +73,10 @@ def process_pdf_file(file):
     else:
         try:
             minio_path = save_pdf_to_minio(file)
-            store_resume_record(file_hash, "pdf", file.name, None, minio_path)
+            raw_content = extract_text_from_pdf(file)
+            store_resume_record(
+                file_hash, "pdf", file.name, None, minio_path, raw_content
+            )
             st.success(f"文件 {file.name} 上传成功并保存到数据库。")
         except Exception as e:
             st.error(f"处理文件 {file.name} 时出错: {str(e)}")
@@ -101,7 +105,7 @@ async def process_url(url: str):
                 st.warning("此URL的简历内容已存在于数据库中。")
                 logger.info(f"URL {url} 的内容已存在于数据库中")
             else:
-                store_resume_record(url_hash, "url", None, url, None)
+                store_resume_record(url_hash, "url", None, url, None, content)
                 st.success("URL简历已成功保存到数据库。")
                 logger.info(f"URL {url} 的简历信息已成功保存到数据库")
         except Exception as e:

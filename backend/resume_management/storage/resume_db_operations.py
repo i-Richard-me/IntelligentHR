@@ -53,6 +53,7 @@ def init_resume_upload_table():
             file_name VARCHAR(255),
             url TEXT,
             minio_path VARCHAR(255),
+            raw_content LONGTEXT,
             upload_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
         """
@@ -72,6 +73,7 @@ def store_resume_record(
     file_name: Optional[str],
     url: Optional[str],
     minio_path: Optional[str],
+    raw_content: str,
 ):
     """
     存储简历记录到数据库。
@@ -82,6 +84,7 @@ def store_resume_record(
         file_name (Optional[str]): PDF文件名（仅对PDF类型有效）。
         url (Optional[str]): 简历URL（仅对URL类型有效）。
         minio_path (Optional[str]): MinIO中的文件路径（仅对PDF类型有效）。
+        raw_content (str): 简历的原始内容。
     """
     conn = get_db_connection()
     if conn is None:
@@ -91,10 +94,10 @@ def store_resume_record(
     try:
         cursor.execute(
             """
-        INSERT INTO resume_uploads (resume_hash, resume_type, file_name, url, minio_path)
-        VALUES (%s, %s, %s, %s, %s)
+        INSERT INTO resume_uploads (resume_hash, resume_type, file_name, url, minio_path, raw_content)
+        VALUES (%s, %s, %s, %s, %s, %s)
         """,
-            (resume_hash, resume_type, file_name, url, minio_path),
+            (resume_hash, resume_type, file_name, url, minio_path, raw_content),
         )
         conn.commit()
         logger.info(f"Resume record stored successfully. Hash: {resume_hash}")

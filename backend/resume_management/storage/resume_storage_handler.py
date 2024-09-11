@@ -2,6 +2,7 @@ import os
 import hashlib
 import aiohttp
 from typing import BinaryIO
+import pdfplumber
 from minio import Minio
 from minio.error import S3Error
 import logging
@@ -75,6 +76,26 @@ def calculate_file_hash(file: BinaryIO) -> str:
     for chunk in iter(lambda: file.read(4096), b""):
         md5_hash.update(chunk)
     return md5_hash.hexdigest()
+
+
+def extract_text_from_pdf(file: BinaryIO) -> str:
+    """
+    从PDF文件中提取文本内容。
+
+    Args:
+        file (BinaryIO): PDF文件对象。
+
+    Returns:
+        str: 提取的文本内容。
+    """
+    try:
+        with pdfplumber.open(file) as pdf:
+            return "\n".join(
+                page.extract_text() for page in pdf.pages if page.extract_text()
+            )
+    except Exception as e:
+        logger.error(f"Error extracting text from PDF: {str(e)}")
+        raise
 
 
 async def extract_text_from_url(url: str) -> str:
