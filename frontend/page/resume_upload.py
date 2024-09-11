@@ -4,6 +4,7 @@ import uuid
 from typing import List, Union
 import asyncio
 import sys
+import pandas as pd
 
 # 添加项目根目录到 Python 路径
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -40,36 +41,70 @@ def main():
     st.title("📤 简历上传系统")
     st.markdown("---")
 
-    # 创建两个标签页：一个用于PDF上传，另一个用于URL输入
-    tab1, tab2 = st.tabs(["PDF上传", "URL输入"])
+    display_info_message()
+    display_workflow()
 
-    with tab1:
-        handle_pdf_upload()
+    with st.container(border=True):
+        tab1, tab2 = st.tabs(["PDF上传", "URL输入"])
 
-    with tab2:
-        handle_url_input()
+        with tab1:
+            handle_pdf_upload()
+
+        with tab2:
+            handle_url_input()
 
     # 显示页脚
     show_footer()
 
 
-def handle_pdf_upload():
-    uploaded_files = st.file_uploader(
-        "上传PDF简历", type=["pdf"], accept_multiple_files=True
+def display_info_message():
+    st.info(
+        """
+        智能简历上传系统支持PDF文件上传和URL输入两种方式。
+        系统会自动提取简历内容,并进行去重和存储。
+        上传的简历将用于后续的智能匹配和分析。
+        """
     )
 
-    if uploaded_files:
-        for file in uploaded_files:
-            process_pdf_file(file)
+
+def display_workflow():
+    with st.expander("📄 查看简历上传工作流程", expanded=False):
+        st.markdown(
+            """
+            1. **文件上传/URL输入**: 选择上传PDF文件或输入简历URL。
+            2. **内容提取**: 系统自动提取简历内容。
+            3. **去重检查**: 检查是否存在重复简历。
+            4. **数据存储**: 将新的简历信息存储到数据库。
+            5. **确认反馈**: 向用户显示上传/处理结果。
+            """
+        )
+
+
+def handle_pdf_upload():
+    with st.container(border=True):
+        uploaded_files = st.file_uploader(
+            "上传PDF简历", type=["pdf"], accept_multiple_files=True
+        )
+
+        if uploaded_files:
+            if st.button("开始处理上传的PDF文件"):
+                results = []
+                for file in uploaded_files:
+                    result = process_pdf_file(file)
+                    results.append(result)
+                display_upload_results(results)
 
 
 def process_pdf_file(file):
-
     file_hash = calculate_file_hash(file)
     existing_resume = get_resume_by_hash(file_hash)
 
     if existing_resume:
-        st.warning(f"文件 {file.name} 已存在于数据库中。")
+        return {
+            "file_name": file.name,
+            "status": "已存在",
+            "message": "文件已存在于数据库中",
+        }
     else:
         try:
             minio_path = save_pdf_to_minio(file)
@@ -77,20 +112,41 @@ def process_pdf_file(file):
             store_resume_record(
                 file_hash, "pdf", file.name, None, minio_path, raw_content
             )
-            st.success(f"文件 {file.name} 上传成功并保存到数据库。")
+            return {
+                "file_name": file.name,
+                "status": "成功",
+                "message": "上传成功并保存到数据库",
+            }
         except Exception as e:
-            st.error(f"处理文件 {file.name} 时出错: {str(e)}")
+            return {
+                "file_name": file.name,
+                "status": "失败",
+                "message": f"处理出错: {str(e)}",
+            }
+
+
+def display_upload_results(results):
+    df = pd.DataFrame(results)
+    st.table(df)
+
+    success_count = sum(1 for result in results if result["status"] == "成功")
+    exist_count = sum(1 for result in results if result["status"] == "已存在")
+    fail_count = sum(1 for result in results if result["status"] == "失败")
+
+    st.markdown(
+        f"**处理总结:** 成功上传 {success_count} 个文件, {exist_count} 个文件已存在, {fail_count} 个文件处理失败"
+    )
 
 
 def handle_url_input():
-    url = st.text_input("输入简历URL")
+    with st.container(border=True):
+        url = st.text_input("输入简历URL")
 
-    if url and st.button("提交"):
-        asyncio.run(process_url(url))
+        if url and st.button("提交URL"):
+            asyncio.run(process_url(url))
 
 
 async def process_url(url: str):
-
     with st.spinner("正在处理URL..."):
         try:
             logger.info(f"开始处理URL: {url}")
