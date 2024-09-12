@@ -280,6 +280,36 @@
             "embedding_fields": [
                 "skill"
             ]
+        },
+        "raw_resume_texts": {
+            "name": "raw_resume_texts",
+            "description": "Collection for storing raw resume text vectors",
+            "fields": [
+                {
+                    "name": "resume_id",
+                    "type": "str",
+                    "description": "Unique identifier for the resume"
+                },
+                {
+                    "name": "raw_text",
+                    "type": "str",
+                    "description": "Raw text content of the resume",
+                    "is_vector": true
+                },
+                {
+                    "name": "file_name",
+                    "type": "str",
+                    "description": "Original file name of the resume"
+                },
+                {
+                    "name": "upload_date",
+                    "type": "str",
+                    "description": "Date when the resume was uploaded"
+                }
+            ],
+            "embedding_fields": [
+                "raw_text"
+            ]
         }
     }
 }

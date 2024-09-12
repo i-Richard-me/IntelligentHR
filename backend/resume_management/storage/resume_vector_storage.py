@@ -7,7 +7,7 @@
 import os
 import json
 from typing import Dict, Any, List, Union
-
+from datetime import datetime
 import pandas as pd
 from pymilvus import connections, Collection
 
@@ -18,6 +18,7 @@ from utils.vector_db_utils import (
     initialize_vector_store,
     insert_to_milvus,
     update_milvus_records,
+    search_in_milvus,
 )
 
 # 初始化 embedding 服务
@@ -151,5 +152,100 @@ def store_resume_in_milvus(resume_data: Dict[str, Any]):
 
     except Exception as e:
         raise Exception(f"存储简历数据时出错: {str(e)}")
+    finally:
+        connections.disconnect("default")
+
+
+def store_raw_resume_text_in_milvus(resume_id: str, raw_text: str, file_name: str):
+    """
+    将简历的原始文本向量化并存储到 Milvus 中。
+
+    Args:
+        resume_id (str): 简历的唯一标识符（哈希值）
+        raw_text (str): 简历的原始文本内容
+        file_name (str): 简历文件的原始文件名或URL
+    """
+    connect_to_milvus(db_name=os.getenv("VECTOR_DB_DATABASE_RESUME", "resume"))
+
+    try:
+        collection_name = "raw_resume_texts"
+        config = COLLECTIONS_CONFIG[collection_name]
+
+        # 初始化或创建集合
+        try:
+            collection = initialize_vector_store(collection_name)
+        except ValueError:
+            collection = create_milvus_collection(
+                config, dim=1024
+            )  # 假设向量维度为 1024
+
+        # 准备数据
+        vector = get_embedding(raw_text)
+        upload_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        data = [
+            {
+                "resume_id": resume_id,
+                "raw_text": raw_text,
+                "file_name": file_name,
+                "upload_date": upload_date,
+            }
+        ]
+
+        vectors = {"raw_text": [vector]}
+
+        # 插入记录
+        insert_to_milvus(collection, data, vectors)
+
+        print(f"Raw resume text for resume ID {resume_id} stored successfully.")
+
+    except Exception as e:
+        print(f"Error storing raw resume text: {str(e)}")
+    finally:
+        connections.disconnect("default")
+
+
+def search_similar_resumes(
+    raw_text: str, top_k: int = 5, threshold: float = 0.9
+) -> List[Dict[str, Any]]:
+    """
+    搜索与给定简历文本相似的简历。
+
+    Args:
+        raw_text (str): 要搜索的简历原始文本
+        top_k (int): 返回的最相似结果数量
+        threshold (float): 相似度阈值，低于此值的结果将被过滤掉
+
+    Returns:
+        List[Dict[str, Any]]: 相似简历的列表，每个字典包含简历信息和相似度得分
+    """
+    connect_to_milvus(db_name=os.getenv("VECTOR_DB_DATABASE_RESUME", "resume"))
+
+    try:
+        collection_name = "raw_resume_texts"
+        collection = initialize_vector_store(collection_name)
+
+        query_vector = get_embedding(raw_text)
+        results = search_in_milvus(collection, query_vector, "raw_text", top_k)
+
+        # 过滤并格式化结果
+        similar_resumes = []
+        for result in results:
+            similarity = result["distance"]
+            if similarity >= threshold:
+                similar_resumes.append(
+                    {
+                        "resume_id": result["resume_id"],
+                        "file_name": result["file_name"],
+                        "upload_date": result["upload_date"],
+                        "similarity": f"{similarity:.2%}",
+                    }
+                )
+
+        return similar_resumes
+
+    except Exception as e:
+        print(f"Error searching for similar resumes: {str(e)}")
+        return []
     finally:
         connections.disconnect("default")

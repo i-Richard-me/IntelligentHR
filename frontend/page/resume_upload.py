@@ -22,6 +22,10 @@ from backend.resume_management.storage.resume_db_operations import (
     store_resume_record,
     get_resume_by_hash,
 )
+from backend.resume_management.storage.resume_vector_storage import (
+    store_raw_resume_text_in_milvus,
+    search_similar_resumes,
+)
 import logging
 
 # 配置日志
@@ -109,20 +113,78 @@ def process_pdf_file(file):
         try:
             minio_path = save_pdf_to_minio(file)
             raw_content = extract_text_from_pdf(file)
+
+            # 检查相似简历
+            similar_resumes = search_similar_resumes(
+                raw_content, top_k=5, threshold=0.9
+            )
+
+            # 存储简历记录
             store_resume_record(
                 file_hash, "pdf", file.name, None, minio_path, raw_content
             )
-            return {
-                "file_name": file.name,
-                "status": "成功",
-                "message": "上传成功并保存到数据库",
-            }
+
+            # 存储原始文本向量
+            store_raw_resume_text_in_milvus(file_hash, raw_content, file.name)
+
+            if similar_resumes:
+                return {
+                    "file_name": file.name,
+                    "status": "潜在重复",
+                    "message": f"上传成功，但发现 {len(similar_resumes)} 份相似简历",
+                    "similar_resumes": similar_resumes,
+                }
+            else:
+                return {
+                    "file_name": file.name,
+                    "status": "成功",
+                    "message": "上传成功并保存到数据库",
+                }
         except Exception as e:
             return {
                 "file_name": file.name,
                 "status": "失败",
                 "message": f"处理出错: {str(e)}",
             }
+
+
+async def process_url(url: str):
+    with st.spinner("正在处理URL..."):
+        try:
+            logger.info(f"开始处理URL: {url}")
+            content = await extract_text_from_url(url)
+            url_hash = calculate_url_hash(content)
+
+            logger.info(f"URL内容提取成功，哈希值: {url_hash}")
+
+            existing_resume = get_resume_by_hash(url_hash)
+
+            if existing_resume:
+                st.warning("此URL的简历内容已存在于数据库中。")
+                logger.info(f"URL {url} 的内容已存在于数据库中")
+            else:
+                # 检查相似简历
+                similar_resumes = search_similar_resumes(
+                    content, top_k=5, threshold=0.9
+                )
+
+                # 存储简历记录
+                store_resume_record(url_hash, "url", None, url, None, content)
+
+                # 存储原始文本向量
+                store_raw_resume_text_in_milvus(url_hash, content, url)
+
+                if similar_resumes:
+                    st.warning(
+                        f"URL简历已保存，但发现 {len(similar_resumes)} 份相似简历。"
+                    )
+                    st.table(pd.DataFrame(similar_resumes))
+                else:
+                    st.success("URL简历已成功保存到数据库。")
+                logger.info(f"URL {url} 的简历信息已成功保存到数据库")
+        except Exception as e:
+            logger.error(f"处理URL时出错: {str(e)}", exc_info=True)
+            st.error(f"处理URL时出错: {str(e)}")
 
 
 def display_upload_results(results):
@@ -144,29 +206,6 @@ def handle_url_input():
 
         if url and st.button("提交URL"):
             asyncio.run(process_url(url))
-
-
-async def process_url(url: str):
-    with st.spinner("正在处理URL..."):
-        try:
-            logger.info(f"开始处理URL: {url}")
-            content = await extract_text_from_url(url)
-            url_hash = calculate_url_hash(content)
-
-            logger.info(f"URL内容提取成功，哈希值: {url_hash}")
-
-            existing_resume = get_resume_by_hash(url_hash)
-
-            if existing_resume:
-                st.warning("此URL的简历内容已存在于数据库中。")
-                logger.info(f"URL {url} 的内容已存在于数据库中")
-            else:
-                store_resume_record(url_hash, "url", None, url, None, content)
-                st.success("URL简历已成功保存到数据库。")
-                logger.info(f"URL {url} 的简历信息已成功保存到数据库")
-        except Exception as e:
-            logger.error(f"处理URL时出错: {str(e)}", exc_info=True)
-            st.error(f"处理URL时出错: {str(e)}")
 
 
 main()
