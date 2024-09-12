@@ -76,7 +76,9 @@ def insert_examples_to_milvus(
             vectors[field_name].append(vector)
 
     if not utility.has_collection(collection_config["name"]):
-        collection = create_milvus_collection(collection_config, len(next(iter(vectors.values()))[0]))
+        collection = create_milvus_collection(
+            collection_config, len(next(iter(vectors.values()))[0])
+        )
     else:
         collection = Collection(collection_config["name"])
 
@@ -136,17 +138,26 @@ def dedup_examples(
 ) -> Tuple[List[Dict], int]:
     """对新上传的数据进行去重，基于所有用于生成向量的字段"""
     if existing_records is None:
-        # 如果collection不存在，所有记录都是新的
         return new_examples, 0
 
     new_df = pd.DataFrame(new_examples)
+
+    # 确保列名一致性
+    new_df.columns = new_df.columns.str.strip().str.lower()
+    if existing_records is not None:
+        existing_records.columns = existing_records.columns.str.strip().str.lower()
 
     # 使用所有用于生成向量的字段进行比较
     embedding_fields = collection_config["embedding_fields"]
 
     # 使用这些字段进行合并
     merged = pd.merge(
-        new_df, existing_records, on=embedding_fields, how="left", indicator=True
+        new_df,
+        existing_records,
+        on=embedding_fields,
+        how="left",
+        indicator=True,
+        suffixes=("", "_existing"),
     )
 
     # 找出未匹配的记录（新数据）
@@ -155,8 +166,12 @@ def dedup_examples(
     # 计算重复记录数量
     duplicate_count = len(new_examples) - len(new_records)
 
+    # 只保留原始列
+    original_columns = new_df.columns
+    new_records = new_records[original_columns]
+
     # 转换回字典列表
-    new_examples = new_records.drop(columns=["_merge"]).to_dict("records")
+    new_examples = new_records.to_dict("records")
 
     return new_examples, duplicate_count
 
@@ -202,7 +217,7 @@ def display_data_preview(
 
         if len(new_examples) > 0:
             st.write("**新记录预览:**")
-            new_df = pd.DataFrame(new_examples[:5])
+            new_df = pd.DataFrame(new_examples)
             st.dataframe(new_df)
         elif collection_exists:
             st.info("所有上传的记录都已存在于数据库中，没有新数据需要插入。")
