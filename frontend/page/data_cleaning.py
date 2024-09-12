@@ -7,7 +7,7 @@ import time
 from typing import Dict, Any, List, Optional
 from uuid import uuid4
 import asyncio
-from concurrent.futures import ThreadPoolExecutor
+import aiohttp
 
 # 添加项目根目录到 Python 路径
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -92,6 +92,7 @@ def initialize_workflow(
     skip_validation: bool,
     skip_search: bool,
     skip_retrieval: bool,
+    search_tool: str,
 ) -> EntityVerificationWorkflow:
     """
     初始化实体验证工作流。
@@ -101,6 +102,7 @@ def initialize_workflow(
         skip_validation (bool): 是否跳过输入验证。
         skip_search (bool): 是否跳过网络搜索和分析。
         skip_retrieval (bool): 是否跳过向量检索和匹配。
+        search_tool (str): 使用的搜索工具（"duckduckgo" 或 "tavily"）。
 
     Returns:
         EntityVerificationWorkflow: 初始化后的工作流对象。
@@ -125,6 +127,7 @@ def initialize_workflow(
         skip_validation=skip_validation,
         skip_search=skip_search,
         skip_retrieval=skip_retrieval,
+        search_tool=search_tool,
     )
 
 
@@ -173,9 +176,16 @@ def main():
                 help="如果处理全新数据，可以跳过与已有数据库的匹配步骤。",
             )
 
+        # 添加搜索工具选择
+        search_tool = st.selectbox(
+            "选择搜索工具",
+            ["duckduckgo", "tavily"],
+            help="选择用于网络搜索的工具。",
+        )
+
     # 初始化工作流
     workflow = initialize_workflow(
-        entity_type, skip_validation, skip_search, skip_retrieval
+        entity_type, skip_validation, skip_search, skip_retrieval, search_tool
     )
 
     st.markdown("## 数据清洗")
@@ -332,7 +342,7 @@ def batch_processing(workflow: EntityVerificationWorkflow, entity_type: str):
 
         # 添加并行处理任务数选择
         max_workers = st.slider(
-            "选择并发任务数", min_value=1, max_value=10, value=3, step=1
+            "选择并发任务数", min_value=1, max_value=10, value=5, step=1
         )
 
         if st.button("开始批量处理"):
@@ -343,8 +353,20 @@ def batch_processing(workflow: EntityVerificationWorkflow, entity_type: str):
         display_batch_results(st.session_state.batch_results_df, entity_type)
 
 
-async def process_entity(entity_name, workflow):
-    session_id = str(uuid4())
+async def process_entity(
+    entity_name: str, workflow: EntityVerificationWorkflow, session_id: str
+) -> Dict[str, Any]:
+    """
+    处理单个实体的异步函数。
+
+    Args:
+        entity_name: 要处理的实体名称。
+        workflow: 实体验证工作流对象。
+        session_id: 会话ID。
+
+    Returns:
+        处理结果字典。
+    """
     return await workflow.run(entity_name, session_id=session_id)
 
 
@@ -352,23 +374,21 @@ async def process_batch(
     df: pd.DataFrame,
     workflow: EntityVerificationWorkflow,
     entity_type: str,
-    max_workers: int = 3,
+    max_workers: int = 5,
 ):
     """
-    异步处理批量实体数据，每100个实体自动保存一次结果。
+    异步处理批量实体数据，使用信号量控制并发。
 
     Args:
         df (pd.DataFrame): 包含实体名称的DataFrame。
         workflow (EntityVerificationWorkflow): 实体名称标准化工作流对象。
         entity_type (str): 实体类型。
-        max_workers (int): 最大并发任务数，默认为3。
+        max_workers (int): 最大并发任务数，默认为5。
     """
     results = []
     progress_bar = st.progress(0)
     status_area = st.empty()
     total_entities = len(df)
-    consecutive_errors = 0
-    max_consecutive_errors = 10
     save_interval = 100
 
     semaphore = asyncio.Semaphore(max_workers)
@@ -381,13 +401,14 @@ async def process_batch(
         temp_dir, f"batch_results_{entity_type}_{task_id}.csv"
     )
 
-    async def process_with_semaphore(entity_name, index):
+    async def process_with_semaphore(entity_name: str, index: int) -> Dict[str, Any]:
         async with semaphore:
-            result = await process_entity(entity_name, workflow)
+            session_id = str(uuid4())
+            result = await process_entity(entity_name, workflow, session_id)
             result["original_index"] = index
             return result
 
-    async def save_results(current_results):
+    async def save_results(current_results: List[Dict[str, Any]]):
         result_df = pd.DataFrame(current_results)
         result_df = result_df.sort_values("original_index").reset_index(drop=True)
         result_df = result_df.drop("original_index", axis=1)
@@ -399,49 +420,33 @@ async def process_batch(
         for i, entity_name in enumerate(df.iloc[:, 0])
     ]
 
-    for i, task in enumerate(asyncio.as_completed(tasks)):
-        result = await task
-        results.append(result)
+    async with aiohttp.ClientSession() as session:
+        for i, task in enumerate(asyncio.as_completed(tasks)):
+            result = await task
+            results.append(result)
 
-        if result["status"] == ProcessingStatus.ERROR:
-            consecutive_errors += 1
-        else:
-            consecutive_errors = 0
+            progress = (i + 1) / total_entities
+            progress_bar.progress(progress)
 
-        progress = (i + 1) / total_entities
-        progress_bar.progress(progress)
+            status_message = (
+                f"已处理: {i + 1}/{total_entities} - "
+                f"最新: '{result['original_input']}' → '{result['final_entity_name']}' "
+                f"(状态: {result['status'].value})"
+            )
+            status_area.info(status_message)
 
-        status_message = (
-            f"已处理: {i + 1}/{total_entities} - "
-            f"最新: '{result['original_input']}' → '{result['final_entity_name']}' "
-            f"(状态: {result['status'].value})"
-        )
-        status_area.info(status_message)
-
-        # 每处理100个实体自动保存一次
-        if (i + 1) % save_interval == 0:
-            await save_results(results)
-            st.info(f"已自动保存 {i + 1} 个处理结果")
-
-        if consecutive_errors >= max_consecutive_errors:
-            status_area.warning(f"连续出现{max_consecutive_errors}次错误，停止处理。")
-            break
-
-        await asyncio.sleep(0.05)
+            # 每处理100个实体自动保存一次
+            if (i + 1) % save_interval == 0:
+                await save_results(results)
+                st.info(f"已自动保存 {i + 1} 个处理结果")
 
     # 最后一次保存，确保所有结果都被保存
     await save_results(results)
 
     # 更新会话状态
     st.session_state.processing_complete = True
+    st.success(f"批量处理完成！共处理 {len(results)} 条数据。")
 
-    # 处理完成后的提示
-    if consecutive_errors >= max_consecutive_errors:
-        status_area.warning(
-            f"由于连续出现{max_consecutive_errors}次错误，处理提前终止。共处理 {len(results)} 条数据。"
-        )
-    else:
-        status_area.success(f"批量处理完成！共处理 {len(results)} 条数据。")
 
 def display_batch_results(result_df: pd.DataFrame, entity_type: str):
     st.success("批量处理完成！")

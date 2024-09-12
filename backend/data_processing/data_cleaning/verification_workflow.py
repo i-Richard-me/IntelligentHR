@@ -1,5 +1,5 @@
 import asyncio
-from typing import Dict, Any, List, Optional, Callable
+from typing import Dict, Any, List, Optional, Callable, Literal
 from uuid import uuid4
 from langfuse.callback import CallbackHandler
 import traceback
@@ -49,6 +49,7 @@ class EntityVerificationWorkflow:
         skip_validation: bool = False,
         skip_search: bool = False,
         skip_retrieval: bool = False,
+        search_tool: Literal["duckduckgo", "tavily"] = "duckduckgo",
     ):
         self.retriever = retriever
         self.entity_type = entity_type
@@ -61,6 +62,7 @@ class EntityVerificationWorkflow:
         self.skip_search = skip_search
         self.skip_retrieval = skip_retrieval
         self.search_tools = SearchTools()
+        self.search_tool = search_tool
 
     async def run(
         self, user_query: str, session_id: Optional[str] = None
@@ -131,7 +133,6 @@ class EntityVerificationWorkflow:
                     result["retrieved_entity_name"] = retrieval_results[0].get(
                         self.original_field, ""
                     )
-                    # 添加这一行来包含standard_name
                     result["standard_name"] = retrieval_results[0].get(
                         self.standard_field, ""
                     )
@@ -182,7 +183,12 @@ class EntityVerificationWorkflow:
         return validation_result["is_valid"]
 
     async def _perform_web_search(self, user_query: str) -> str:
-        return await self.search_tools.aduckduckgo_search(user_query)
+        if self.search_tool == "duckduckgo":
+            return await self.search_tools.aduckduckgo_search(user_query)
+        elif self.search_tool == "tavily":
+            return await self.search_tools.atavily_search(user_query)
+        else:
+            raise ValueError(f"Unsupported search tool: {self.search_tool}")
 
     async def _analyze_search_results(
         self, user_query: str, search_results: str, langfuse_handler: CallbackHandler
@@ -237,7 +243,6 @@ class EntityVerificationWorkflow:
         elif result["status"] == ProcessingStatus.ERROR:
             result["final_entity_name"] = "处理错误"
         elif result["status"] == ProcessingStatus.VERIFIED:
-            # 如果存在standard_name，使用它作为final_entity_name
             if "standard_name" in result:
                 result["final_entity_name"] = result["standard_name"]
             else:

@@ -71,12 +71,19 @@ system_message_verification = """
 human_message_validation = "用户查询的{entity_type}：{user_query}"
 
 human_message_search_analysis = """
-针对特定查询'{user_query}'，请仔细评估以下网络搜索片段：{snippets}。
+针对特定查询'{user_query}'，请仔细评估以下网络搜索片段：
+
+{snippets}
+
 如果搜索结果明确指向查询中的{entity_type}，并且您能够提取出标准化的{entity_type}名称，
 请提供该标准化名称并标注状态为'known'。
 如果搜索结果不明确或无法提取出相关信息，请标注状态为'unknown'，并省略{entity_type}名称。"""
 
-human_message_verification = "用户查询的{entity_type}：{user_query} \n检索到的{entity_type}：{retrieved_name} \n搜索结果：{search_results}"
+human_message_verification = """
+用户查询的{entity_type}：{user_query} \n
+检索到的{entity_type}：{retrieved_name} \n
+搜索结果：
+{search_results}"""
 
 # 创建处理链
 input_validator = LanguageModelChain(
