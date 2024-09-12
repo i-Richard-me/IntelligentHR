@@ -133,10 +133,26 @@ def get_similar_tools(query: str, top_k: int = 3) -> str:
     )
     query_vector = embeddings.embed_query(query)
 
-    results = search_in_milvus(collection, query_vector, "description", top_k)
+    # 检索更多结果以便进行去重
+    results = search_in_milvus(collection, query_vector, "description", top_k * 3)
+
+    # 添加日志，记录每个检索结果的工具名称和相似度
+    for result in results:
+        logger.info(
+            f"检索到的工具: {result['tool_name']}, 相似度: {result['distance']:.4f}"
+        )
+
+    # 去重逻辑
+    unique_tools = []
+    seen_tools = set()
+    for result in results:
+        tool_name = result["tool_name"]
+        if tool_name not in seen_tools and len(unique_tools) < top_k:
+            unique_tools.append(result)
+            seen_tools.add(tool_name)
 
     tools_description = ""
-    for result in results:
+    for result in unique_tools:
         tools_description += f"函数名：\n{result['tool_name']}\n\n"
         tools_description += f"描述：\n{result['full_description']}\n\n"
         tools_description += f"参数：\n{result['args']}\n\n"
