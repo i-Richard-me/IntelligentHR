@@ -66,23 +66,31 @@ def display_classification_result(result: ClassificationResult):
 
 async def batch_classify(texts: List[str], context: str, progress_bar, status_area):
     total_texts = len(texts)
+    workflow = TextClassificationWorkflow()
     results = []
-    for i, text in enumerate(texts):
-        result = await workflow.async_classify_text(
-            ClassificationInput(text=text, context=context), st.session_state.session_id
+
+    async def process_batch(batch):
+        batch_results = await workflow.async_batch_classify(
+            batch, context, st.session_state.session_id, max_concurrency=3
         )
-        results.append(result.dict())
+        results.extend(batch_results)
+        return len(batch_results)
+
+    batch_size = 3
+    for i in range(0, total_texts, batch_size):
+        batch = texts[i : i + batch_size]
+        processed_count = await process_batch(batch)
 
         # 更新进度条和状态信息
-        progress = (i + 1) / total_texts
+        progress = (i + processed_count) / total_texts
         progress_bar.progress(progress)
-        status_message = f"已处理: {i + 1}/{total_texts}"
+        status_message = f"已处理: {i + processed_count}/{total_texts}"
         status_area.info(status_message)
 
         # 添加小延迟以允许UI更新
         await asyncio.sleep(0.05)
 
-    return results
+    return [result.model_dump() for result in results]
 
 
 def display_info_message():
@@ -178,7 +186,7 @@ def main():
                 try:
                     st.session_state.df = pd.read_csv(uploaded_file)
                     st.write("预览上传的数据：")
-                    st.dataframe(st.session_state.df.head())
+                    st.dataframe(st.session_state.df)
 
                     text_column = st.selectbox(
                         "选择包含要分析文本的列", st.session_state.df.columns
