@@ -101,7 +101,7 @@ def display_check_results(results: List[Dict[str, Any]]):
 
 
 def main():
-    st.title("📄 智能文档检查工具")
+    st.title("🔍 智能文档检查工具")
     st.markdown("---")
 
     st.info(

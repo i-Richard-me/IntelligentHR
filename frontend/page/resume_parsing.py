@@ -239,7 +239,7 @@ def display_workflow():
 
 def main():
     """主函数，包含 Streamlit 应用的主要逻辑。"""
-    st.title("📄 智能简历解析")
+    st.title("📇 智能简历解析")
     st.markdown("---")
 
     display_info_message()
@@ -260,9 +260,6 @@ def main():
 
     # 页脚
     show_footer()
-
-
-# 接续上一部分的代码
 
 
 async def handle_resume_processing(

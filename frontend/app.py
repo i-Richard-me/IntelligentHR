@@ -34,7 +34,6 @@ def logout():
 
 role = st.session_state.role
 
-logout_page = st.Page(logout, title="Log out", icon=":material/logout:")
 home_page = st.Page("Home.py", title="首页", icon=":material/home:", default=True)
 table_operation = st.Page(
     "page/table_operation.py", title="智能数据整理", icon=":material/table_view:"
@@ -95,7 +94,7 @@ vector_db_management = st.Page(
     icon=":material/database:",
 )
 
-account_pages = [logout_page, home_page]
+account_pages = [home_page]
 request_pages = [
     table_operation,
     data_cleaning,

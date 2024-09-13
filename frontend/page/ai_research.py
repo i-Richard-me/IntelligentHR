@@ -31,7 +31,7 @@ def main():
     if "verbose_output" not in st.session_state:
         st.session_state.verbose_output = ""
 
-    st.title("🔍 AI 研究助手")
+    st.title("📝 AI 研究助手")
     st.markdown("---")
 
     display_info_message()
@@ -61,7 +61,7 @@ def display_workflow():
     """
     显示AI研究助手的工作流程。
     """
-    with st.expander("🔍 查看AI研究助手工作流程", expanded=False):
+    with st.expander("📝 查看AI研究助手工作流程", expanded=False):
 
         with st.container(border=True):
             col1, col2 = st.columns([1, 1])
