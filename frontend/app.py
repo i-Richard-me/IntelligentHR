@@ -13,7 +13,7 @@ if "role" in st.query_params:
 if "role" not in st.session_state:
     st.session_state.role = None
 
-ROLES = [None, "User", "Admin", "Recruiter"]
+ROLES = ["User", "Recruiter", "Admin"]
 
 
 def login():
@@ -114,13 +114,29 @@ admin_pages = [vector_db_management]
 #     icon_image="frontend/assets/icon_blue.png",
 # )
 
+# 功能分类
+data_processing = [table_operation, data_cleaning, document_check, vector_db_management]
+
+text_analysis = [ai_translation, sentiment_analysis, text_clustering]
+
+talent_management = [resume_upload, resume_parsing, resume_recommendation]
+
+decision_support = [ai_research, modeling_analysis]
+
+# 根据角色分配权限
 page_dict = {}
 if st.session_state.role in ["User", "Recruiter", "Admin"]:
-    page_dict["Request"] = request_pages
+    page_dict["数据处理与管理"] = [
+        p for p in data_processing if p != vector_db_management
+    ]
+    page_dict["文本分析与洞察"] = text_analysis
+    page_dict["辅助决策与研究"] = decision_support
+
 if st.session_state.role in ["Recruiter", "Admin"]:
-    page_dict["Recruitment"] = recruitment_pages
+    page_dict["人才管理工具"] = talent_management
+
 if st.session_state.role == "Admin":
-    page_dict["Admin"] = admin_pages
+    page_dict["数据处理与管理"].append(vector_db_management)
 
 if len(page_dict) > 0:
     pg = st.navigation({"Account": account_pages} | page_dict)
