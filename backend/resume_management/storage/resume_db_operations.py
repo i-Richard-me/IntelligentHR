@@ -54,7 +54,9 @@ def init_resume_upload_table():
             url TEXT,
             minio_path VARCHAR(255),
             raw_content LONGTEXT,
-            upload_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            upload_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            is_outdated BOOLEAN DEFAULT FALSE,
+            latest_resume_id VARCHAR(32)
         )
         """
         )
@@ -74,6 +76,8 @@ def store_resume_record(
     url: Optional[str],
     minio_path: Optional[str],
     raw_content: str,
+    is_outdated: bool = False,
+    latest_resume_id: Optional[str] = None,
 ):
     """
     存储简历记录到数据库。
@@ -85,6 +89,8 @@ def store_resume_record(
         url (Optional[str]): 简历URL（仅对URL类型有效）。
         minio_path (Optional[str]): MinIO中的文件路径（仅对PDF类型有效）。
         raw_content (str): 简历的原始内容。
+        is_outdated (bool): 是否为过时的简历版本。
+        latest_resume_id (Optional[str]): 最新版本简历的ID。
     """
     conn = get_db_connection()
     if conn is None:
@@ -94,10 +100,20 @@ def store_resume_record(
     try:
         cursor.execute(
             """
-        INSERT INTO resume_uploads (resume_hash, resume_type, file_name, url, minio_path, raw_content)
-        VALUES (%s, %s, %s, %s, %s, %s)
+        INSERT INTO resume_uploads 
+        (resume_hash, resume_type, file_name, url, minio_path, raw_content, is_outdated, latest_resume_id)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         """,
-            (resume_hash, resume_type, file_name, url, minio_path, raw_content),
+            (
+                resume_hash,
+                resume_type,
+                file_name,
+                url,
+                minio_path,
+                raw_content,
+                is_outdated,
+                latest_resume_id,
+            ),
         )
         conn.commit()
         logger.info(f"Resume record stored successfully. Hash: {resume_hash}")
@@ -132,6 +148,70 @@ def get_resume_by_hash(resume_hash: str) -> Optional[Dict[str, Any]]:
         return result
     except Error as e:
         logger.error(f"Error retrieving resume data: {e}")
+        return None
+    finally:
+        cursor.close()
+        conn.close()
+
+
+def update_resume_version(old_resume_hash: str, new_resume_hash: str):
+    """
+    更新简历版本信息。
+
+    Args:
+        old_resume_hash (str): 旧版本简历的哈希值。
+        new_resume_hash (str): 新版本简历的哈希值。
+    """
+    conn = get_db_connection()
+    if conn is None:
+        return
+
+    cursor = conn.cursor()
+    try:
+        # 将旧版本标记为过时，并更新最新版本的ID
+        cursor.execute(
+            """
+            UPDATE resume_uploads 
+            SET is_outdated = TRUE, latest_resume_id = %s 
+            WHERE resume_hash = %s
+            """,
+            (new_resume_hash, old_resume_hash),
+        )
+        conn.commit()
+        logger.info(
+            f"Resume version updated. Old hash: {old_resume_hash}, New hash: {new_resume_hash}"
+        )
+    except Error as e:
+        logger.error(f"Error updating resume version: {e}")
+        conn.rollback()
+    finally:
+        cursor.close()
+        conn.close()
+
+
+def get_minio_path_by_id(resume_id: str) -> Optional[str]:
+    """
+    根据简历ID从MySQL数据库中获取MinIO路径
+
+    Args:
+        resume_id (str): 简历ID
+
+    Returns:
+        Optional[str]: MinIO路径，如果不存在则返回None
+    """
+    conn = get_db_connection()
+    if conn is None:
+        return None
+
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute(
+            "SELECT minio_path FROM resume_uploads WHERE resume_hash = %s", (resume_id,)
+        )
+        result = cursor.fetchone()
+        return result["minio_path"] if result else None
+    except Error as e:
+        logger.error(f"Error retrieving MinIO path: {e}")
         return None
     finally:
         cursor.close()

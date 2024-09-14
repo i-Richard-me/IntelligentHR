@@ -20,6 +20,11 @@ from utils.vector_db_utils import (
     update_milvus_records,
     search_in_milvus,
 )
+from backend.resume_management.storage.resume_db_operations import get_minio_link
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 # 初始化 embedding 服务
 embeddings = VectorEncoder(model="BAAI/bge-m3")
@@ -208,17 +213,6 @@ def store_raw_resume_text_in_milvus(resume_id: str, raw_text: str, file_name: st
 def search_similar_resumes(
     raw_text: str, top_k: int = 5, threshold: float = 0.9
 ) -> List[Dict[str, Any]]:
-    """
-    搜索与给定简历文本相似的简历。
-
-    Args:
-        raw_text (str): 要搜索的简历原始文本
-        top_k (int): 返回的最相似结果数量
-        threshold (float): 相似度阈值，低于此值的结果将被过滤掉
-
-    Returns:
-        List[Dict[str, Any]]: 相似简历的列表，每个字典包含简历信息和相似度得分
-    """
     connect_to_milvus(db_name=os.getenv("VECTOR_DB_DATABASE_RESUME", "resume"))
 
     try:
@@ -228,24 +222,47 @@ def search_similar_resumes(
         query_vector = get_embedding(raw_text)
         results = search_in_milvus(collection, query_vector, "raw_text", top_k)
 
-        # 过滤并格式化结果
         similar_resumes = []
         for result in results:
             similarity = result["distance"]
             if similarity >= threshold:
+                minio_path = get_minio_link(result["resume_id"])
                 similar_resumes.append(
                     {
                         "resume_id": result["resume_id"],
                         "file_name": result["file_name"],
                         "upload_date": result["upload_date"],
                         "similarity": f"{similarity:.2%}",
+                        "minio_path": minio_path,
                     }
                 )
 
         return similar_resumes
 
     except Exception as e:
-        print(f"Error searching for similar resumes: {str(e)}")
+        logger.error(f"Error searching for similar resumes: {str(e)}")
         return []
+    finally:
+        connections.disconnect("default")
+
+
+def delete_resume_from_milvus(resume_id: str):
+    """
+    从Milvus数据库中删除指定的简历
+
+    Args:
+        resume_id (str): 要删除的简历ID
+    """
+    connect_to_milvus(db_name=os.getenv("VECTOR_DB_DATABASE_RESUME", "resume"))
+
+    try:
+        collection_name = "raw_resume_texts"
+        collection = initialize_vector_store(collection_name)
+
+        expr = f'resume_id == "{resume_id}"'
+        collection.delete(expr)
+        logger.info(f"成功从Milvus中删除简历ID: {resume_id}")
+    except Exception as e:
+        logger.error(f"从Milvus删除简历时出错: {str(e)}")
     finally:
         connections.disconnect("default")
