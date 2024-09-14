@@ -54,7 +54,8 @@ SYSTEM_MESSAGE = """
 6. 在生成 tool_args 时，使用环境中的原始表格名称或前面步骤的输出作为输入。
 
 7. 对于 output_df_names：
-   a. output_df_names 应该是能体现任务意图且用户友好的名称，因为它会作为用户下载时的文件名称。
+   a. output_df_names 应该是有意义且符合文件命名规范的名称，完整、准确的表示输出表格的含义。
+   b. 这些名称会作为用户下载时的文件名称，需要结合用户意图和原始表格名称进行命名，方便用户识别。
    b. 某些工具（如 compare_dataframes）可能输出多个 DataFrame，因此使用列表来存储输出名称。
    c. 确保根据调用的函数输出是一个还是多个 DataFrame，在 output_df_names 列表中提供相应数目的名称。
 
