@@ -64,9 +64,9 @@ def main():
 
     if st.session_state.step == "upload":
         handle_upload()
-    elif st.session_state.step == "process_and_review":
+    if st.session_state.step == "process_and_review":
         process_and_review_uploads()
-    elif st.session_state.step == "confirm":
+    if st.session_state.step == "confirm":
         confirm_uploads()
 
     show_footer()
@@ -108,14 +108,12 @@ def handle_upload():
                 st.session_state.uploaded_files = uploaded_files
                 if st.button("开始处理上传的PDF文件"):
                     st.session_state.step = "process_and_review"
-                    st.rerun()
 
         with tab2:
             url = st.text_input("输入简历URL")
             if url and st.button("提交URL"):
                 st.session_state.uploaded_files = [{"type": "url", "content": url}]
                 st.session_state.step = "process_and_review"
-                st.rerun()
 
 
 def process_and_review_uploads():
@@ -131,20 +129,24 @@ def process_and_review_uploads():
 
     st.write("处理结果：")
     need_review = False
+    all_new_or_duplicate = True
     for result in st.session_state.processing_results:
         st.write(
             f"文件名: {result['file_name']}, 状态: {result['status']}, 消息: {result['message']}"
         )
         if result["status"] == "潜在重复":
             need_review = True
+            all_new_or_duplicate = False
 
     if need_review:
         st.subheader("审核相似简历")
         review_similar_resumes()
+    elif all_new_or_duplicate:
+        # 如果所有简历都是新的或完全重复的，直接进入确认步骤
+        st.session_state.step = "confirm"
     else:
         if st.button("确认并继续到最终上传", type="primary"):
             st.session_state.step = "confirm"
-            st.rerun()
 
 
 def review_similar_resumes():
@@ -231,7 +233,6 @@ def review_similar_resumes():
 
     if st.button("确认审核结果并继续到最终上传", type="primary"):
         st.session_state.step = "confirm"
-        st.rerun()
 
 
 def confirm_uploads():
