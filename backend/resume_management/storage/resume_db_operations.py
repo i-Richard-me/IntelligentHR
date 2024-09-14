@@ -154,6 +154,29 @@ def get_resume_by_hash(resume_hash: str) -> Optional[Dict[str, Any]]:
         conn.close()
 
 
+def get_minio_link(resume_hash: str) -> Optional[str]:
+    conn = get_db_connection()
+    if conn is None:
+        return None
+
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute(
+            "SELECT minio_path FROM resume_uploads WHERE resume_hash = %s",
+            (resume_hash,),
+        )
+        result = cursor.fetchone()
+        if result and result["minio_path"]:
+            return result["minio_path"]
+        return None
+    except Error as e:
+        logger.error(f"Error retrieving MinIO path: {e}")
+        return None
+    finally:
+        cursor.close()
+        conn.close()
+
+
 def update_resume_version(old_resume_hash: str, new_resume_hash: str):
     """
     更新简历版本信息。
