@@ -234,6 +234,7 @@ def search_similar_resumes(
                         "upload_date": result["upload_date"],
                         "similarity": f"{similarity:.2%}",
                         "minio_path": minio_path,
+                        "raw_content": result["raw_text"],  # 添加原始内容
                     }
                 )
 

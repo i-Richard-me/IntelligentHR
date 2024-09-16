@@ -2,6 +2,7 @@ import streamlit as st
 import os
 import sys
 import pandas as pd
+import uuid
 from typing import List, Dict, Any
 import asyncio
 
@@ -28,6 +29,7 @@ from backend.resume_management.storage.resume_vector_storage import (
     search_similar_resumes,
     delete_resume_from_milvus,
 )
+from backend.resume_management.storage.resume_comparison import compare_resumes
 import logging
 
 # 配置日志
@@ -51,8 +53,8 @@ if "processing_results" not in st.session_state:
     st.session_state.processing_results = []
 if "similar_resumes" not in st.session_state:
     st.session_state.similar_resumes = {}
-if "user_decisions" not in st.session_state:
-    st.session_state.user_decisions = {}
+if "comparison_results" not in st.session_state:
+    st.session_state.comparison_results = {}
 
 
 def main():
@@ -88,8 +90,8 @@ def display_workflow():
             """
             1. **文件上传/URL输入**: 选择上传PDF文件或输入简历URL。
             2. **内容提取与去重检查**: 系统自动提取简历内容并检查是否存在重复。
-            3. **相似度分析与审核**: 分析简历内容相似度，需要时进行人工审核。
-            4. **数据存储**: 根据分析结果和审核（如果有）存储简历信息。
+            3. **相似度分析与智能比较**: 分析简历内容相似度，使用AI进行智能比较。
+            4. **数据存储**: 根据分析结果存储简历信息。
             5. **确认反馈**: 向用户显示最终的上传/处理结果。
             """
         )
@@ -139,8 +141,8 @@ def process_and_review_uploads():
             all_new_or_duplicate = False
 
     if need_review:
-        st.subheader("审核相似简历")
-        review_similar_resumes()
+        st.subheader("智能比较相似简历")
+        asyncio.run(compare_similar_resumes())
     elif all_new_or_duplicate:
         # 如果所有简历都是新的或完全重复的，直接进入确认步骤
         st.session_state.step = "confirm"
@@ -149,11 +151,11 @@ def process_and_review_uploads():
             st.session_state.step = "confirm"
 
 
-def review_similar_resumes():
+async def compare_similar_resumes():
     total_resumes = len(
         [r for r in st.session_state.processing_results if r["status"] == "潜在重复"]
     )
-    progress_text = f"已审核 0/{total_resumes} 份简历"
+    progress_text = f"已比较 0/{total_resumes} 份简历"
     progress_bar = st.progress(0.0)
     progress_display = st.empty()
     progress_display.text(progress_text)
@@ -205,50 +207,52 @@ def review_similar_resumes():
                 else:
                     st.write("没有找到相似的简历。")
 
-            is_same_candidate = st.radio(
-                "这是否是同一个候选人的简历？",
-                ("是", "否"),
-                key=f"same_candidate_{result['resume_hash']}",
-                horizontal=True,
+            # 使用AI进行比较
+            session_id = str(uuid.uuid4())
+            uploaded_resume_content = result["raw_content"]
+            existing_resume_content = (
+                similar_resumes[0]["raw_content"] if similar_resumes else ""
             )
 
-            if is_same_candidate == "是":
-                is_latest_version = st.radio(
-                    "这是否是该候选人的最新版本简历？",
-                    ("是", "否"),
-                    key=f"latest_version_{result['resume_hash']}",
-                    horizontal=True,
-                )
-                st.session_state.user_decisions[result["resume_hash"]] = {
-                    "is_same_candidate": True,
-                    "is_latest_version": is_latest_version == "是",
-                }
-            else:
-                st.session_state.user_decisions[result["resume_hash"]] = {
-                    "is_same_candidate": False
-                }
+            comparison_result = await compare_resumes(
+                uploaded_resume_content, existing_resume_content, session_id
+            )
+
+            st.session_state.comparison_results[result["resume_hash"]] = (
+                comparison_result
+            )
+
+            st.write("AI比较结果：")
+            st.json(comparison_result)
 
             progress_bar.progress((i + 1) / total_resumes)
-            progress_display.text(f"已审核 {i+1}/{total_resumes} 份简历")
+            progress_display.text(f"已比较 {i+1}/{total_resumes} 份简历")
 
-    if st.button("确认审核结果并继续到最终上传", type="primary"):
+    if st.button("确认AI比较结果并继续到最终上传", type="primary"):
         st.session_state.step = "confirm"
 
 
 def confirm_uploads():
     st.header("确认上传")
-    st.write("根据您的确认进行最终处理：")
+    st.write("根据AI比较结果进行最终处理：")
 
     for result in st.session_state.processing_results:
         if result["status"] == "潜在重复":
-            decision = st.session_state.user_decisions.get(result["resume_hash"])
-            if decision["is_same_candidate"]:
-                if decision["is_latest_version"]:
-                    handle_latest_version(result)
+            comparison_result = st.session_state.comparison_results.get(
+                result["resume_hash"]
+            )
+            if comparison_result:
+                if comparison_result["is_same_candidate"]:
+                    if comparison_result["is_latest_version"]:
+                        handle_latest_version(result)
+                    else:
+                        handle_old_version(result)
                 else:
-                    handle_old_version(result)
+                    handle_different_candidate(result)
+                st.write(f"文件名: {result['file_name']}")
+                st.write(f"AI比较结果: {comparison_result['explanation']}")
             else:
-                handle_different_candidate(result)
+                st.error(f"未找到 {result['file_name']} 的AI比较结果")
         elif result["status"] == "成功":
             st.success(
                 f"{result['file_name']} 处理成功，已保存到MySQL和Milvus数据库中。"
@@ -345,7 +349,7 @@ def process_pdf_file(file):
         minio_path = save_pdf_to_minio(file)
         raw_content = extract_text_from_pdf(file)
 
-        similar_resumes = search_similar_resumes(raw_content, top_k=5, threshold=0.9)
+        similar_resumes = search_similar_resumes(raw_content, top_k=1, threshold=0.9)
 
         if similar_resumes:
             st.session_state.similar_resumes[file_hash] = similar_resumes
@@ -392,7 +396,7 @@ def process_url(url):
                 "resume_hash": url_hash,
             }
 
-        similar_resumes = search_similar_resumes(content, top_k=5, threshold=0.9)
+        similar_resumes = search_similar_resumes(content, top_k=1, threshold=0.9)
 
         if similar_resumes:
             st.session_state.similar_resumes[url_hash] = similar_resumes
@@ -434,7 +438,7 @@ def reset_state():
     st.session_state.uploaded_files = []
     st.session_state.processing_results = []
     st.session_state.similar_resumes = {}
-    st.session_state.user_decisions = {}
+    st.session_state.comparison_results = {}
 
 
 main()
