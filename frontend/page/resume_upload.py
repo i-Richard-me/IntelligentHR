@@ -66,10 +66,8 @@ def main():
 
     if st.session_state.step == "upload":
         handle_upload()
-    if st.session_state.step == "process_and_review":
+    elif st.session_state.step == "process_and_review":
         process_and_review_uploads()
-    if st.session_state.step == "confirm":
-        confirm_uploads()
 
     show_footer()
 
@@ -91,8 +89,8 @@ def display_workflow():
             1. **文件上传/URL输入**: 选择上传PDF文件或输入简历URL。
             2. **内容提取与去重检查**: 系统自动提取简历内容并检查是否存在重复。
             3. **相似度分析与智能比较**: 分析简历内容相似度，使用AI进行智能比较。
-            4. **数据存储**: 根据分析结果存储简历信息。
-            5. **确认反馈**: 向用户显示最终的上传/处理结果。
+            4. **数据存储**: 根据分析结果自动存储简历信息。
+            5. **处理结果展示**: 向用户显示最终的上传/处理结果。
             """
         )
 
@@ -131,24 +129,18 @@ def process_and_review_uploads():
 
     st.write("处理结果：")
     need_review = False
-    all_new_or_duplicate = True
     for result in st.session_state.processing_results:
         st.write(
             f"文件名: {result['file_name']}, 状态: {result['status']}, 消息: {result['message']}"
         )
         if result["status"] == "潜在重复":
             need_review = True
-            all_new_or_duplicate = False
 
     if need_review:
         st.subheader("智能比较相似简历")
         asyncio.run(compare_similar_resumes())
-    elif all_new_or_duplicate:
-        # 如果所有简历都是新的或完全重复的，直接进入确认步骤
-        st.session_state.step = "confirm"
-    else:
-        if st.button("确认并继续到最终上传", type="primary"):
-            st.session_state.step = "confirm"
+
+    confirm_uploads()
 
 
 async def compare_similar_resumes():
@@ -208,33 +200,31 @@ async def compare_similar_resumes():
                     st.write("没有找到相似的简历。")
 
             # 使用AI进行比较
-            session_id = str(uuid.uuid4())
-            uploaded_resume_content = result["raw_content"]
-            existing_resume_content = (
-                similar_resumes[0]["raw_content"] if similar_resumes else ""
-            )
+            with st.spinner("正在进行AI比较..."):
+                session_id = str(uuid.uuid4())
+                uploaded_resume_content = result["raw_content"]
+                existing_resume_content = (
+                    similar_resumes[0]["raw_content"] if similar_resumes else ""
+                )
 
-            comparison_result = await compare_resumes(
-                uploaded_resume_content, existing_resume_content, session_id
-            )
+                comparison_result = await compare_resumes(
+                    uploaded_resume_content, existing_resume_content, session_id
+                )
 
-            st.session_state.comparison_results[result["resume_hash"]] = (
-                comparison_result
-            )
+                st.session_state.comparison_results[result["resume_hash"]] = (
+                    comparison_result
+                )
 
-            st.write("AI比较结果：")
-            st.json(comparison_result)
+            with st.expander("查看AI比较结果", expanded=False):
+                st.json(comparison_result)
 
             progress_bar.progress((i + 1) / total_resumes)
             progress_display.text(f"已比较 {i+1}/{total_resumes} 份简历")
 
-    if st.button("确认AI比较结果并继续到最终上传", type="primary"):
-        st.session_state.step = "confirm"
-
 
 def confirm_uploads():
-    st.header("确认上传")
-    st.write("根据AI比较结果进行最终处理：")
+    st.header("处理结果")
+    st.write("根据AI比较结果进行自动处理：")
 
     for result in st.session_state.processing_results:
         if result["status"] == "潜在重复":
@@ -250,7 +240,6 @@ def confirm_uploads():
                 else:
                     handle_different_candidate(result)
                 st.write(f"文件名: {result['file_name']}")
-                st.write(f"AI比较结果: {comparison_result['explanation']}")
             else:
                 st.error(f"未找到 {result['file_name']} 的AI比较结果")
         elif result["status"] == "成功":
