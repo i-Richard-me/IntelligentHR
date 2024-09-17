@@ -120,7 +120,7 @@ def process_and_review_uploads():
     st.header("处理和审核简历")
 
     if not st.session_state.processing_results:
-        with st.spinner("正在处理上传的文件..."):
+        with st.spinner("正在智能分析上传的简历..."):
             progress_bar = st.progress(0)
             for i, file in enumerate(st.session_state.uploaded_files):
                 result = process_file(file)
@@ -131,7 +131,7 @@ def process_and_review_uploads():
     need_review = False
     for result in st.session_state.processing_results:
         st.write(
-            f"文件名: {result['file_name']}, 状态: {result['status']}, 消息: {result['message']}"
+            f"文件名: {result['file_name']}, 状态: {result['status']}, 信息: {result['message']}"
         )
         if result["status"] == "潜在重复":
             need_review = True
@@ -211,6 +211,10 @@ async def compare_similar_resumes():
                     uploaded_resume_content, existing_resume_content, session_id
                 )
 
+                comparison_result = comparison_result.get(
+                    "properties", comparison_result
+                )
+
                 st.session_state.comparison_results[result["resume_hash"]] = (
                     comparison_result
                 )
@@ -224,7 +228,7 @@ async def compare_similar_resumes():
 
 def confirm_uploads():
     st.header("处理结果")
-    st.write("根据AI比较结果进行自动处理：")
+    st.write("根据智能分析结果,系统自动处理如下：")
 
     for result in st.session_state.processing_results:
         if result["status"] == "潜在重复":
@@ -233,21 +237,27 @@ def confirm_uploads():
             )
             if comparison_result:
                 if comparison_result["is_same_candidate"]:
-                    if comparison_result["is_latest_version"]:
+                    if comparison_result["latest_version"] == "uploaded_resume":
+                        st.success(
+                            f"{result['file_name']} 是同一候选人的最新版本简历，已更新到人才库。"
+                        )
                         handle_latest_version(result)
                     else:
+                        st.info(
+                            f"{result['file_name']} 是同一候选人的旧版本简历，已保存为历史记录。"
+                        )
                         handle_old_version(result)
                 else:
+                    st.success(
+                        f"{result['file_name']} 已作为新候选人的简历保存到人才库中。"
+                    )
                     handle_different_candidate(result)
-                st.write(f"文件名: {result['file_name']}")
             else:
-                st.error(f"未找到 {result['file_name']} 的AI比较结果")
+                st.error(f"未能完成 {result['file_name']} 的智能比较,请稍后重试")
         elif result["status"] == "成功":
-            st.success(
-                f"{result['file_name']} 处理成功，已保存到MySQL和Milvus数据库中。"
-            )
+            st.success(f"{result['file_name']} 已成功添加到人才库中。")
         elif result["status"] == "已存在":
-            st.info(f"{result['file_name']} 已存在于数据库中，未进行任何更改。")
+            st.info(f"{result['file_name']} 已存在于人才库中,无需重复添加。")
         else:
             st.error(f"{result['file_name']} 处理失败：{result['message']}")
 
@@ -275,10 +285,6 @@ def handle_latest_version(result):
         result["resume_hash"], result["raw_content"], result["file_name"]
     )
 
-    st.success(
-        f"{result['file_name']} 已作为最新版本保存，旧版本已标记为过时并从向量数据库中删除。"
-    )
-
 
 def handle_old_version(result):
     # 仅存储到MySQL，标记为过时
@@ -293,9 +299,6 @@ def handle_old_version(result):
         latest_resume_id=st.session_state.similar_resumes[result["resume_hash"]][0][
             "resume_id"
         ],
-    )
-    st.success(
-        f"{result['file_name']} 已保存为旧版本，仅存储在MySQL数据库中。向量数据库中的数据保持不变。"
     )
 
 
@@ -312,7 +315,6 @@ def handle_different_candidate(result):
     store_raw_resume_text_in_milvus(
         result["resume_hash"], result["raw_content"], result["file_name"]
     )
-    st.success(f"{result['file_name']} 已作为新简历保存到MySQL和Milvus数据库中。")
 
 
 def process_file(file):
