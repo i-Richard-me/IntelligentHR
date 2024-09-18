@@ -195,25 +195,30 @@ def calculate_score():
 
 def display_score():
     st.subheader("考试结果")
-    st.write(f"您的得分是: {st.session_state.score:.2f}分")
 
-    question_index = 1
+    col1, col2 = st.columns(2)
+    with col1:
+            st.metric("总分", f"{int(st.session_state.score)}")
+    with col2:
+        total_questions = sum(
+            len(questions) for questions in st.session_state.exam_questions.values()
+        )
+        correct_count = int(st.session_state.score * total_questions / 100)
+        st.metric("正确率", f"{correct_count}/{total_questions}")
+
     for question_type, questions in st.session_state.exam_questions.items():
-        if questions:
-            st.write(f"**{question_type}**")
-            for question in questions:
-                st.write(f"**问题 {question_index}:** {question['question']}")
-                user_answer = st.session_state.user_answers[question_index]
+        st.markdown(f"### {question_type}")
+        for i, question in enumerate(questions, 1):
+            with st.container(border=True):
+                st.markdown(f"**问题 {i}:** {question['question']}")
+                user_answer = st.session_state.user_answers[i]
                 correct_answer = question["correct_answer"]
 
-                if question_type == "选择题":
-                    st.write(f"您的答案: {user_answer}")
-                    st.write(f"正确答案: {correct_answer}")
-                else:  # 判断题
-                    st.write(
-                        f"您的答案: {'True' if user_answer == 'True' else 'False'}"
-                    )
-                    st.write(f"正确答案: {'True' if correct_answer else 'False'}")
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.markdown(f"您的答案: **{user_answer}**")
+                with col2:
+                    st.markdown(f"正确答案: **{correct_answer}**")
 
                 if (question_type == "选择题" and user_answer == correct_answer) or (
                     question_type == "判断题"
@@ -222,8 +227,6 @@ def display_score():
                     st.success("回答正确！")
                 else:
                     st.error("回答错误。")
-                st.markdown("---")
-                question_index += 1
 
 
 main()
