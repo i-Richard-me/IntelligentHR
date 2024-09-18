@@ -58,12 +58,17 @@ SYSTEM_MESSAGE_TRUE_FALSE = """
 HUMAN_MESSAGE_TEMPLATE = """
 请根据以下文本材料生成{num_questions}个{question_type}：
 
+```
 {text_content}
+```
 
 请确保生成的题目直接基于这段文本，并涵盖其中的关键信息。
 
 以下是之前已经生成的问题，请避免生成重复或过于相似的问题(如果之前没有生成过，请忽略)：
+
+```
 {previous_questions}
+```
 
 请生成与这些问题不同的新问题。
 """
