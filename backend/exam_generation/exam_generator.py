@@ -2,6 +2,7 @@ import os
 from typing import List, Optional
 from pydantic import BaseModel, Field
 from langfuse.callback import CallbackHandler
+from typing import Dict
 
 from utils.llm_tools import init_language_model, LanguageModelChain
 
@@ -94,16 +95,12 @@ class ExamGenerator:
         session_id: str,
         num_questions: int = 5,
         question_type: str = "选择题",
-        previous_questions: Optional[List[dict]] = None,
-    ) -> List[dict]:
+        previous_questions: Optional[str] = None,
+    ) -> List[Dict]:
         langfuse_handler = CallbackHandler(
             tags=["exam_generation"],
             session_id=session_id,
             metadata={"step": "generate_questions", "question_type": question_type},
-        )
-
-        previous_questions_text = self._format_previous_questions(
-            previous_questions, question_type
         )
 
         try:
@@ -117,38 +114,39 @@ class ExamGenerator:
                     "text_content": text_content,
                     "num_questions": num_questions,
                     "question_type": question_type,
-                    "previous_questions": previous_questions_text,
+                    "previous_questions": previous_questions or "",
                 },
                 config={"callbacks": [langfuse_handler]},
             )
-
-            # 打印生成的问题数量
-            print(f"生成的问题数量: {len(result['questions'])}")
-
             return result["questions"]
         except Exception as e:
             print(f"Error generating questions: {str(e)}")
             return []
 
     def _format_previous_questions(
-        self, previous_questions: Optional[List[dict]], question_type: str
+        self,
+        previous_questions: Optional[List[MultipleChoiceQuestion | TrueFalseQuestion]],
+        question_type: str,
     ) -> str:
         if not previous_questions:
             return ""
 
         formatted_questions = []
         for q in previous_questions:
-            if question_type == "选择题":
+            if question_type == "选择题" and isinstance(q, MultipleChoiceQuestion):
                 formatted_questions.append(
-                    f"问题: {q['question']}\n选项: {', '.join(q['options'])}\n正确答案: {q['correct_answer']}\n"
+                    f"问题: {q.question}\n选项: {', '.join(q.options)}\n正确答案: {q.correct_answer}\n"
                 )
-            elif question_type == "判断题":
+            elif question_type == "判断题" and isinstance(q, TrueFalseQuestion):
                 formatted_questions.append(
-                    f"问题: {q['question']}\n正确答案: {'True' if q['correct_answer'] else 'False'}\n"
+                    f"问题: {q.question}\n正确答案: {'True' if q.correct_answer else 'False'}\n"
                 )
 
         return "\n".join(formatted_questions)
 
 
-def merge_questions(first_round: List[dict], second_round: List[dict]) -> List[dict]:
+def merge_questions(
+    first_round: List[MultipleChoiceQuestion] | List[TrueFalseQuestion],
+    second_round: List[MultipleChoiceQuestion] | List[TrueFalseQuestion],
+) -> List[MultipleChoiceQuestion] | List[TrueFalseQuestion]:
     return first_round + second_round

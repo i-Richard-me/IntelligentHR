@@ -83,20 +83,36 @@ async def generate_exam_questions(text_content: str, question_type: str) -> List
         text_content, session_id, num_questions=5, question_type=question_type
     )
 
+    # 格式化第一轮的问题，以便传递给第二轮
+    formatted_first_round = format_questions_for_prompt(first_round, question_type)
+
     # 第二轮生成5个问题，传入第一轮的问题以避免重复
     second_round = await generator.generate_questions(
         text_content,
         session_id,
         num_questions=5,
         question_type=question_type,
-        previous_questions=first_round,
+        previous_questions=formatted_first_round,
     )
 
     # 合并两轮生成的问题
-    all_questions = merge_questions(first_round, second_round)
+    all_questions = first_round + second_round
 
-    # 直接返回合并后的问题列表，因为它们已经是字典格式
     return all_questions
+
+
+def format_questions_for_prompt(questions: List[Dict], question_type: str) -> str:
+    formatted_questions = []
+    for q in questions:
+        if question_type == "选择题":
+            formatted_questions.append(
+                f"问题: {q['question']}\n选项: {', '.join(q['options'])}\n正确答案: {q['correct_answer']}\n"
+            )
+        else:  # 判断题
+            formatted_questions.append(
+                f"问题: {q['question']}\n正确答案: {'True' if q['correct_answer'] else 'False'}\n"
+            )
+    return "\n".join(formatted_questions)
 
 
 def display_exam_questions():
