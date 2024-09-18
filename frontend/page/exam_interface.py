@@ -43,13 +43,14 @@ def main():
         with st.form("exam_generation_form"):
             text_content = st.text_area("请输入文本材料", height=200)
             question_type = st.selectbox("选择题型", ["选择题", "判断题"])
+            num_questions = st.selectbox("选择题目数量", [5, 10, 15, 20])
             submit_button = st.form_submit_button("生成考试题目")
 
         if submit_button and text_content:
             st.session_state.question_type = question_type
             with st.spinner("正在生成考试题目..."):
                 st.session_state.exam_questions = asyncio.run(
-                    generate_exam_questions(text_content, question_type)
+                    generate_exam_questions(text_content, question_type, num_questions)
                 )
                 st.session_state.user_answers = {}
                 st.session_state.score = None
@@ -68,35 +69,44 @@ def display_info_message():
     st.info(
         """
         智能考试系统可以根据输入的文本材料自动生成考试题目。
-        系统会生成10个题目，可以选择生成选择题或判断题。
+        系统可以生成5到20个题目，可以选择生成选择题或判断题。
         完成答题后，系统将自动评分并显示结果。
         """
     )
 
 
-async def generate_exam_questions(text_content: str, question_type: str) -> List[Dict]:
+async def generate_exam_questions(
+    text_content: str, question_type: str, num_questions: int
+) -> List[Dict]:
     generator = ExamGenerator()
     session_id = str(uuid.uuid4())
+    all_questions = []
 
-    # 第一轮生成5个问题
-    first_round = await generator.generate_questions(
-        text_content, session_id, num_questions=5, question_type=question_type
-    )
+    for i in range(0, num_questions, 5):
+        batch_size = min(5, num_questions - i)
 
-    # 格式化第一轮的问题，以便传递给第二轮
-    formatted_first_round = format_questions_for_prompt(first_round, question_type)
+        if i == 0:
+            # 第一轮生成
+            batch_questions = await generator.generate_questions(
+                text_content,
+                session_id,
+                num_questions=batch_size,
+                question_type=question_type,
+            )
+        else:
+            # 后续轮次，传入之前的问题以避免重复
+            formatted_previous_questions = format_questions_for_prompt(
+                all_questions, question_type
+            )
+            batch_questions = await generator.generate_questions(
+                text_content,
+                session_id,
+                num_questions=batch_size,
+                question_type=question_type,
+                previous_questions=formatted_previous_questions,
+            )
 
-    # 第二轮生成5个问题，传入第一轮的问题以避免重复
-    second_round = await generator.generate_questions(
-        text_content,
-        session_id,
-        num_questions=5,
-        question_type=question_type,
-        previous_questions=formatted_first_round,
-    )
-
-    # 合并两轮生成的问题
-    all_questions = first_round + second_round
+        all_questions.extend(batch_questions)
 
     return all_questions
 
