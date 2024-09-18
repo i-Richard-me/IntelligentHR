@@ -18,8 +18,8 @@ def _render_sidebar_content():
     渲染侧边栏的主要内容。
     """
     st.markdown(_get_sidebar_style(), unsafe_allow_html=True)
-    _get_sidebar_content()
-    st.markdown("---")
+    # _get_sidebar_content()
+    # st.markdown("---")
 
 
 def _get_sidebar_style():

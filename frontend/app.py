@@ -93,6 +93,11 @@ vector_db_management = st.Page(
     title="向量数据库管理",
     icon=":material/database:",
 )
+exam_interface = st.Page(
+    "page/exam_interface.py",
+    title="智能考试系统",
+    icon=":material/quiz:",
+)
 
 account_pages = [home_page]
 request_pages = [
@@ -119,7 +124,12 @@ data_processing = [table_operation, data_cleaning, document_check, vector_db_man
 
 text_analysis = [ai_translation, sentiment_analysis, text_clustering]
 
-talent_management = [resume_upload, resume_parsing, resume_recommendation]
+talent_management = [
+    resume_upload,
+    resume_parsing,
+    resume_recommendation,
+    exam_interface,
+]
 
 decision_support = [ai_research, modeling_analysis]
 
