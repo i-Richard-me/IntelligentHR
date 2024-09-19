@@ -2,6 +2,7 @@ import asyncio
 import os
 import sys
 import uuid
+import re
 from typing import List, Tuple, Optional
 
 import pandas as pd
@@ -31,18 +32,36 @@ if "translation_results" not in st.session_state:
     st.session_state.translation_results = None
 
 
+def contains_chinese(text: str) -> bool:
+    """
+    检查文本是否包含超过50%的中文字符。
+
+    Args:
+        text (str): 要检查的文本。
+
+    Returns:
+        bool: 如果文本包含超过50%的中文字符，返回True；否则返回False。
+    """
+    if isinstance(text, str):
+        chinese_chars = re.findall("[\u4e00-\u9fff]", text)
+        return len(chinese_chars) / len(text) >= 0.5 if text else False
+    return False
+
+
 async def translate_text(text: str, text_topic: str) -> str:
     """
-    异步翻译单个文本。
+    异步翻译单个文本，如果文本主要是中文则直接返回原文。
 
     Args:
         text (str): 要翻译的文本。
         text_topic (str): 文本主题。
 
     Returns:
-        str: 翻译后的文本或错误信息。
+        str: 翻译后的文本、原中文文本或错误信息。
     """
     try:
+        if contains_chinese(text):
+            return text  # 如果文本主要是中文，直接返回原文
         session_id = str(uuid.uuid4())
         return await translator.translate(text, text_topic, session_id)
     except Exception as e:
@@ -53,7 +72,7 @@ async def batch_translate(
     texts: List[str], text_topic: str, session_id: str, max_concurrent: int = 3
 ) -> List[str]:
     """
-    批量翻译文本，限制并发数量。
+    批量翻译文本，限制并发数量，并跳过主要是中文的文本。
 
     Args:
         texts (List[str]): 要翻译的文本列表。
@@ -68,6 +87,8 @@ async def batch_translate(
 
     async def translate_with_semaphore(text: str) -> str:
         async with semaphore:
+            if contains_chinese(text):
+                return text  # 如果文本主要是中文，直接返回原文
             return await translator.translate(text, text_topic, session_id)
 
     tasks = [translate_with_semaphore(text) for text in texts]
@@ -79,6 +100,7 @@ def display_translation_info() -> None:
     st.info(
         """
     智能语境翻译是一个高效的多语言翻译工具，专为批量处理文本设计，通过上下文理解提高翻译准确性。
+    本工具会自动检测并跳过主要由中文组成的文本，只翻译非中文文本。
 
     智能语境翻译适用于需要快速、准确翻译大量文本的各类场景，如多语言数据分析。
     """
@@ -214,14 +236,21 @@ def main() -> None:
                 submit_button = st.form_submit_button("翻译")
 
                 if submit_button and text_to_translate and text_topic:
-                    with st.spinner("正在翻译..."):
-                        translated_text = asyncio.run(
-                            translate_text(text_to_translate, text_topic)
-                        )
-                    st.session_state.translation_results = {
-                        "original": text_to_translate,
-                        "translated": translated_text,
-                    }
+                    if contains_chinese(text_to_translate):
+                        st.info("检测到输入的文本主要是中文，无需翻译。")
+                        st.session_state.translation_results = {
+                            "original": text_to_translate,
+                            "translated": text_to_translate,
+                        }
+                    else:
+                        with st.spinner("正在翻译..."):
+                            translated_text = asyncio.run(
+                                translate_text(text_to_translate, text_topic)
+                            )
+                        st.session_state.translation_results = {
+                            "original": text_to_translate,
+                            "translated": translated_text,
+                        }
 
         with tab2:
             df, text_column = upload_and_process_file()
