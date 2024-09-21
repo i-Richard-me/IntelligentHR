@@ -37,6 +37,7 @@ def initialize_session_state():
         "clustering_params",
         "use_custom_categories",
         "additional_requirements",
+        "is_multi_label",
     ]
     for var in session_vars:
         if var not in st.session_state:
@@ -59,6 +60,9 @@ def initialize_session_state():
     if st.session_state.additional_requirements is None:
         st.session_state.additional_requirements = None
 
+    if st.session_state.is_multi_label is None:
+        st.session_state.is_multi_label = False
+
 
 def display_info_message():
     """显示文本聚类分析工具的信息消息"""
@@ -67,6 +71,8 @@ def display_info_message():
         文本聚类分析工具利用大语言模型的语义理解能力，自动化地从大量文本中识别和归类主要主题。
         
         适用于各类文本内容分析场景，如用户反馈归类、话题趋势分析等。
+        
+        现在支持单标签和多标签分类，可以根据需求选择合适的分类方式。
         """
     )
 
@@ -78,10 +84,11 @@ def display_workflow_introduction():
             """
             1. 上传数据：准备包含文本数据的CSV文件，并上传到系统。
             2. 设置参数：选择文本列，输入主题背景，设置聚类参数。
-            3. 初始聚类：系统自动进行初始聚类，生成类别。
-            4. 审核类别：查看并编辑生成的类别，确保符合需求。
-            5. 文本分类：对所有文本进行分类。
-            6. 查看结果：浏览分类结果，下载分析报告。
+            3. 选择分类方式：选择单标签或多标签分类。
+            4. 初始聚类：系统自动进行初始聚类，生成类别。
+            5. 审核类别：查看并编辑生成的类别，确保符合需求。
+            6. 文本分类：对所有文本进行分类。
+            7. 查看结果：浏览分类结果，下载分析报告。
             """
         )
 
@@ -161,6 +168,13 @@ def handle_data_input_and_clustering():
             st.write("预览上传的数据：")
             st.dataframe(df, height=250)
             st.session_state.text_column = st.selectbox("选择包含文本的列", df.columns)
+
+            # 新增：选择单标签或多标签分类
+            st.session_state.is_multi_label = st.radio(
+                "选择分类方式",
+                [False, True],
+                format_func=lambda x: "多标签分类" if x else "单标签分类",
+            )
 
             previous_use_custom_categories = st.session_state.get(
                 "use_custom_categories", False
@@ -338,6 +352,7 @@ def review_clustering_results():
                                     classification_batch_size=st.session_state.clustering_params[
                                         "classification_batch_size"
                                     ],
+                                    is_multi_label=st.session_state.is_multi_label,  # 新增：传递多标签分类选项
                                 )
                             )
 
@@ -354,7 +369,34 @@ def display_classification_results():
         st.markdown("## 分类结果展示")
 
         with st.container(border=True):
-            st.dataframe(st.session_state.df_result)
+            if st.session_state.is_multi_label:
+                # 多标签分类结果展示
+                st.write("多标签分类结果：")
+                # 获取所有类别列
+                category_columns = [
+                    col
+                    for col in st.session_state.df_result.columns
+                    if col.startswith("category_")
+                ]
+
+                # 创建一个新的DataFrame，只包含原始文本和类别列
+                display_df = st.session_state.df_result[
+                    [st.session_state.text_column] + category_columns
+                ].copy()
+
+                # 将类别列合并为一个列表
+                display_df["分类结果"] = display_df[category_columns].apply(
+                    lambda row: [cat for cat, val in row.items() if val], axis=1
+                )
+
+                # 删除原始的类别列
+                display_df = display_df.drop(columns=category_columns)
+
+                st.dataframe(display_df)
+            else:
+                # 单标签分类结果展示
+                st.write("单标签分类结果：")
+                st.dataframe(st.session_state.df_result)
 
             # 提供下载选项
             csv = st.session_state.df_result.to_csv(index=False).encode("utf-8-sig")
