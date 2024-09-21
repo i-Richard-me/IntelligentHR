@@ -2,7 +2,8 @@ import os
 import time
 import uuid
 import asyncio
-from typing import List, Dict, Any, Optional
+import logging
+from typing import List, Dict, Any, Optional, Tuple
 
 import pandas as pd
 import aiohttp
@@ -21,9 +22,14 @@ from backend.text_processing.clustering.clustering_core import (
     INITIAL_CATEGORY_GENERATION_HUMAN_MESSAGE,
     MERGE_CATEGORIES_SYSTEM_MESSAGE,
     MERGE_CATEGORIES_HUMAN_MESSAGE,
-    TEXT_CLASSIFICATION_SYSTEM_MESSAGE,
+    SINGLE_LABEL_CLASSIFICATION_SYSTEM_MESSAGE,
+    MULTI_LABEL_CLASSIFICATION_SYSTEM_MESSAGE,
     TEXT_CLASSIFICATION_HUMAN_MESSAGE,
 )
+
+# 初始化日志
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # 初始化语言模型
 language_model = init_language_model(
@@ -31,7 +37,7 @@ language_model = init_language_model(
 )
 
 # 创建异步信号量，限制并发任务数量
-MAX_CONCURRENT_TASKS = 3
+MAX_CONCURRENT_TASKS = 3  # 增加并发任务数量
 semaphore = asyncio.Semaphore(MAX_CONCURRENT_TASKS)
 
 
@@ -252,6 +258,7 @@ async def classify_single_batch(
     session_id: str,
     langfuse_handler: CallbackHandler,
     classification_chain: LanguageModelChain,
+    is_multi_label: bool,
 ) -> List[Dict]:
     """
     对单个批次的文本进行分类
@@ -263,20 +270,33 @@ async def classify_single_batch(
         session_id: 会话ID
         langfuse_handler: Langfuse回调处理器
         classification_chain: 分类链
+        is_multi_label: 是否为多标签分类
 
     Returns:
         List[Dict]: 分类结果列表
     """
     async with semaphore:
-        result = await classification_chain.ainvoke(
-            {
-                "text_topic": text_topic,
-                "categories": categories,
-                "text_table": text_batch,
-            },
-            config={"callbacks": [langfuse_handler]},
-        )
-    return result["classifications"]
+        try:
+            result = await asyncio.wait_for(
+                classification_chain.ainvoke(
+                    {
+                        "text_topic": text_topic,
+                        "categories": categories,
+                        "text_table": text_batch,
+                    },
+                    config={"callbacks": [langfuse_handler]},
+                ),
+                timeout=300,  # 5分钟超时
+            )
+            return result["classifications"]
+        except asyncio.TimeoutError:
+            logger.error(f"Batch classification timed out for session {session_id}")
+            return []
+        except Exception as e:
+            logger.error(
+                f"Error in batch classification for session {session_id}: {str(e)}"
+            )
+            return []
 
 
 async def classify_texts(
@@ -287,6 +307,7 @@ async def classify_texts(
     text_topic: str,
     session_id: str,
     classification_batch_size: int = 20,
+    is_multi_label: bool = False,
 ) -> pd.DataFrame:
     """
     异步对文本进行分类
@@ -299,15 +320,22 @@ async def classify_texts(
         text_topic: 文本主题或背景
         session_id: 会话ID
         classification_batch_size: 分类批处理大小
+        is_multi_label: 是否为多标签分类
 
     Returns:
         pd.DataFrame: 包含分类结果的DataFrame
     """
     langfuse_handler = create_langfuse_handler(session_id, "classify_texts")
 
+    system_message = (
+        MULTI_LABEL_CLASSIFICATION_SYSTEM_MESSAGE
+        if is_multi_label
+        else SINGLE_LABEL_CLASSIFICATION_SYSTEM_MESSAGE
+    )
+
     classification_chain = LanguageModelChain(
         ClassificationResult,
-        TEXT_CLASSIFICATION_SYSTEM_MESSAGE,
+        system_message,
         TEXT_CLASSIFICATION_HUMAN_MESSAGE,
         language_model,
     )()
@@ -324,22 +352,42 @@ async def classify_texts(
             session_id,
             langfuse_handler,
             classification_chain,
+            is_multi_label,
         )
         for table in markdown_tables
     ]
 
     classification_results = []
-    for completed_task in asyncio.as_completed(tasks):
-        result = await completed_task
-        classification_results.extend(result)
-        # 每处理完一个批次，保存临时文件
-        save_temp_results(classification_results, session_id, "text_classification")
+    for task in asyncio.as_completed(tasks):
+        try:
+            result = await task
+            classification_results.extend(result)
+            # 每处理完一个批次，保存临时文件
+            save_temp_results(classification_results, session_id, "text_classification")
+            logger.info(f"Completed a batch classification for session {session_id}")
+        except Exception as e:
+            logger.error(f"Error processing batch in session {session_id}: {str(e)}")
 
     df_classifications = pd.DataFrame(classification_results)
-    df_result = df.merge(
-        df_classifications, left_on="unique_id", right_on="id", how="left"
-    )
-    df_result = df_result.drop(columns=["unique_id", "id"])
+
+    if is_multi_label:
+        # 多标签分类结果处理
+        df_result = df.merge(
+            df_classifications, left_on="unique_id", right_on="id", how="left"
+        )
+        df_result = df_result.drop(columns=["unique_id", "id"])
+        # 将categories列展开为多个独立的列
+        category_columns = df_result["categories"].apply(pd.Series)
+        category_columns = category_columns.add_prefix("category_")
+        df_result = pd.concat(
+            [df_result.drop(columns=["categories"]), category_columns], axis=1
+        )
+    else:
+        # 单标签分类结果处理
+        df_result = df.merge(
+            df_classifications, left_on="unique_id", right_on="id", how="left"
+        )
+        df_result = df_result.drop(columns=["unique_id", "id"])
 
     return df_result
 

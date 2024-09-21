@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import List
+from typing import List, Union
 
 
 class Category(BaseModel):
@@ -18,19 +18,26 @@ class Categories(BaseModel):
     categories: List[Category] = Field(..., description="聚类得到的所有类别列表")
 
 
-class TextClassification(BaseModel):
-    """单个文本的分类结果"""
+class SingleLabelTextClassification(BaseModel):
+    """单个文本的单标签分类结果"""
 
     id: str = Field(..., description="文本的唯一标识符")
     category: str = Field(..., description="根据预定义分类规则确定的类别")
 
 
+class MultiLabelTextClassification(BaseModel):
+    """单个文本的多标签分类结果"""
+
+    id: str = Field(..., description="文本的唯一标识符")
+    categories: List[str] = Field(..., description="根据预定义分类规则确定的多个类别")
+
+
 class ClassificationResult(BaseModel):
     """所有文本的分类结果"""
 
-    classifications: List[TextClassification] = Field(
-        ..., description="所有文本的分类结果列表"
-    )
+    classifications: List[
+        Union[SingleLabelTextClassification, MultiLabelTextClassification]
+    ] = Field(..., description="所有文本的分类结果列表")
 
 
 # 用于初始生成类别的系统消息
@@ -117,9 +124,9 @@ MERGE_CATEGORIES_HUMAN_MESSAGE = """
 请提供符合指定JSON格式的最终整合分类结果。
 """
 
-# 用于文本分类的系统消息
-TEXT_CLASSIFICATION_SYSTEM_MESSAGE = """
-你是一位文本分类专家。你的任务是根据预定义的分类规则，对给定的文本进行主题分类。请遵循以下指南：
+# 用于单标签文本分类的系统消息
+SINGLE_LABEL_CLASSIFICATION_SYSTEM_MESSAGE = """
+你是一位文本分类专家。你的任务是根据预定义的分类规则，对给定的文本进行单标签主题分类。请遵循以下指南：
 
 1. 分类规则：
    {categories}
@@ -127,6 +134,7 @@ TEXT_CLASSIFICATION_SYSTEM_MESSAGE = """
 2. 分类要求：
    - 仔细阅读每条文本，理解其核心内容。
    - 根据文本内容，从预定义的类别中选择最合适的一个。
+   - 每条文本只能分配一个类别。
    - 如果一条文本涉及多个主题，选择最主要或最突出的一个。
    - 如果文本内容不清晰或不属于任何预定义类别，将其归类为"其他"。
 
@@ -135,6 +143,27 @@ TEXT_CLASSIFICATION_SYSTEM_MESSAGE = """
    - 严格遵循指定的JSON格式。
 
 请确保分类的一致性和准确性，不要遗漏任何文本。
+"""
+
+# 用于多标签文本分类的系统消息
+MULTI_LABEL_CLASSIFICATION_SYSTEM_MESSAGE = """
+你是一位文本分类专家。你的任务是根据预定义的分类规则，对给定的文本进行多标签主题分类。请遵循以下指南：
+
+1. 分类规则：
+   {categories}
+
+2. 分类要求：
+   - 仔细阅读每条文本，理解其所有涉及的主题。
+   - 根据文本内容，从预定义的类别中选择所有相关的类别。
+   - 每条文本可以分配多个类别。
+   - 确保选择的每个类别都与文本内容相关。
+   - 如果文本内容不清晰或不属于任何预定义类别，将其归类为"其他"。
+
+3. 输出格式：
+   - 对每条文本，输出其ID和对应的所有相关类别。
+   - 严格遵循指定的JSON格式。
+
+请确保分类的全面性和准确性，不要遗漏任何文本或相关类别。
 """
 
 # 用于文本分类的人工消息模板
