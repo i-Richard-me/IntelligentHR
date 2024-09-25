@@ -2,7 +2,7 @@ import streamlit as st
 import os
 import sys
 import asyncio
-from typing import List, Dict, Tuple
+from typing import Dict, List
 import uuid
 
 # 添加项目根目录到 Python 路径
@@ -17,64 +17,22 @@ st.query_params.role = st.session_state.role
 # 应用自定义样式
 apply_common_styles()
 
-# 显示侧边栏
-show_sidebar()
 
 # 初始化 session state
-if "exam_questions" not in st.session_state:
-    st.session_state.exam_questions = {"选择题": [], "判断题": []}
-if "user_answers" not in st.session_state:
-    st.session_state.user_answers = {}
-if "score" not in st.session_state:
-    st.session_state.score = None
-if "generation_complete" not in st.session_state:
-    st.session_state.generation_complete = False
-
-
-def main():
-    st.title("📝 智能考试系统")
-    st.markdown("---")
-
-    display_info_message()
-
-    if not st.session_state.generation_complete:
-        with st.form("exam_generation_form"):
-            text_content = st.text_area("请输入文本材料", height=200)
-            col1, col2 = st.columns(2)
-            with col1:
-                num_multiple_choice = st.number_input(
-                    "选择题数量", min_value=0, max_value=20, value=5, step=5
-                )
-            with col2:
-                num_true_false = st.number_input(
-                    "判断题数量", min_value=0, max_value=20, value=5, step=5
-                )
-            submit_button = st.form_submit_button("生成考试题目")
-
-        if submit_button and text_content:
-            if num_multiple_choice + num_true_false == 0:
-                st.error("请至少选择一种题型并设置题目数量。")
-            else:
-                with st.spinner("正在生成考试题目..."):
-                    st.session_state.exam_questions = asyncio.run(
-                        generate_exam_questions(
-                            text_content, num_multiple_choice, num_true_false
-                        )
-                    )
-                    st.session_state.user_answers = {}
-                    st.session_state.score = None
-                    st.session_state.generation_complete = True
-                st.rerun()
-    else:
-        display_exam_questions()
-
-    if st.session_state.score is not None:
-        display_score()
-
-    show_footer()
+def initialize_session_state():
+    """初始化会话状态变量"""
+    if "exam_questions" not in st.session_state:
+        st.session_state.exam_questions = {"选择题": [], "判断题": []}
+    if "user_answers" not in st.session_state:
+        st.session_state.user_answers = {}
+    if "score" not in st.session_state:
+        st.session_state.score = None
+    if "generation_complete" not in st.session_state:
+        st.session_state.generation_complete = False
 
 
 def display_info_message():
+    """显示系统信息消息"""
     st.info(
         """
         智能考试系统可以根据输入的文本材料自动生成考试题目。
@@ -88,6 +46,14 @@ def display_info_message():
 async def generate_exam_questions(
     text_content: str, num_multiple_choice: int, num_true_false: int
 ) -> Dict[str, List[Dict]]:
+    """
+    生成考试题目
+
+    :param text_content: 用于生成问题的文本内容
+    :param num_multiple_choice: 选择题数量
+    :param num_true_false: 判断题数量
+    :return: 生成的考试题目字典
+    """
     generator = ExamGenerator()
     session_id = str(uuid.uuid4())
     all_questions = {"选择题": [], "判断题": []}
@@ -129,20 +95,27 @@ async def generate_exam_questions(
 
 
 def format_questions_for_prompt(questions: List[Dict]) -> str:
+    """
+    格式化问题列表为提示字符串
+
+    :param questions: 问题列表
+    :return: 格式化后的问题字符串
+    """
     formatted_questions = []
-    for q in questions:
-        if "options" in q:  # 选择题
+    for question in questions:
+        if "options" in question:  # 选择题
             formatted_questions.append(
-                f"问题: {q['question']}\n选项: {', '.join(q['options'])}\n正确答案: {q['correct_answer']}\n"
+                f"问题: {question['question']}\n选项: {', '.join(question['options'])}\n正确答案: {question['correct_answer']}\n"
             )
         else:  # 判断题
             formatted_questions.append(
-                f"问题: {q['question']}\n正确答案: {'True' if q['correct_answer'] else 'False'}\n"
+                f"问题: {question['question']}\n正确答案: {'True' if question['correct_answer'] else 'False'}\n"
             )
     return "\n".join(formatted_questions)
 
 
 def display_exam_questions():
+    """显示考试题目并收集用户答案"""
     st.subheader("考试题目")
     with st.form("exam_form"):
         question_index = 1
@@ -174,6 +147,7 @@ def display_exam_questions():
 
 
 def calculate_score():
+    """计算考试分数"""
     correct_count = 0
     total_questions = 0
     for question_type, questions in st.session_state.exam_questions.items():
@@ -194,11 +168,12 @@ def calculate_score():
 
 
 def display_score():
+    """显示考试结果"""
     st.subheader("考试结果")
 
     col1, col2 = st.columns(2)
     with col1:
-            st.metric("总分", f"{int(st.session_state.score)}")
+        st.metric("总分", f"{int(st.session_state.score)}")
     with col2:
         total_questions = sum(
             len(questions) for questions in st.session_state.exam_questions.values()
@@ -227,6 +202,58 @@ def display_score():
                     st.success("回答正确！")
                 else:
                     st.error("回答错误。")
+
+
+def main():
+    """主函数，控制整个应用的流程"""
+    st.title("📝 智能考试系统")
+    st.markdown("---")
+
+    # 显示侧边栏
+    show_sidebar()
+
+    # 初始化会话状态
+    initialize_session_state()
+
+    # 显示系统信息
+    display_info_message()
+
+    if not st.session_state.generation_complete:
+        with st.form("exam_generation_form"):
+            text_content = st.text_area("请输入文本材料", height=200)
+            col1, col2 = st.columns(2)
+            with col1:
+                num_multiple_choice = st.number_input(
+                    "选择题数量", min_value=0, max_value=20, value=5, step=5
+                )
+            with col2:
+                num_true_false = st.number_input(
+                    "判断题数量", min_value=0, max_value=20, value=5, step=5
+                )
+            submit_button = st.form_submit_button("生成考试题目")
+
+        if submit_button and text_content:
+            if num_multiple_choice + num_true_false == 0:
+                st.error("请至少选择一种题型并设置题目数量。")
+            else:
+                with st.spinner("正在生成考试题目..."):
+                    st.session_state.exam_questions = asyncio.run(
+                        generate_exam_questions(
+                            text_content, num_multiple_choice, num_true_false
+                        )
+                    )
+                    st.session_state.user_answers = {}
+                    st.session_state.score = None
+                    st.session_state.generation_complete = True
+                st.rerun()
+    else:
+        display_exam_questions()
+
+    if st.session_state.score is not None:
+        display_score()
+
+    # 显示页脚
+    show_footer()
 
 
 main()
