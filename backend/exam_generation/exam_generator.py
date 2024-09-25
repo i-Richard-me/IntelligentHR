@@ -1,8 +1,7 @@
 import os
-from typing import List, Optional
+from typing import List, Optional, Dict
 from pydantic import BaseModel, Field
 from langfuse.callback import CallbackHandler
-from typing import Dict
 
 from utils.llm_tools import init_language_model, LanguageModelChain
 
@@ -75,7 +74,10 @@ HUMAN_MESSAGE_TEMPLATE = """
 
 
 class ExamGenerator:
+    """考试生成器类，用于生成选择题和判断题。"""
+
     def __init__(self):
+        """初始化考试生成器，设置语言模型和问题生成链。"""
         self.language_model = init_language_model(
             temperature=0.7,
             provider=os.getenv("SMART_LLM_PROVIDER"),
@@ -102,6 +104,16 @@ class ExamGenerator:
         question_type: str = "选择题",
         previous_questions: Optional[str] = None,
     ) -> List[Dict]:
+        """
+        生成考试问题。
+
+        :param text_content: 用于生成问题的文本内容
+        :param session_id: 会话ID，用于追踪
+        :param num_questions: 要生成的问题数量
+        :param question_type: 问题类型，"选择题"或"判断题"
+        :param previous_questions: 之前生成的问题，用于避免重复
+        :return: 生成的问题列表
+        """
         langfuse_handler = CallbackHandler(
             tags=["exam_generation"],
             session_id=session_id,
@@ -125,7 +137,7 @@ class ExamGenerator:
             )
             return result["questions"]
         except Exception as e:
-            print(f"Error generating questions: {str(e)}")
+            print(f"生成问题时出错: {str(e)}")
             return []
 
     def _format_previous_questions(
@@ -133,18 +145,27 @@ class ExamGenerator:
         previous_questions: Optional[List[MultipleChoiceQuestion | TrueFalseQuestion]],
         question_type: str,
     ) -> str:
+        """
+        格式化之前生成的问题，用于避免重复。
+
+        :param previous_questions: 之前生成的问题列表
+        :param question_type: 问题类型
+        :return: 格式化后的问题字符串
+        """
         if not previous_questions:
             return ""
 
         formatted_questions = []
-        for q in previous_questions:
-            if question_type == "选择题" and isinstance(q, MultipleChoiceQuestion):
+        for question in previous_questions:
+            if question_type == "选择题" and isinstance(
+                question, MultipleChoiceQuestion
+            ):
                 formatted_questions.append(
-                    f"问题: {q.question}\n选项: {', '.join(q.options)}\n正确答案: {q.correct_answer}\n"
+                    f"问题: {question.question}\n选项: {', '.join(question.options)}\n正确答案: {question.correct_answer}\n"
                 )
-            elif question_type == "判断题" and isinstance(q, TrueFalseQuestion):
+            elif question_type == "判断题" and isinstance(question, TrueFalseQuestion):
                 formatted_questions.append(
-                    f"问题: {q.question}\n正确答案: {'True' if q.correct_answer else 'False'}\n"
+                    f"问题: {question.question}\n正确答案: {'True' if question.correct_answer else 'False'}\n"
                 )
 
         return "\n".join(formatted_questions)
@@ -154,4 +175,11 @@ def merge_questions(
     first_round: List[MultipleChoiceQuestion] | List[TrueFalseQuestion],
     second_round: List[MultipleChoiceQuestion] | List[TrueFalseQuestion],
 ) -> List[MultipleChoiceQuestion] | List[TrueFalseQuestion]:
+    """
+    合并两轮生成的问题。
+
+    :param first_round: 第一轮生成的问题列表
+    :param second_round: 第二轮生成的问题列表
+    :return: 合并后的问题列表
+    """
     return first_round + second_round
