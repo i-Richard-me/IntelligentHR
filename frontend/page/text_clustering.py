@@ -1,20 +1,20 @@
+from frontend.ui_components import show_sidebar, show_footer, apply_common_styles
+from backend.text_processing.clustering.clustering_workflow import (
+    generate_categories,
+    classify_texts,
+)
 import streamlit as st
 import pandas as pd
 import sys
 import os
 import uuid
-import asyncio
 from typing import Dict, Any, Optional
 
 # 添加项目根目录到 Python 路径
-project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+project_root = os.path.abspath(os.path.join(
+    os.path.dirname(__file__), "..", ".."))
 sys.path.append(project_root)
 
-from backend.text_processing.clustering.clustering_workflow import (
-    generate_categories,
-    classify_texts,
-)
-from frontend.ui_components import show_sidebar, show_footer, apply_common_styles
 
 st.query_params.role = st.session_state.role
 
@@ -121,7 +121,8 @@ def get_clustering_parameters():
             "分类批处理大小",
             10,
             100,
-            st.session_state.clustering_params.get("classification_batch_size", 20),
+            st.session_state.clustering_params.get(
+                "classification_batch_size", 20),
             key="classification_batch_size_slider",
         )
 
@@ -133,7 +134,8 @@ def get_custom_classification_parameters():
             "分类批处理大小",
             10,
             100,
-            st.session_state.clustering_params.get("classification_batch_size", 20),
+            st.session_state.clustering_params.get(
+                "classification_batch_size", 20),
             key="custom_classification_batch_size_slider",
         )
 
@@ -211,31 +213,30 @@ def handle_data_input_and_clustering():
                 if st.button("开始初始聚类"):
                     with st.spinner("正在进行初始聚类..."):
                         try:
-                            result = asyncio.run(
-                                generate_categories(
-                                    df=df,
-                                    text_column=st.session_state.text_column,
-                                    text_topic=st.session_state.text_topic,
-                                    initial_category_count=st.session_state.clustering_params[
-                                        "max_categories"
-                                    ],
-                                    min_categories=st.session_state.clustering_params[
-                                        "min_categories"
-                                    ],
-                                    max_categories=st.session_state.clustering_params[
-                                        "max_categories"
-                                    ],
-                                    batch_size=st.session_state.clustering_params[
-                                        "batch_size"
-                                    ],
-                                    session_id=st.session_state.session_id,
-                                    additional_requirements=(
-                                        f"补充要求：\n{st.session_state.additional_requirements}"
-                                        if st.session_state.additional_requirements
-                                        and st.session_state.additional_requirements.strip()
-                                        else ""
-                                    ),
-                                )
+                            result = generate_categories(
+                                df=df,
+                                text_column=st.session_state.text_column,
+                                text_topic=st.session_state.text_topic,
+                                initial_category_count=st.session_state.clustering_params[
+                                    "max_categories"
+                                ],
+                                min_categories=st.session_state.clustering_params[
+                                    "min_categories"
+                                ],
+                                max_categories=st.session_state.clustering_params[
+                                    "max_categories"
+                                ],
+                                batch_size=st.session_state.clustering_params[
+                                    "batch_size"
+                                ],
+                                session_id=st.session_state.session_id,
+                                additional_requirements=(
+                                    f"补充要求：\n{
+                                        st.session_state.additional_requirements}"
+                                    if st.session_state.additional_requirements
+                                    and st.session_state.additional_requirements.strip()
+                                    else ""
+                                ),
                             )
 
                             st.success("初始聚类完成！")
@@ -276,7 +277,8 @@ def handle_custom_categories():
                 )
                 if uploaded_categories is not None:
                     categories_df = pd.read_csv(uploaded_categories)
-                    st.session_state.categories = categories_df.to_dict("records")
+                    st.session_state.categories = categories_df.to_dict(
+                        "records")
                     st.success("自定义类别已成功上传！")
             else:
                 categories_text = st.text_area(
@@ -294,7 +296,8 @@ def handle_custom_categories():
                     categories_df = pd.DataFrame(
                         categories_list, columns=["name", "description"]
                     )
-                    st.session_state.categories = categories_df.to_dict("records")
+                    st.session_state.categories = categories_df.to_dict(
+                        "records")
                     st.success("自定义类别已成功添加！")
 
 
@@ -341,19 +344,17 @@ def review_clustering_results():
                 else:
                     with st.spinner("正在进行文本分类..."):
                         try:
-                            df_result = asyncio.run(
-                                classify_texts(
-                                    df=st.session_state.df_preprocessed,
-                                    text_column=st.session_state.text_column,
-                                    id_column="unique_id",
-                                    categories={"categories": edited_categories},
-                                    text_topic=st.session_state.text_topic,
-                                    session_id=st.session_state.session_id,
-                                    classification_batch_size=st.session_state.clustering_params[
-                                        "classification_batch_size"
-                                    ],
-                                    is_multi_label=st.session_state.is_multi_label,  # 新增：传递多标签分类选项
-                                )
+                            df_result = classify_texts(
+                                df=st.session_state.df_preprocessed,
+                                text_column=st.session_state.text_column,
+                                id_column="unique_id",
+                                categories={"categories": edited_categories},
+                                text_topic=st.session_state.text_topic,
+                                session_id=st.session_state.session_id,
+                                classification_batch_size=st.session_state.clustering_params[
+                                    "classification_batch_size"
+                                ],
+                                is_multi_label=st.session_state.is_multi_label,
                             )
 
                             st.session_state.df_result = df_result
@@ -399,7 +400,8 @@ def display_classification_results():
                 st.dataframe(st.session_state.df_result)
 
             # 提供下载选项
-            csv = st.session_state.df_result.to_csv(index=False).encode("utf-8-sig")
+            csv = st.session_state.df_result.to_csv(
+                index=False).encode("utf-8-sig")
             st.download_button(
                 label="下载分类结果CSV",
                 data=csv,
