@@ -34,7 +34,8 @@ def logout():
 
 role = st.session_state.role
 
-home_page = st.Page("Home.py", title="首页", icon=":material/home:", default=True)
+home_page = st.Page("Home.py", title="首页",
+                    icon=":material/home:", default=True)
 table_operation = st.Page(
     "page/table_operation.py", title="智能数据整理", icon=":material/table_view:"
 )
@@ -98,10 +99,16 @@ exam_interface = st.Page(
     title="智能考试系统",
     icon=":material/quiz:",
 )
+sql_assistant = st.Page(
+    "page/sql_assistant.py",
+    title="SQL查询助手",
+    icon=":material/conditions:",
+)
 
 account_pages = [home_page]
 request_pages = [
     table_operation,
+    sql_assistant,
     data_cleaning,
     document_check,
     ai_translation,
@@ -120,7 +127,13 @@ admin_pages = [vector_db_management]
 # )
 
 # 功能分类
-data_processing = [table_operation, data_cleaning, document_check, vector_db_management]
+data_processing = [
+    table_operation,
+    sql_assistant,
+    data_cleaning,
+    document_check,
+    vector_db_management,
+]
 
 text_analysis = [ai_translation, sentiment_analysis, text_clustering]
 
