@@ -2,10 +2,21 @@ import streamlit as st
 import sys
 import os
 from PIL import Image
+import hmac
 
 # 添加项目根目录到 Python 路径
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.append(project_root)
+
+# 在文件开头添加这个函数
+def maintain_auth_token():
+    """Maintain auth_token across page navigation"""
+    # 如果当前 URL 没有 auth_token 但 session 中有登录状态
+    if ("auth_token" not in st.query_params and 
+        st.session_state.get("password_correct", False) and 
+        "current_token" in st.session_state):
+        # 恢复 auth_token 到 URL
+        st.query_params["auth_token"] = st.session_state.current_token
 
 if "role" in st.query_params:
     st.session_state.role = st.query_params.role
@@ -16,21 +27,75 @@ if "role" not in st.session_state:
 ROLES = ["User", "Recruiter", "Admin"]
 
 
-def login():
+def check_password():
+    """Returns `True` if the user had a correct password."""
+
+    # 检查 URL 参数中是否有有效的登录状态
+    if "auth_token" in st.query_params:
+        stored_token = st.query_params["auth_token"]
+        if stored_token in st.secrets["auth_tokens"].values():
+            # 根据 token 找到对应的用户和角色
+            for username, token in st.secrets["auth_tokens"].items():
+                if token == stored_token:
+                    st.session_state["password_correct"] = True
+                    st.session_state.role = st.secrets.user_roles[username]
+                    # 保存当前 token 到 session state
+                    st.session_state.current_token = stored_token
+                    return True
+        
+    def login_form():
+        """Form with widgets to collect user information"""
+        with st.form("Credentials"):
+            st.text_input("Username", key="username")
+            st.text_input("Password", type="password", key="password")
+            st.form_submit_button("Log in", on_click=password_entered)
+
+    def password_entered():
+        """Checks whether a password entered by the user is correct."""
+        if st.session_state["username"] in st.secrets["passwords"] and hmac.compare_digest(
+            st.session_state["password"],
+            st.secrets.passwords[st.session_state["username"]],
+        ):
+            st.session_state["password_correct"] = True
+            # Set the role based on username
+            st.session_state.role = st.secrets.user_roles[st.session_state["username"]]
+            # 获取并保存 token
+            current_token = st.secrets["auth_tokens"][st.session_state["username"]]
+            st.session_state.current_token = current_token
+            # 设置 auth_token 到 URL
+            st.query_params["auth_token"] = current_token
+            del st.session_state["password"]
+            del st.session_state["username"]
+        else:
+            st.session_state["password_correct"] = False
+
+    if st.session_state.get("password_correct", False):
+        return True
 
     st.title("Intelligent HR Assistant")
     st.header("Log in")
-    role = st.selectbox("Choose your role", ROLES)
-
-    if st.button("Log in"):
-        st.session_state.role = role
-        st.rerun()
+    login_form()
+    if "password_correct" in st.session_state:
+        st.error("😕 User not known or password incorrect")
+    return False
 
 
 def logout():
+    st.session_state.password_correct = False
     st.session_state.role = None
+    # 清除 session 中的 token
+    if "current_token" in st.session_state:
+        del st.session_state.current_token
+    # 清除 URL 中的 auth_token
+    if "auth_token" in st.query_params:
+        del st.query_params["auth_token"]
     st.rerun()
 
+# 在主程序开始时调用
+maintain_auth_token()
+
+if not check_password():
+    st.stop()
 
 role = st.session_state.role
 
@@ -160,6 +225,11 @@ if st.session_state.role in ["Recruiter", "Admin"]:
 
 if st.session_state.role == "Admin":
     page_dict["数据处理与管理"].append(vector_db_management)
+
+def login():
+    st.title("Intelligent HR Assistant")
+    st.header("Please log in to continue")
+    return
 
 if len(page_dict) > 0:
     pg = st.navigation({"Account": account_pages} | page_dict)
