@@ -310,6 +310,46 @@
             "embedding_fields": [
                 "raw_text"
             ]
+        },
+        "table_descriptions": {
+            "name": "table_descriptions",
+            "description": "Collection for storing database table metadata and semantic descriptions",
+            "fields": [
+                {
+                    "name": "table_name",
+                    "type": "str",
+                    "description": "Name of the database table"
+                },
+                {
+                    "name": "description",
+                    "type": "str",
+                    "description": "Description of the table's purpose and content",
+                    "is_vector": true
+                }
+            ],
+            "embedding_fields": [
+                "description"
+            ]
+        },
+        "term_descriptions": {
+            "name": "term_descriptions",
+            "description": "Collection for domain terminology mapping and definitions",
+            "fields": [
+                {
+                    "name": "term",
+                    "type": "str",
+                    "description": "Domain-specific term or phrase",
+                    "is_vector": true
+                },
+                {
+                    "name": "description",
+                    "type": "str",
+                    "description": "Standard definition and usage context of the term"
+                }
+            ],
+            "embedding_fields": [
+                "term"
+            ]
         }
     }
 }
