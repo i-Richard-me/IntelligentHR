@@ -1,0 +1,182 @@
+"""
+SQL助手图构建模块。
+构建和配置SQL助手的完整处理流程图。
+"""
+
+import uuid
+import logging
+from typing import Dict, Any, Optional
+
+from langgraph.graph import StateGraph, START, END
+from langgraph.checkpoint.memory import MemorySaver
+from langchain_core.messages import HumanMessage
+from langfuse.callback import CallbackHandler
+
+from backend.sql_assistant.states.assistant_state import SQLAssistantState
+from backend.sql_assistant.nodes.intent_analysis_node import intent_analysis_node
+from backend.sql_assistant.nodes.keyword_extraction_node import keyword_extraction_node
+from backend.sql_assistant.nodes.term_mapping_node import domain_term_mapping_node
+from backend.sql_assistant.nodes.query_normalization_node import query_normalization_node
+from backend.sql_assistant.nodes.data_source_node import data_source_identification_node
+from backend.sql_assistant.nodes.table_structure_node import table_structure_analysis_node
+from backend.sql_assistant.nodes.sql_generation_node import sql_generation_node
+from backend.sql_assistant.nodes.sql_execution_node import sql_execution_node
+from backend.sql_assistant.nodes.error_analysis_node import error_analysis_node
+from backend.sql_assistant.nodes.result_generation_node import result_generation_node
+from backend.sql_assistant.routes.node_routes import (
+    route_after_intent,
+    route_after_sql_generation,
+    route_after_execution,
+    route_after_error_analysis
+)
+
+logger = logging.getLogger(__name__)
+
+
+def create_langfuse_handler(session_id: str) -> CallbackHandler:
+    """
+    创建Langfuse回调处理器。
+
+    Args:
+        session_id: 会话ID
+
+    Returns:
+        CallbackHandler: Langfuse回调处理器实例
+    """
+    return CallbackHandler(
+        tags=["sql_assistant"], session_id=session_id
+    )
+
+
+def build_sql_assistant_graph() -> StateGraph:
+    """构建SQL助手的完整处理图
+
+    创建并配置所有节点和边，设置路由逻辑。
+    包括意图分析、关键词提取、业务术语规范化等全流程。
+
+    Returns:
+        StateGraph: 配置好的状态图实例
+    """
+    # 创建图构建器
+    graph_builder = StateGraph(SQLAssistantState)
+
+    # 添加所有节点
+    graph_builder.add_node("intent_analysis", intent_analysis_node)
+    graph_builder.add_node("keyword_extraction", keyword_extraction_node)
+    graph_builder.add_node("domain_term_mapping", domain_term_mapping_node)
+    graph_builder.add_node("query_normalization", query_normalization_node)
+    graph_builder.add_node("data_source_identification",
+                           data_source_identification_node)
+    graph_builder.add_node("table_structure_analysis",
+                           table_structure_analysis_node)
+    graph_builder.add_node("sql_generation", sql_generation_node)
+    graph_builder.add_node("sql_execution", sql_execution_node)
+    graph_builder.add_node("error_analysis", error_analysis_node)
+    graph_builder.add_node("result_generation", result_generation_node)
+
+    # 设置条件边
+    # 意图分析后的路由
+    graph_builder.add_conditional_edges(
+        "intent_analysis",
+        route_after_intent,
+        {
+            "keyword_extraction": "keyword_extraction",
+            END: END
+        }
+    )
+
+    # SQL生成后的路由
+    graph_builder.add_conditional_edges(
+        "sql_generation",
+        route_after_sql_generation,
+        {
+            "sql_execution": "sql_execution",
+            END: END
+        }
+    )
+
+    # SQL执行后的路由
+    graph_builder.add_conditional_edges(
+        "sql_execution",
+        route_after_execution,
+        {
+            "result_generation": "result_generation",
+            "error_analysis": "error_analysis"
+        }
+    )
+
+    # 错误分析后的路由
+    graph_builder.add_conditional_edges(
+        "error_analysis",
+        route_after_error_analysis,
+        {
+            "sql_execution": "sql_execution",
+            END: END
+        }
+    )
+
+    # 添加基本流程边
+    graph_builder.add_edge("keyword_extraction", "domain_term_mapping")
+    graph_builder.add_edge("domain_term_mapping", "query_normalization")
+    graph_builder.add_edge("query_normalization", "data_source_identification")
+    graph_builder.add_edge("data_source_identification",
+                           "table_structure_analysis")
+    graph_builder.add_edge("table_structure_analysis", "sql_generation")
+    graph_builder.add_edge("result_generation", END)
+
+    # 设置入口
+    graph_builder.add_edge(START, "intent_analysis")
+
+    return graph_builder
+
+
+def run_sql_assistant(
+    query: str,
+    thread_id: Optional[str] = None,
+    checkpoint_saver: Optional[Any] = None
+) -> Dict[str, Any]:
+    """运行SQL助手
+
+    创建并执行SQL助手的完整处理流程，
+    支持会话状态保持和断点续传。
+
+    Args:
+        query: 用户的查询文本
+        thread_id: 会话ID，用于状态保持
+        checkpoint_saver: 状态保存器实例
+
+    Returns:
+        Dict[str, Any]: 处理结果字典
+    """
+    # 创建图构建器
+    graph_builder = build_sql_assistant_graph()
+
+    # 使用默认的内存存储器
+    if checkpoint_saver is None:
+        checkpoint_saver = MemorySaver()
+
+    # 编译图
+    graph = graph_builder.compile(checkpointer=checkpoint_saver)
+
+    # 生成会话ID（如果未提供）
+    if thread_id is None:
+        thread_id = str(uuid.uuid4())
+
+    # 配置运行参数
+    config = {
+        "configurable": {"thread_id": thread_id},
+        "callbacks": [create_langfuse_handler(thread_id)]
+    }
+
+    # 构造输入消息
+    state_input = {
+        "messages": [HumanMessage(content=query)]
+    }
+
+    # 执行图
+    try:
+        return graph.invoke(state_input, config)
+    except Exception as e:
+        error_msg = f"SQL助手执行出错: {str(e)}"
+        logger.error(error_msg)
+        return {"error": error_msg}
