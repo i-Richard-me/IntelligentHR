@@ -23,8 +23,8 @@ class SQLAssistantState(TypedDict):
     keywords: List[str]
     # 业务术语及其描述
     domain_term_mappings: Dict[str, str]
-    # 改写后的规范化查询
-    normalized_query: Optional[str]
+    # 改写后的查询
+    rewritten_query: Optional[str]
     # 匹配的数据表信息
     matched_tables: List[Dict[str, Any]]
     # 数据表结构信息
