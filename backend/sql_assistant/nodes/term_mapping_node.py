@@ -29,7 +29,7 @@ class DomainTermMapper:
     def __init__(self):
         """初始化术语映射器"""
         # 连接到Milvus向量数据库
-        connect_to_milvus("examples")
+        connect_to_milvus(os.getenv("VECTOR_DB_DATABASE", ""))
         # 初始化术语描述集合
         self.collection = initialize_vector_store("term_descriptions")
         # 初始化embedding模型
@@ -42,49 +42,45 @@ class DomainTermMapper:
     def find_standard_terms(
         self,
         keywords: List[str],
-        similarity_threshold: float = 0.6
-    ) -> Dict[str, str]:
-        """查找关键词对应的标准术语及其解释
+        similarity_threshold: float = 0.9
+    ) -> Dict[str, Dict[str, str]]:
+        """查找关键词对应的标准术语及其信息
 
         Args:
             keywords: 需要标准化的关键词列表
             similarity_threshold: 相似度匹配阈值，控制匹配的严格程度
 
         Returns:
-            Dict[str, str]: 标准术语到解释的映射字典
-
-        Raises:
-            ValueError: 向量搜索失败时抛出
+            Dict[str, Dict[str, str]]: 关键词到标准术语信息的映射字典
         """
-        # 如果关键词列表为空，直接返回空字典
         if not keywords:
             return {}
 
-        term_descriptions = {}
+        term_mappings = {}
 
         for keyword in keywords:
             try:
-                # 生成关键词的向量表示
                 query_vector = self.embeddings.embed_query(keyword)
-
-                # 在向量库中搜索相似术语
+                
                 results = search_in_milvus(
                     collection=self.collection,
                     query_vector=query_vector,
-                    vector_field="term",
-                    top_k=1  # 只取最相似的一个结果
+                    vector_field="original_term",
+                    top_k=1
                 )
 
-                # 如果找到且相似度超过阈值，添加到结果中
                 if results and results[0]["distance"] > similarity_threshold:
-                    term_descriptions[results[0]["term"]
-                                      ] = results[0]["description"]
+                    term_mappings[keyword] = {
+                        "original_term": results[0]["original_term"],
+                        "standard_name": results[0]["standard_name"],
+                        "additional_info": results[0]["additional_info"]
+                    }
 
             except Exception as e:
                 logger.error(f"处理关键词 '{keyword}' 时发生错误: {str(e)}")
                 continue
 
-        return term_descriptions
+        return term_mappings
 
 
 def domain_term_mapping_node(state: SQLAssistantState) -> dict:
@@ -107,11 +103,11 @@ def domain_term_mapping_node(state: SQLAssistantState) -> dict:
         standardizer = DomainTermMapper()
 
         # 执行术语标准化
-        term_descriptions = standardizer.find_standard_terms(keywords)
+        term_mappings = standardizer.find_standard_terms(keywords)
 
         # 更新状态
         return {
-            "domain_term_mappings": term_descriptions
+            "domain_term_mappings": term_mappings
         }
 
     except Exception as e:
