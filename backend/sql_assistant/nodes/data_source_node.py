@@ -28,7 +28,7 @@ class DataSourceMatcher:
     def __init__(self):
         """初始化数据源匹配器"""
         # 连接到Milvus向量数据库
-        connect_to_milvus("examples")
+        connect_to_milvus(os.getenv("VECTOR_DB_DATABASE", ""))
         # 初始化表描述集合
         self.collection = initialize_vector_store("table_descriptions")
         # 初始化embedding模型
@@ -93,17 +93,17 @@ def data_source_identification_node(state: SQLAssistantState) -> dict:
     Returns:
         dict: 包含相关数据表信息的状态更新
     """
-    # 获取规范化后的查询
-    normalized_query = state.get("normalized_query")
-    if not normalized_query:
-        raise ValueError("状态中未找到规范化查询")
+    # 获取改写后的查询
+    rewritten_query = state.get("rewritten_query")
+    if not rewritten_query:
+        raise ValueError("状态中未找到改写后的查询")
 
     try:
         # 创建匹配器实例
         matcher = DataSourceMatcher()
 
         # 执行数据表匹配
-        matched_tables = matcher.find_relevant_tables(normalized_query)
+        matched_tables = matcher.find_relevant_tables(rewritten_query)
 
         # 更新状态
         return {

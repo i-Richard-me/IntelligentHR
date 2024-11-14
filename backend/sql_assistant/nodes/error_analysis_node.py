@@ -64,7 +64,7 @@ ERROR_ANALYSIS_SYSTEM_PROMPT = """你是一个专业的数据分析师，负责�
 ERROR_ANALYSIS_USER_PROMPT = """请分析以下SQL执行失败的原因并提供解决方案：
 
 1. 原始查询需求：
-{normalized_query}
+{rewritten_query}
 
 2. 可用的表结构：
 {table_structures}
@@ -124,7 +124,7 @@ def error_analysis_node(state: SQLAssistantState) -> dict:
     try:
         # 准备输入数据
         input_data = {
-            "normalized_query": state["normalized_query"],
+            "rewritten_query": state["rewritten_query"],
             "table_structures": format_table_structures(state["table_structures"]),
             "term_descriptions": format_term_descriptions(
                 state.get("domain_term_mappings", {})

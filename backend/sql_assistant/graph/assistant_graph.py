@@ -16,7 +16,7 @@ from backend.sql_assistant.states.assistant_state import SQLAssistantState
 from backend.sql_assistant.nodes.intent_analysis_node import intent_analysis_node
 from backend.sql_assistant.nodes.keyword_extraction_node import keyword_extraction_node
 from backend.sql_assistant.nodes.term_mapping_node import domain_term_mapping_node
-from backend.sql_assistant.nodes.query_normalization_node import query_normalization_node
+from backend.sql_assistant.nodes.query_rewrite_node import query_rewrite_node
 from backend.sql_assistant.nodes.data_source_node import data_source_identification_node
 from backend.sql_assistant.nodes.table_structure_node import table_structure_analysis_node
 from backend.sql_assistant.nodes.sql_generation_node import sql_generation_node
@@ -64,7 +64,7 @@ def build_sql_assistant_graph() -> StateGraph:
     graph_builder.add_node("intent_analysis", intent_analysis_node)
     graph_builder.add_node("keyword_extraction", keyword_extraction_node)
     graph_builder.add_node("domain_term_mapping", domain_term_mapping_node)
-    graph_builder.add_node("query_normalization", query_normalization_node)
+    graph_builder.add_node("query_rewrite", query_rewrite_node)
     graph_builder.add_node("data_source_identification",
                            data_source_identification_node)
     graph_builder.add_node("table_structure_analysis",
@@ -117,8 +117,8 @@ def build_sql_assistant_graph() -> StateGraph:
 
     # 添加基本流程边
     graph_builder.add_edge("keyword_extraction", "domain_term_mapping")
-    graph_builder.add_edge("domain_term_mapping", "query_normalization")
-    graph_builder.add_edge("query_normalization", "data_source_identification")
+    graph_builder.add_edge("domain_term_mapping", "query_rewrite")
+    graph_builder.add_edge("query_rewrite", "data_source_identification")
     graph_builder.add_edge("data_source_identification",
                            "table_structure_analysis")
     graph_builder.add_edge("table_structure_analysis", "sql_generation")
