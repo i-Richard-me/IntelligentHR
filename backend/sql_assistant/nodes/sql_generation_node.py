@@ -39,10 +39,9 @@ SQL_GENERATION_SYSTEM_PROMPT = """你是一个专业的数据分析师，负责�
 请遵循以下规则进行判断和生成：
 
 1. 可行性判断要点：
-   - 充分理解数据表中的字段含义和真实的数据类型
-   - 检查用户需求的数据项是否能从现有表中获取
-   - 检查查询所需的每个字段是否在表中精确存在
-   - 严格验证字段的业务含义是否与查询需求完全匹配
+   - 检查用户需求的数据是否能从现有表中获取
+   - 检查查询所需的每个字段是否在表中存在
+   - 验证字段的业务含义是否与查询需求匹配
    - 确认表之间的关联字段存在且语义一致
    - 确认数据粒度是否满足查询需求
    - 如有字段缺失或语义不匹配，应判定为不可行
@@ -63,22 +62,25 @@ SQL_GENERATION_SYSTEM_PROMPT = """你是一个专业的数据分析师，负责�
    - 正确处理表连接和条件筛选
    - 正确处理NULL值
    - 使用适当的聚合函数和分组
+   - 当涉及到日期字段，注意将字符串或文本形式存储的日期字段转换为日期格式
 
 5. 优化建议：
-   - 只选择必要的字段
-   - 对于容易存在表述不精准的字段，使用'%%keyword%%'进行模糊匹配
-   - 添加适当的WHERE条件
-   - 使用合适的索引
+   - 只选择与查询需求相关的必要字段，控制在5个字段以内
    - 避免使用SELECT *
+   - 添加适当的WHERE条件
+   - 对于容易存在表述不精准的字段，如项目名称等，使用'%%keyword%%'进行模糊匹配
 """
 
 SQL_GENERATION_USER_PROMPT = """请根据以下信息评估查询可行性并生成SQL：
 
-1. 规范化后的查询需求：
-{normalized_query}
+1. 查询需求：
+{rewritten_query}
 
 2. 可用的表结构：
 {table_structures}
+
+3. 检索到的业务术语信息(如果存在)：
+{term_descriptions}
 
 请首先评估查询可行性，并按照指定的JSON格式输出结果。如果可行则生成SQL查询，如果不可行则提供详细的原因。"""
 
@@ -115,26 +117,24 @@ def sql_generation_node(state: SQLAssistantState) -> dict:
         dict: 包含SQL生成结果的状态更新
     """
     # 验证必要的输入
-    if not state.get("normalized_query"):
-        return {"error": "状态中未找到规范化查询"}
+    if not state.get("rewritten_query"):
+        return {"error": "状态中未找��改写后的查询"}
     if not state.get("table_structures"):
         return {"error": "状态中未找到表结构信息"}
 
     try:
         # 准备输入数据
-        normalized_query = state["normalized_query"]
-        table_structures = format_table_structures(state["table_structures"])
-        term_descriptions = format_term_descriptions(
-            state.get("domain_term_mappings", {})
-        )
+        input_data = {
+            "rewritten_query": state["rewritten_query"],
+            "table_structures": format_table_structures(state["table_structures"]),
+            "term_descriptions": format_term_descriptions(
+                state.get("domain_term_mappings", {})
+            )
+        }
 
         # 创建并执行SQL生成链
         generation_chain = create_sql_generation_chain()
-        result = generation_chain.invoke({
-            "normalized_query": normalized_query,
-            "table_structures": table_structures,
-            "term_descriptions": term_descriptions
-        })
+        result = generation_chain.invoke(input_data)
 
         # 更新状态
         response = {

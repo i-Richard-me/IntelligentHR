@@ -5,6 +5,8 @@
 
 from typing import List, Dict
 from langchain_core.messages import HumanMessage, AIMessage, BaseMessage
+from tabulate import tabulate
+import json
 
 
 def format_conversation_history(messages: List[BaseMessage]) -> str:
@@ -25,22 +27,27 @@ def format_conversation_history(messages: List[BaseMessage]) -> str:
     return "\n".join(formatted)
 
 
-def format_term_descriptions(term_descriptions: Dict[str, str]) -> str:
-    """格式化业务术语解释信息
+def format_term_descriptions(term_mappings: Dict[str, Dict[str, str]]) -> List[Dict[str, str]]:
+    """格式化业务术语映射信息
 
     Args:
-        term_descriptions: 业务术语和解释的映射字典
+        term_mappings: 业务术语映射信息字典
 
     Returns:
-        str: 格式化后的术语解释文本
+        List[Dict[str, str]]: 格式化后的术语映射信息列表
     """
-    if not term_descriptions:
-        return "无标准业务术语解释"
+    if not term_mappings:
+        return []
 
-    formatted = []
-    for term, desc in term_descriptions.items():
-        formatted.append(f"- {term}: {desc}")
-    return "\n".join(formatted)
+    formatted_mappings = []
+    for mapping in term_mappings.values():
+        formatted_mappings.append({
+            "original_term": mapping["original_term"],
+            "standard_name": mapping["standard_name"],
+            "additional_info": mapping["additional_info"]
+        })
+    
+    return formatted_mappings
 
 
 def format_table_structures(schemas: List[Dict]) -> str:
@@ -97,3 +104,39 @@ def format_results_preview(execution_result: Dict) -> str:
         lines.append("... (更多结果省略)")
 
     return "\n".join(lines)
+
+
+def format_full_results(execution_result: Dict) -> str:
+    """格式化完整的查询结果
+    
+    将查询结果格式化为完整的表格形式，使用 tabulate 生成美观的表格。
+    
+    Args:
+        execution_result: SQL执行结果字典
+        
+    Returns:
+        str: 格式化后的完整结果文本
+    """
+    if not execution_result.get('results'):
+        return "无数据"
+        
+    results = execution_result['results']
+    columns = execution_result['columns']
+    
+    # 将结果转换为行数据列表
+    rows = []
+    for row in results:
+        rows.append([str(row[col]) for col in columns])
+    
+    # 使用 tabulate 生成表格
+    # 使用 'pipe' 样式，这样在 notebook 中显示效果最好
+    table = tabulate(
+        rows,
+        headers=columns,
+        tablefmt='pipe',  # 使用 pipe 格式，在 notebook 中显示为 markdown 表格
+        showindex=False,
+        numalign='left',
+        stralign='left'
+    )
+    
+    return table
