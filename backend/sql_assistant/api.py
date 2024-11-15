@@ -10,18 +10,25 @@ from langgraph.checkpoint.memory import MemorySaver
 
 from backend.sql_assistant.graph.assistant_graph import run_sql_assistant
 
+from langchain_core.globals import set_llm_cache
+from langchain_community.cache import SQLiteCache
+
+set_llm_cache(SQLiteCache(database_path="data/llm_cache/langchain.db"))
+
 # 创建FastAPI应用
 app = FastAPI(title="SQL助手API")
 
 
 class QueryRequest(BaseModel):
     """查询请求模型"""
+
     query: str
     session_id: Optional[str] = None
 
 
 class QueryResponse(BaseModel):
     """查询响应模型"""
+
     message: str
     session_id: str
 
@@ -48,7 +55,7 @@ async def process_query(request: QueryRequest) -> QueryResponse:
         result = run_sql_assistant(
             query=request.query,
             thread_id=request.session_id,
-            checkpoint_saver=checkpoint_saver
+            checkpoint_saver=checkpoint_saver,
         )
 
         # 获取最后一条助手消息
@@ -61,14 +68,11 @@ async def process_query(request: QueryRequest) -> QueryResponse:
         # 返回响应
         return QueryResponse(
             message=last_message,
-            session_id=request.session_id or result.get("thread_id", "")
+            session_id=request.session_id or result.get("thread_id", ""),
         )
 
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"处理查询失败: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"处理查询失败: {str(e)}")
 
 
 @app.get("/health")
