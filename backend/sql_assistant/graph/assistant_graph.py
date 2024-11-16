@@ -5,6 +5,7 @@ SQL助手图构建模块。
 
 import uuid
 import logging
+import os
 from typing import Dict, Any, Optional
 
 from langgraph.graph import StateGraph, START, END
@@ -164,9 +165,12 @@ def run_sql_assistant(
 
     # 配置运行参数
     config = {
-        "configurable": {"thread_id": thread_id},
-        "callbacks": [create_langfuse_handler(thread_id)]
+        "configurable": {"thread_id": thread_id}
     }
+
+    # 仅在启用 Langfuse 时添加 callbacks
+    if os.getenv('LANGFUSE_ENABLED', 'false').lower() == 'true':
+        config["callbacks"] = [create_langfuse_handler(thread_id)]
 
     # 构造输入消息
     state_input = {

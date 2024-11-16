@@ -2,6 +2,7 @@
 SQL助手的API入口模块。
 提供HTTP接口供外部调用SQL助手服务。
 """
+import os
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
@@ -14,6 +15,18 @@ from langchain_core.globals import set_llm_cache
 from langchain_community.cache import SQLiteCache
 
 set_llm_cache(SQLiteCache(database_path="data/llm_cache/langchain.db"))
+
+
+if os.getenv('PHOENIX_ENABLED', 'false').lower() == 'true':
+    from phoenix.otel import register
+    from openinference.instrumentation.langchain import LangChainInstrumentor
+
+    tracer_provider = register(
+        project_name="llm-app",
+        endpoint="http://localhost:6006/v1/traces",
+    )
+
+    LangChainInstrumentor().instrument(tracer_provider=tracer_provider)
 
 # 创建FastAPI应用
 app = FastAPI(title="SQL助手API")
