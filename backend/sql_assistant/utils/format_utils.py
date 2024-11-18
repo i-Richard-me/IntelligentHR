@@ -77,7 +77,7 @@ def format_results_preview(execution_result: Dict) -> str:
     """格式化查询结果预览
 
     将查询结果格式化为易读的表格形式。
-    限制预览行数，确保输出简洁。
+    当结果超过20行时，不展示具体数据，而是返回提示信息。
 
     Args:
         execution_result: SQL执行结果字典
@@ -91,17 +91,19 @@ def format_results_preview(execution_result: Dict) -> str:
     results = execution_result['results']
     columns = execution_result['columns']
 
+    # 如果结果集过大，返回提示信息
+    if len(results) > 20:
+        return f"结果集过大，不展示具体数据"
+
     # 构建表格形式的预览
     lines = []
     # 表头
     lines.append("| " + " | ".join(columns) + " |")
     lines.append("|" + "|".join(["-" * len(col) for col in columns]) + "|")
-    # 数据行（最多显示20行）
-    for row in results[:20]:
+    # 数据行
+    for row in results:
         lines.append("| " + " | ".join(str(row[col])
-                     for col in columns) + " |")
-    if len(results) > 20:
-        lines.append("... (更多结果省略)")
+                                       for col in columns) + " |")
 
     return "\n".join(lines)
 
