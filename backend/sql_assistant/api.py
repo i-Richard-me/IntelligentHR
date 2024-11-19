@@ -2,6 +2,7 @@
 SQL助手的API入口模块。
 提供HTTP接口供外部调用SQL助手服务。
 """
+
 import os
 
 from fastapi import FastAPI, HTTPException
@@ -10,19 +11,20 @@ from typing import Optional
 from langgraph.checkpoint.memory import MemorySaver
 
 from backend.sql_assistant.graph.assistant_graph import run_sql_assistant
+from backend.sql_assistant.utils.user_mapper import UserMapper
 
 from langchain_core.globals import set_llm_cache
 from langchain_community.cache import SQLiteCache
 
-set_llm_cache(SQLiteCache(database_path="data/llm_cache/langchain.db"))
+# set_llm_cache(SQLiteCache(database_path="data/llm_cache/langchain.db"))
 
 
-if os.getenv('PHOENIX_ENABLED', 'false').lower() == 'true':
+if os.getenv("PHOENIX_ENABLED", "false").lower() == "true":
     from phoenix.otel import register
     from openinference.instrumentation.langchain import LangChainInstrumentor
 
     tracer_provider = register(
-        project_name="llm-app",
+        project_name="sql_assistant",
         endpoint="http://localhost:6006/v1/traces",
     )
 
@@ -37,6 +39,7 @@ class QueryRequest(BaseModel):
 
     query: str
     session_id: Optional[str] = None
+    username: Optional[str] = "anonymous"
 
 
 class QueryResponse(BaseModel):
@@ -46,29 +49,27 @@ class QueryResponse(BaseModel):
     session_id: str
 
 
-# 创建全局状态保存器
 checkpoint_saver = MemorySaver()
+user_mapper = UserMapper()
 
 
 @app.post("/api/sql-assistant", response_model=QueryResponse)
 async def process_query(request: QueryRequest) -> QueryResponse:
-    """处理SQL查询请求
-
-    Args:
-        request: 包含查询文本和可选会话ID的请求对象
-
-    Returns:
-        QueryResponse: 包含助手回复和会话ID的响应对象
-
-    Raises:
-        HTTPException: 处理失败时抛出
-    """
+    """处理SQL查询请求"""
     try:
+        # 查询用户ID
+        user_id = user_mapper.get_user_id(request.username)
+        if user_id is None and request.username != "anonymous":
+            raise HTTPException(
+                status_code=404, detail=f"用户 {request.username} 不存在或已禁用"
+            )
+
         # 运行SQL助手
         result = run_sql_assistant(
             query=request.query,
             thread_id=request.session_id,
             checkpoint_saver=checkpoint_saver,
+            user_id=user_id,
         )
 
         # 获取最后一条助手消息
@@ -78,7 +79,6 @@ async def process_query(request: QueryRequest) -> QueryResponse:
 
         last_message = messages[-1].content
 
-        # 返回响应
         return QueryResponse(
             message=last_message,
             session_id=request.session_id or result.get("thread_id", ""),
