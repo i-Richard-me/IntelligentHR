@@ -1,12 +1,10 @@
 """
 SQL生成节点模块。
-负责评估查询可行性并生成SQL语句。
+负责生成SQL查询语句。
 """
 
-import logging
-from typing import Optional
 from pydantic import BaseModel, Field
-from langchain_core.messages import AIMessage
+from typing import Optional
 
 from backend.sql_assistant.states.assistant_state import SQLAssistantState
 from backend.sql_assistant.utils.format_utils import (
@@ -15,63 +13,33 @@ from backend.sql_assistant.utils.format_utils import (
 )
 from utils.llm_tools import init_language_model, LanguageModelChain
 
-logger = logging.getLogger(__name__)
-
 
 class SQLGenerationResult(BaseModel):
     """SQL生成结果模型"""
-    is_feasible: bool = Field(
+    sql_query: str = Field(
         ...,
-        description="表示查询是否可行，根据现有数据表是否能够满足用户的查询需求"
-    )
-    infeasible_reason: Optional[str] = Field(
-        None,
-        description="当查询不可行时，说明不可行的具体原因"
-    )
-    sql_query: Optional[str] = Field(
-        None,
-        description="当查询可行时，生成的SQL查询语句"
+        description="生成的SQL查询语句"
     )
 
 
-# 系统提示词，保持原有定义
-SQL_GENERATION_SYSTEM_PROMPT = """你是一个专业的数据分析师，负责评估用户查询是否能通过现有数据表完成，并生成相应的SQL语句。
-请遵循以下规则进行判断和生成：
+SQL_GENERATION_SYSTEM_PROMPT = """你是一个专业的数据分析师，负责生成SQL查询语句。
+请遵循以下规则生成SQL：
 
-1. 可行性判断要点：
-   - 检查用户需求的数据是否能从现有表中获取
-   - 检查查询所需的每个字段是否在表中存在
-   - 验证字段的业务含义是否与查询需求匹配
-   - 确认表之间的关联字段存在且语义一致
-   - 确认数据粒度是否满足查询需求
-   - 如有字段缺失或语义不匹配，应判定为不可行
-
-2. 当查询不可行时：
-   - 设置 is_feasible 为 false
-   - 在 infeasible_reason 中详细说明原因
-   - 不生成SQL语句
-
-3. 当查询可行时：
-   - 设置 is_feasible 为 true
-   - 生成标准的SQL语句
-   - 使用正确的表和字段名
-   - 确保SQL语法正确
-
-4. SQL生成规范：
+1. SQL生成规范：
    - 使用MYSQL语法
    - 正确处理表连接和条件筛选
    - 正确处理NULL值
    - 使用适当的聚合函数和分组
    - 当涉及到日期字段，注意将字符串或文本形式存储的日期字段转换为日期格式
 
-5. 优化建议：
+2. 优化建议：
    - 只选择与查询需求相关的必要字段，控制在5个字段以内
    - 避免使用SELECT *
    - 添加适当的WHERE条件
-   - 对于容易存在表述不精准的字段，如项目名称等，使用'%%keyword%%'进行模糊匹配
-"""
+   - 对于容易存在表述不精准的字段，如项目名称等，使用'%%keyword%%'进行模糊匹配"""
 
-SQL_GENERATION_USER_PROMPT = """请根据以下信息评估查询可行性并生成SQL：
+
+SQL_GENERATION_USER_PROMPT = """请根据以下信息生成SQL查询语句：
 
 1. 查询需求：
 {rewritten_query}
@@ -82,20 +50,13 @@ SQL_GENERATION_USER_PROMPT = """请根据以下信息评估查询可行性并生
 3. 检索到的业务术语信息(如果存在)：
 {term_descriptions}
 
-请首先评估查询可行性，并按照指定的JSON格式输出结果。如果可行则生成SQL查询，如果不可行则提供详细的原因。"""
+请生成标准的SQL查询语句，并以指定的JSON格式输出结果。"""
 
 
 def create_sql_generation_chain(temperature: float = 0.0) -> LanguageModelChain:
-    """创建SQL生成任务链
-
-    Args:
-        temperature: 模型温度参数，控制输出的随机性
-
-    Returns:
-        LanguageModelChain: 配置好的SQL生成任务链
-    """
+    """创建SQL生成任务链"""
     llm = init_language_model(temperature=temperature)
-
+    
     return LanguageModelChain(
         model_cls=SQLGenerationResult,
         sys_msg=SQL_GENERATION_SYSTEM_PROMPT,
@@ -105,25 +66,13 @@ def create_sql_generation_chain(temperature: float = 0.0) -> LanguageModelChain:
 
 
 def sql_generation_node(state: SQLAssistantState) -> dict:
-    """SQL生成节点函数
-
-    基于查询需求和表结构信息，评估查询可行性并生成SQL语句。
-    包含查询可行性评估和SQL语句生成两个主要步骤。
-
-    Args:
-        state: 当前状态对象
-
-    Returns:
-        dict: 包含SQL生成结果的状态更新
-    """
-    # 验证必要的输入
+    """SQL生成节点函数"""
     if not state.get("rewritten_query"):
-        return {"error": "状态中未找��改写后的查询"}
+        return {"error": "状态中未找到改写后的查询"}
     if not state.get("table_structures"):
         return {"error": "状态中未找到表结构信息"}
 
     try:
-        # 准备输入数据
         input_data = {
             "rewritten_query": state["rewritten_query"],
             "table_structures": format_table_structures(state["table_structures"]),
@@ -132,28 +81,15 @@ def sql_generation_node(state: SQLAssistantState) -> dict:
             )
         }
 
-        # 创建并执行SQL生成链
         generation_chain = create_sql_generation_chain()
         result = generation_chain.invoke(input_data)
 
-        # 更新状态
-        response = {
+        return {
             "generated_sql": {
-                "is_feasible": result["is_feasible"],
-                "infeasible_reason": result["infeasible_reason"] if not result["is_feasible"] else None,
-                "sql_query": result["sql_query"] if result["is_feasible"] else None
+                "sql_query": result["sql_query"]
             }
         }
 
-        # 如果查询不可行，将原因添加到消息历史
-        if not result["is_feasible"] and result.get("infeasible_reason"):
-            response["messages"] = [
-                AIMessage(content=result["infeasible_reason"])
-            ]
-
-        return response
-
     except Exception as e:
         error_msg = f"SQL生成过程出错: {str(e)}"
-        logger.error(error_msg)
         return {"error": error_msg}
