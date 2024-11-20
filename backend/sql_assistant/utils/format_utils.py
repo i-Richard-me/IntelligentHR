@@ -62,6 +62,7 @@ def format_table_structures(schemas: List[Dict]) -> str:
     formatted = []
     for schema in schemas:
         formatted.append(f"表名: {schema['table_name']}")
+        formatted.append(f"描述: {schema.get('description', '暂无描述')}")
         formatted.append("字段列表:")
         formatted.append("| 字段名 | 类型 | 说明 |")
         formatted.append("|--------|------|------|")

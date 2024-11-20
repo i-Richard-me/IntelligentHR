@@ -13,6 +13,8 @@ from langgraph.graph.message import add_messages
 
 class SQLAssistantState(TypedDict):
     """SQL助手的状态类型定义"""
+    # 用户ID
+    user_id: Optional[int]
     # 消息历史记录
     messages: Annotated[List[BaseMessage], add_messages]
     # 查询意图分析结果
@@ -39,3 +41,5 @@ class SQLAssistantState(TypedDict):
     retry_count: int
     # 查询结果反馈
     result_feedback: Optional[str]
+    # 可行性检查结果
+    feasibility_check: Optional[Dict]

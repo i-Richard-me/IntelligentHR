@@ -101,6 +101,7 @@ def table_structure_analysis_node(state: SQLAssistantState) -> dict:
         # 获取每个匹配表的结构
         for table in matched_tables:
             structure = parser.get_table_structure(table["table_name"])
+            structure["description"] = table.get("description", "")
             table_structures.append(structure)
 
         # 更新状态
