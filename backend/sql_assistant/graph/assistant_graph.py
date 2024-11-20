@@ -19,16 +19,19 @@ from backend.sql_assistant.nodes.keyword_extraction_node import keyword_extracti
 from backend.sql_assistant.nodes.term_mapping_node import domain_term_mapping_node
 from backend.sql_assistant.nodes.query_rewrite_node import query_rewrite_node
 from backend.sql_assistant.nodes.data_source_node import data_source_identification_node
-from backend.sql_assistant.nodes.table_structure_node import table_structure_analysis_node
+from backend.sql_assistant.nodes.table_structure_node import (
+    table_structure_analysis_node,
+)
 from backend.sql_assistant.nodes.sql_generation_node import sql_generation_node
 from backend.sql_assistant.nodes.sql_execution_node import sql_execution_node
 from backend.sql_assistant.nodes.error_analysis_node import error_analysis_node
 from backend.sql_assistant.nodes.result_generation_node import result_generation_node
+from backend.sql_assistant.nodes.feasibility_check_node import feasibility_check_node
 from backend.sql_assistant.routes.node_routes import (
     route_after_intent,
-    route_after_sql_generation,
     route_after_execution,
-    route_after_error_analysis
+    route_after_error_analysis,
+    route_after_feasibility_check,
 )
 
 logger = logging.getLogger(__name__)
@@ -44,9 +47,7 @@ def create_langfuse_handler(session_id: str) -> CallbackHandler:
     Returns:
         CallbackHandler: Langfuse回调处理器实例
     """
-    return CallbackHandler(
-        tags=["sql_assistant"], session_id=session_id
-    )
+    return CallbackHandler(tags=["sql_assistant"], session_id=session_id)
 
 
 def build_sql_assistant_graph() -> StateGraph:
@@ -66,10 +67,11 @@ def build_sql_assistant_graph() -> StateGraph:
     graph_builder.add_node("keyword_extraction", keyword_extraction_node)
     graph_builder.add_node("domain_term_mapping", domain_term_mapping_node)
     graph_builder.add_node("query_rewrite", query_rewrite_node)
-    graph_builder.add_node("data_source_identification",
-                           data_source_identification_node)
-    graph_builder.add_node("table_structure_analysis",
-                           table_structure_analysis_node)
+    graph_builder.add_node(
+        "data_source_identification", data_source_identification_node
+    )
+    graph_builder.add_node("table_structure_analysis", table_structure_analysis_node)
+    graph_builder.add_node("feasibility_checking", feasibility_check_node)
     graph_builder.add_node("sql_generation", sql_generation_node)
     graph_builder.add_node("sql_execution", sql_execution_node)
     graph_builder.add_node("error_analysis", error_analysis_node)
@@ -80,18 +82,15 @@ def build_sql_assistant_graph() -> StateGraph:
     graph_builder.add_conditional_edges(
         "intent_analysis",
         route_after_intent,
-        {
-            "keyword_extraction": "keyword_extraction",
-            END: END
-        }
+        {"keyword_extraction": "keyword_extraction", END: END},
     )
 
-    # SQL生成后的路由
+    # 可行性检查后的路由
     graph_builder.add_conditional_edges(
-        "sql_generation",
-        route_after_sql_generation,
+        "feasibility_checking",
+        route_after_feasibility_check,
         {
-            "sql_execution": "sql_execution",
+            "sql_generation": "sql_generation",
             END: END
         }
     )
@@ -100,29 +99,23 @@ def build_sql_assistant_graph() -> StateGraph:
     graph_builder.add_conditional_edges(
         "sql_execution",
         route_after_execution,
-        {
-            "result_generation": "result_generation",
-            "error_analysis": "error_analysis"
-        }
+        {"result_generation": "result_generation", "error_analysis": "error_analysis"},
     )
 
     # 错误分析后的路由
     graph_builder.add_conditional_edges(
         "error_analysis",
         route_after_error_analysis,
-        {
-            "sql_execution": "sql_execution",
-            END: END
-        }
+        {"sql_execution": "sql_execution", END: END},
     )
 
     # 添加基本流程边
     graph_builder.add_edge("keyword_extraction", "domain_term_mapping")
     graph_builder.add_edge("domain_term_mapping", "query_rewrite")
     graph_builder.add_edge("query_rewrite", "data_source_identification")
-    graph_builder.add_edge("data_source_identification",
-                           "table_structure_analysis")
-    graph_builder.add_edge("table_structure_analysis", "sql_generation")
+    graph_builder.add_edge("data_source_identification", "table_structure_analysis")
+    graph_builder.add_edge("table_structure_analysis", "feasibility_checking")
+    graph_builder.add_edge("sql_generation", "sql_execution")
     graph_builder.add_edge("result_generation", END)
 
     # 设置入口
@@ -134,17 +127,16 @@ def build_sql_assistant_graph() -> StateGraph:
 def run_sql_assistant(
     query: str,
     thread_id: Optional[str] = None,
-    checkpoint_saver: Optional[Any] = None
+    checkpoint_saver: Optional[Any] = None,
+    user_id: Optional[int] = None,  # 新增用户ID参数
 ) -> Dict[str, Any]:
     """运行SQL助手
 
-    创建并执行SQL助手的完整处理流程，
-    支持会话状态保持和断点续传。
-
     Args:
         query: 用户的查询文本
-        thread_id: 会话ID，用于状态保持
+        thread_id: 会话ID
         checkpoint_saver: 状态保存器实例
+        user_id: 用户ID,用于权限控制
 
     Returns:
         Dict[str, Any]: 处理结果字典
@@ -159,22 +151,25 @@ def run_sql_assistant(
     # 编译图
     graph = graph_builder.compile(checkpointer=checkpoint_saver)
 
-    # 生成会话ID（如果未提供）
+    # 生成会话ID
     if thread_id is None:
         thread_id = str(uuid.uuid4())
 
     # 配置运行参数
     config = {
-        "configurable": {"thread_id": thread_id}
+        "configurable": {
+            "thread_id": thread_id,
+        }
     }
 
     # 仅在启用 Langfuse 时添加 callbacks
-    if os.getenv('LANGFUSE_ENABLED', 'false').lower() == 'true':
+    if os.getenv("LANGFUSE_ENABLED", "false").lower() == "true":
         config["callbacks"] = [create_langfuse_handler(thread_id)]
 
-    # 构造输入消息
+    # 构造输入状态
     state_input = {
-        "messages": [HumanMessage(content=query)]
+        "messages": [HumanMessage(content=query)],
+        "user_id": user_id,  # 在初始状态中加入用户ID
     }
 
     # 执行图

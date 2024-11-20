@@ -25,24 +25,6 @@ def route_after_intent(state: SQLAssistantState):
     return "keyword_extraction"
 
 
-def route_after_sql_generation(state: SQLAssistantState):
-    """SQL生成后的路由函数
-
-    根据SQL生成结果决定下一步操作。
-    如果生成成功则执行SQL，否则结束处理。
-
-    Args:
-        state: 当前状态对象
-
-    Returns:
-        str: 下一个节点的标识符
-    """
-    generated_sql = state.get("generated_sql", {})
-    if not generated_sql or not generated_sql.get('is_feasible'):
-        return END
-    return "sql_execution"
-
-
 def route_after_execution(state: SQLAssistantState):
     """SQL执行后的路由函数
 
@@ -75,11 +57,28 @@ def route_after_error_analysis(state: SQLAssistantState):
         str: 下一个节点的标识符
     """
     error_analysis_result = state.get("error_analysis_result", {})
+    error_analysis_result = state.get("error_analysis_result", {})
     if error_analysis_result.get("is_sql_fixable", False):
-        # 如果是可修复的SQL错误，更新生成的SQL并重新执行
         state["generated_sql"] = {
-            "is_feasible": True,
             "sql_query": error_analysis_result["fixed_sql"]
         }
         return "sql_execution"
-    return END  # 如果不是SQL问题，结束流程
+    return END
+
+
+def route_after_feasibility_check(state: SQLAssistantState):
+    """可行性检查后的路由函数
+    
+    根据可行性检查结果决定下一步操作。
+    如果查询可行则生成SQL，否则结束处理。
+    
+    Args:
+        state: 当前状态对象
+        
+    Returns:
+        str: 下一个节点的标识符
+    """
+    feasibility_check = state.get("feasibility_check", {})
+    if not feasibility_check or not feasibility_check.get('is_feasible'):
+        return END
+    return "sql_generation"
