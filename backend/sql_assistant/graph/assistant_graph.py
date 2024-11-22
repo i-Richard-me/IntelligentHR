@@ -23,6 +23,7 @@ from backend.sql_assistant.nodes.table_structure_node import (
     table_structure_analysis_node,
 )
 from backend.sql_assistant.nodes.sql_generation_node import sql_generation_node
+from backend.sql_assistant.nodes.permission_control_node import permission_control_node
 from backend.sql_assistant.nodes.sql_execution_node import sql_execution_node
 from backend.sql_assistant.nodes.error_analysis_node import error_analysis_node
 from backend.sql_assistant.nodes.result_generation_node import result_generation_node
@@ -32,6 +33,7 @@ from backend.sql_assistant.routes.node_routes import (
     route_after_execution,
     route_after_error_analysis,
     route_after_feasibility_check,
+    route_after_permission_check,
 )
 
 logger = logging.getLogger(__name__)
@@ -73,49 +75,53 @@ def build_sql_assistant_graph() -> StateGraph:
     graph_builder.add_node("table_structure_analysis", table_structure_analysis_node)
     graph_builder.add_node("feasibility_checking", feasibility_check_node)
     graph_builder.add_node("sql_generation", sql_generation_node)
+    # 添加权限控制节点
+    graph_builder.add_node("permission_control", permission_control_node)
     graph_builder.add_node("sql_execution", sql_execution_node)
     graph_builder.add_node("error_analysis", error_analysis_node)
     graph_builder.add_node("result_generation", result_generation_node)
 
     # 设置条件边
-    # 意图分析后的路由
     graph_builder.add_conditional_edges(
         "intent_analysis",
         route_after_intent,
         {"keyword_extraction": "keyword_extraction", END: END},
     )
 
-    # 可行性检查后的路由
     graph_builder.add_conditional_edges(
         "feasibility_checking",
         route_after_feasibility_check,
-        {
-            "sql_generation": "sql_generation",
-            END: END
-        }
+        {"sql_generation": "sql_generation", END: END},
     )
 
-    # SQL执行后的路由
+    graph_builder.add_conditional_edges(
+            "permission_control",
+            route_after_permission_check,
+            {
+                "sql_execution": "sql_execution",
+                "error_analysis": "error_analysis"
+            }
+        )
+
     graph_builder.add_conditional_edges(
         "sql_execution",
         route_after_execution,
         {"result_generation": "result_generation", "error_analysis": "error_analysis"},
     )
 
-    # 错误分析后的路由
     graph_builder.add_conditional_edges(
         "error_analysis",
         route_after_error_analysis,
         {"sql_execution": "sql_execution", END: END},
     )
 
-    # 添加基本流程边
+    # 修改基本流程边,添加权限控制节点
     graph_builder.add_edge("keyword_extraction", "domain_term_mapping")
     graph_builder.add_edge("domain_term_mapping", "query_rewrite")
     graph_builder.add_edge("query_rewrite", "data_source_identification")
     graph_builder.add_edge("data_source_identification", "table_structure_analysis")
     graph_builder.add_edge("table_structure_analysis", "feasibility_checking")
-    graph_builder.add_edge("sql_generation", "sql_execution")
+    graph_builder.add_edge("sql_generation", "permission_control")
     graph_builder.add_edge("result_generation", END)
 
     # 设置入口
@@ -128,7 +134,7 @@ def run_sql_assistant(
     query: str,
     thread_id: Optional[str] = None,
     checkpoint_saver: Optional[Any] = None,
-    user_id: Optional[int] = None,  # 新增用户ID参数
+    user_id: Optional[int] = None,
 ) -> Dict[str, Any]:
     """运行SQL助手
 
