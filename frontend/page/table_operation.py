@@ -91,7 +91,7 @@ def display_workflow():
 
             with col1:
                 image = Image.open("frontend/assets/table_operation_workflow.png")
-                st.image(image, caption="智能数据整理流程图", use_column_width=True)
+                st.image(image, caption="智能数据整理流程图", use_container_width=True)
 
             with col2:
                 st.markdown(
