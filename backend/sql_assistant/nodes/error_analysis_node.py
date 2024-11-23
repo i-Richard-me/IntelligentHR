@@ -6,11 +6,12 @@
 import logging
 from pydantic import BaseModel, Field
 from typing import Optional
+from langchain_core.messages import AIMessage
 
 from backend.sql_assistant.states.assistant_state import SQLAssistantState
 from backend.sql_assistant.utils.format_utils import (
     format_table_structures,
-    format_term_descriptions
+    format_term_descriptions,
 )
 from utils.llm_tools import init_language_model, LanguageModelChain
 
@@ -19,21 +20,17 @@ logger = logging.getLogger(__name__)
 
 class ErrorAnalysisResult(BaseModel):
     """SQL错误分析结果模型"""
+
+    error_analysis: str = Field(..., description="错误原因思考和分析")
     is_sql_fixable: bool = Field(
-        ...,
-        description="判断是否是可以通过修改SQL来解决的错误"
-    )
-    error_analysis: str = Field(
-        ...,
-        description="错误原因分析"
+        ..., description="判断是否是可以通过修改SQL来解决的错误"
     )
     fixed_sql: Optional[str] = Field(
-        None,
-        description="当错误可修复时，提供修正后的SQL语句"
+        None, description="当错误可修复时，提供修正后的SQL语句"
     )
+    user_feedback: Optional[str] = Field(None, description="面向用户的友好错误说明")
 
 
-# 系统提示词，保持原有定义
 ERROR_ANALYSIS_SYSTEM_PROMPT = """你是一个专业的数据分析师，负责分析SQL执行失败的原因并提供解决方案。
 请遵循以下规则进行分析：
 
@@ -55,11 +52,21 @@ ERROR_ANALYSIS_SYSTEM_PROMPT = """你是一个专业的数据分析师，负责�
    - 保持SQL的优化原则
    - 确保使用正确的表和字段名
 
-4. 输出要求：
+4. 用户反馈要求：
+   - 对于权限问题：
+     * 指出用户缺少哪些表的访问权限
+     * 用自然语言表示表名，不要泄露数据库的表名
+     * 建议用户联系数据团队申请相应权限
+   - 对于不可修复的其他问题：
+     * 用通俗易懂的语言解释问题
+     * 提供明确的后续处理建议
+     * 适当表达歉意
+
+5. 输出要求：
    - 明确指出是否可以通过修改SQL修复
    - 详细解释错误原因
    - 对于可修复错误，提供修正后的SQL
-   - 对于不可修复错误，说明需要采取的其他解决方案"""
+   - 对于不可修复错误，提供用户友好的反馈信息"""
 
 ERROR_ANALYSIS_USER_PROMPT = """请分析以下SQL执行失败的原因并提供解决方案：
 
@@ -78,18 +85,12 @@ ERROR_ANALYSIS_USER_PROMPT = """请分析以下SQL执行失败的原因并提供
 5. 错误信息：
 {error_message}
 
-请分析错误原因，判断是否可以通过修改SQL修复，并按照指定的JSON格式输出分析结果。"""
+请分析错误原因，判断是否可以通过修改SQL修复，并按照指定的JSON格式输出分析结果。
+"""
 
 
 def create_error_analysis_chain(temperature: float = 0.0) -> LanguageModelChain:
-    """创建错误分析任务链
-
-    Args:
-        temperature: 模型温度参数，控制输出的随机性
-
-    Returns:
-        LanguageModelChain: 配置好的错误分析任务链
-    """
+    """创建错误分析任务链"""
     llm = init_language_model(temperature=temperature)
 
     return LanguageModelChain(
@@ -114,11 +115,11 @@ def error_analysis_node(state: SQLAssistantState) -> dict:
     """
     # 获取执行结果
     execution_result = state.get("execution_result", {})
-    if not execution_result or execution_result.get('success', True):
+    if not execution_result or execution_result.get("success", True):
         return {"error": "状态中未找到失败的执行结果"}
 
     generated_sql = state.get("generated_sql", {})
-    if not generated_sql or not generated_sql.get('sql_query'):
+    if not generated_sql or not generated_sql.get("sql_query"):
         return {"error": "状态中未找到生成的SQL"}
 
     try:
@@ -130,21 +131,28 @@ def error_analysis_node(state: SQLAssistantState) -> dict:
                 state.get("domain_term_mappings", {})
             ),
             "failed_sql": generated_sql["sql_query"],
-            "error_message": execution_result["error"]
+            "error_message": execution_result["error"],
         }
 
         # 创建并执行错误分析链
         analysis_chain = create_error_analysis_chain()
         result = analysis_chain.invoke(input_data)
 
-        # 更新状态
-        return {
+        # 构造返回结果
+        response = {
             "error_analysis_result": {
                 "is_sql_fixable": result["is_sql_fixable"],
                 "error_analysis": result["error_analysis"],
-                "fixed_sql": result["fixed_sql"] if result["is_sql_fixable"] else None
+                "fixed_sql": result["fixed_sql"] if result["is_sql_fixable"] else None,
+                "user_feedback": result["user_feedback"]
             }
         }
+
+        # 只有在有用户反馈时才添加消息
+        if result.get("user_feedback"):
+            response["messages"] = [AIMessage(content=result["user_feedback"])]
+
+        return response
 
     except Exception as e:
         error_msg = f"错误分析过程出错: {str(e)}"

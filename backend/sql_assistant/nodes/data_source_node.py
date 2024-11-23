@@ -41,7 +41,7 @@ class DataSourceMatcher:
     def find_relevant_tables(
         self,
         query: str,
-        top_k: int = 1
+        top_k: int = 2
     ) -> List[Dict[str, Any]]:
         """识别与查询最相关的数据表
 

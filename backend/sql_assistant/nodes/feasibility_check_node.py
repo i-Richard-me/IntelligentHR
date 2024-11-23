@@ -119,8 +119,7 @@ def feasibility_check_node(state: SQLAssistantState) -> dict:
         }
 
         if not result["is_feasible"] and result["infeasible_reason"]:
-            response["messages"] = [
-                AIMessage(content=result["infeasible_reason"])]
+            response["messages"] = [AIMessage(content=result["infeasible_reason"])]
 
         return response
 
