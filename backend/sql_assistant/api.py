@@ -52,17 +52,20 @@ class QueryResponse(BaseModel):
 checkpoint_saver = MemorySaver()
 user_mapper = UserMapper()
 
+USER_AUTH_ENABLED = os.getenv("USER_AUTH_ENABLED").lower() == "true"
 
 @app.post("/api/sql-assistant", response_model=QueryResponse)
 async def process_query(request: QueryRequest) -> QueryResponse:
     """处理SQL查询请求"""
     try:
-        # 查询用户ID
-        user_id = user_mapper.get_user_id(request.username)
-        if user_id is None and request.username != "anonymous":
-            raise HTTPException(
-                status_code=404, detail=f"用户 {request.username} 不存在或已禁用"
-            )
+        # 根据环境变量决定是否进行用户权限控制
+        user_id = None
+        if USER_AUTH_ENABLED:
+            user_id = user_mapper.get_user_id(request.username)
+            if user_id is None and request.username != "anonymous":
+                raise HTTPException(
+                    status_code=404, detail=f"用户 {request.username} 不存在或已禁用"
+                )
 
         # 运行SQL助手
         result = run_sql_assistant(
