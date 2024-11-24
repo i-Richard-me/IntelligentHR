@@ -2,9 +2,9 @@ from typing import List, Literal
 from pydantic import BaseModel, Field
 
 
-class ClassificationResult(BaseModel):
+class ContentAnalysisResult(BaseModel):
     """
-    定义文本分类的输出格式。
+    定义文本内容分析的输出格式。
 
     包含回复的有效性、情感倾向和是否包含敏感信息。
     """
@@ -20,9 +20,9 @@ class ClassificationResult(BaseModel):
     )
 
 
-class ClassificationInput(BaseModel):
+class ContentAnalysisInput(BaseModel):
     """
-    定义文本分类的输入格式。
+    定义文本内容分析的输入格式。
 
     包含需要分类的文本和文本的上下文或主题。
     """
@@ -32,7 +32,7 @@ class ClassificationInput(BaseModel):
 
 
 # 系统提示词，用于指导AI模型进行文本分类
-CLASSIFICATION_SYSTEM_PROMPT = """
+CONTENT_ANALYSIS_SYSTEM_PROMPT = """
 作为一个NLP专家，你需要评估给出的{context}中的回复文本。请按照以下步骤操作：
 
 1. 回复有效性判断：若回复非常短，如一个词、符号或空白，判断为"无效"。超过10个字即为"有效"。
@@ -52,7 +52,7 @@ CLASSIFICATION_SYSTEM_PROMPT = """
 """
 
 # 人类提示词，用于提供待分类的文本
-CLASSIFICATION_HUMAN_PROMPT = """
+CONTENT_ANALYSIS_HUMAN_PROMPT = """
 请对以下文本进行分类：
 
 {text}

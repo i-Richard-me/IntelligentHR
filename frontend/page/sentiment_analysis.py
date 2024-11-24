@@ -11,12 +11,12 @@ project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..
 sys.path.append(project_root)
 
 from frontend.ui_components import show_sidebar, show_footer, apply_common_styles
-from backend.text_processing.classification.classification_workflow import (
-    TextClassificationWorkflow,
+from backend.text_processing.classification.content_analysis_workflow import (
+    TextContentAnalysisWorkflow,
 )
-from backend.text_processing.classification.classification_core import (
-    ClassificationInput,
-    ClassificationResult,
+from backend.text_processing.classification.content_analysis_core import (
+    ContentAnalysisInput,
+    ContentAnalysisResult,
 )
 
 import uuid
@@ -30,7 +30,7 @@ apply_common_styles()
 show_sidebar()
 
 # 初始化文本分类工作流
-workflow = TextClassificationWorkflow()
+workflow = TextContentAnalysisWorkflow()
 
 
 # 初始化会话状态
@@ -52,7 +52,7 @@ def initialize_session_state():
 initialize_session_state()
 
 
-def display_classification_result(result: ClassificationResult):
+def display_classification_result(result: ContentAnalysisResult):
     """将分析结果显示为表格"""
     df = pd.DataFrame(
         {
@@ -66,11 +66,11 @@ def display_classification_result(result: ClassificationResult):
 
 async def batch_classify(texts: List[str], context: str, progress_bar, status_area):
     total_texts = len(texts)
-    workflow = TextClassificationWorkflow()
+    workflow = TextContentAnalysisWorkflow()
     results = []
 
     async def process_batch(batch):
-        batch_results = await workflow.async_batch_classify(
+        batch_results = await workflow.async_batch_analyze(
             batch, context, st.session_state.session_id, max_concurrency=3
         )
         results.extend(batch_results)
@@ -169,7 +169,7 @@ def main():
                             uuid.uuid4()
                         )  # 为单个分类任务生成新的session_id
                         with st.spinner("正在分析..."):
-                            input_data = ClassificationInput(
+                            input_data = ContentAnalysisInput(
                                 text=text_to_classify,
                                 context=st.session_state.context,
                             )
@@ -250,7 +250,7 @@ def main():
         st.markdown("## 分析结果")
         with st.container(border=True):
             if isinstance(
-                st.session_state.classification_results, ClassificationResult
+                st.session_state.classification_results, ContentAnalysisResult
             ):
                 # 单个文本分类结果
                 display_classification_result(st.session_state.classification_results)
