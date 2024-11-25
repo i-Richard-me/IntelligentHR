@@ -12,7 +12,7 @@ from backend.sql_assistant.utils.format_utils import format_term_descriptions
 from utils.vector_db_utils import (
     connect_to_milvus,
     initialize_vector_store,
-    search_in_milvus
+    search_in_milvus,
 )
 from utils.llm_tools import CustomEmbeddings
 
@@ -36,13 +36,11 @@ class DomainTermMapper:
         self.embeddings = CustomEmbeddings(
             api_key=os.getenv("EMBEDDING_API_KEY", ""),
             api_url=os.getenv("EMBEDDING_API_BASE", ""),
-            model=os.getenv("EMBEDDING_MODEL", "")
+            model=os.getenv("EMBEDDING_MODEL", ""),
         )
 
     def find_standard_terms(
-        self,
-        keywords: List[str],
-        similarity_threshold: float = 0.9
+        self, keywords: List[str], similarity_threshold: float = 0.9
     ) -> Dict[str, Dict[str, str]]:
         """查找关键词对应的标准术语及其信息
 
@@ -61,19 +59,19 @@ class DomainTermMapper:
         for keyword in keywords:
             try:
                 query_vector = self.embeddings.embed_query(keyword)
-                
+
                 results = search_in_milvus(
                     collection=self.collection,
                     query_vector=query_vector,
                     vector_field="original_term",
-                    top_k=1
+                    top_k=1,
                 )
 
                 if results and results[0]["distance"] > similarity_threshold:
                     term_mappings[keyword] = {
                         "original_term": results[0]["original_term"],
                         "standard_name": results[0]["standard_name"],
-                        "additional_info": results[0]["additional_info"]
+                        "additional_info": results[0]["additional_info"],
                     }
 
             except Exception as e:
@@ -105,15 +103,12 @@ def domain_term_mapping_node(state: SQLAssistantState) -> dict:
         # 执行术语标准化
         term_mappings = standardizer.find_standard_terms(keywords)
 
+        logger.info(f"术语映射结果: {term_mappings}")
+
         # 更新状态
-        return {
-            "domain_term_mappings": term_mappings
-        }
+        return {"domain_term_mappings": term_mappings}
 
     except Exception as e:
         error_msg = f"业务术语规范化过程出错: {str(e)}"
         logger.error(error_msg)
-        return {
-            "domain_term_mappings": {},
-            "error": error_msg
-        }
+        return {"domain_term_mappings": {}, "error": error_msg}
