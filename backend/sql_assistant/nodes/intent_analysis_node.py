@@ -6,10 +6,13 @@
 from typing import Optional
 from pydantic import BaseModel, Field
 from langchain_core.messages import AIMessage
+import logging
 
 from backend.sql_assistant.states.assistant_state import SQLAssistantState
 from backend.sql_assistant.utils.format_utils import format_conversation_history
 from utils.llm_tools import init_language_model, LanguageModelChain
+
+logger = logging.getLogger(__name__)
 
 
 class QueryIntentAnalysis(BaseModel):
@@ -94,6 +97,7 @@ def intent_analysis_node(state: SQLAssistantState) -> dict:
 
     # 执行分析
     result = analysis_chain.invoke({"query": dialogue_history})
+    logger.info(f"意图分析结果: 意图清晰度={result['is_intent_clear']}, 澄清问题={result.get('clarification_question')}")
 
     # 如果意图不明确，添加一个助手消息询问澄清
     response = {}

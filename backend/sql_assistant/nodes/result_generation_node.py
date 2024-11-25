@@ -141,6 +141,7 @@ def result_generation_node(state: SQLAssistantState) -> dict:
 
     try:
         # 准备输入数据
+        generated_sql = state.get("generated_sql", {})
         input_data = {
             "rewritten_query": state["rewritten_query"],
             "row_count": execution_result["row_count"],
@@ -150,12 +151,14 @@ def result_generation_node(state: SQLAssistantState) -> dict:
                 state.get("domain_term_mappings", {})
             ),
             "data_source": state.get("matched_tables", [{}])[0].get("table_name", "未知数据源"),
-            "sql_query": execution_result.get("executed_sql", "未知SQL查询")
+            "sql_query": generated_sql.get("sql_query", "未知SQL查询")
         }
 
         # 创建并执行结果生成链
         generation_chain = create_result_generation_chain()
         result = generation_chain.invoke(input_data)
+        
+        logger.info(f"结果生成完成: {result['result_description'][:100]}...")
 
         # 将结果描述和完整表格结果组合在一起
         formatted_table = format_full_results(execution_result)

@@ -5,10 +5,13 @@
 
 from pydantic import BaseModel, Field
 from typing import List
+import logging
 
 from backend.sql_assistant.states.assistant_state import SQLAssistantState
 from backend.sql_assistant.utils.format_utils import format_conversation_history
 from utils.llm_tools import init_language_model, LanguageModelChain
+
+logger = logging.getLogger(__name__)
 
 
 class QueryKeywordExtraction(BaseModel):
@@ -97,6 +100,8 @@ def keyword_extraction_node(state: SQLAssistantState) -> dict:
     result = extraction_chain.invoke({
         "dialogue_history": dialogue_history
     })
+    
+    logger.info(f"提取到的关键词: {result['keywords']}")
 
     # 更新状态
     return {

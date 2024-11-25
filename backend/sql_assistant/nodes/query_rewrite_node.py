@@ -4,6 +4,7 @@
 """
 
 from pydantic import BaseModel, Field
+import logging
 
 from backend.sql_assistant.states.assistant_state import SQLAssistantState
 from backend.sql_assistant.utils.format_utils import (
@@ -11,6 +12,8 @@ from backend.sql_assistant.utils.format_utils import (
     format_term_descriptions
 )
 from utils.llm_tools import init_language_model, LanguageModelChain
+
+logger = logging.getLogger(__name__)
 
 
 class QueryRewrite(BaseModel):
@@ -102,6 +105,8 @@ def query_rewrite_node(state: SQLAssistantState) -> dict:
         "dialogue_history": dialogue_history,
         "term_descriptions": term_descriptions
     })
+    
+    logger.info(f"查询改写完成，改写结果: {result['rewritten_query']}")
 
     # 更新状态
     return {
