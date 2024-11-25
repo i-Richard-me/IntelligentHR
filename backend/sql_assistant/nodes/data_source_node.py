@@ -72,7 +72,8 @@ class DataSourceMatcher:
                 {
                     "table_name": result["table_name"],
                     "description": result["description"],
-                    "similarity_score": result["distance"]
+                    "similarity_score": result["distance"],
+                    "additional_info": result.get("additional_info", "")
                 }
                 for result in results
             ]
@@ -104,6 +105,8 @@ def data_source_identification_node(state: SQLAssistantState) -> dict:
 
         # 执行数据表匹配
         matched_tables = matcher.find_relevant_tables(rewritten_query)
+        
+        logger.info(f"匹配到的相关数据表: {[table['table_name'] for table in matched_tables]}")
 
         # 更新状态
         return {
