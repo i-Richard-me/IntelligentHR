@@ -130,13 +130,17 @@ def error_analysis_node(state: SQLAssistantState) -> dict:
             "term_descriptions": format_term_descriptions(
                 state.get("domain_term_mappings", {})
             ),
-            "failed_sql": generated_sql["sql_query"],
+            "failed_sql": generated_sql.get("permission_controlled_sql", ""),
             "error_message": execution_result["error"],
         }
 
         # 创建并执行错误分析链
         analysis_chain = create_error_analysis_chain()
         result = analysis_chain.invoke(input_data)
+        
+        logger.info(f"错误分析结果: 是否可修复={result['is_sql_fixable']}")
+        if result['is_sql_fixable'] and result['fixed_sql']:
+            logger.info(f"修复后的SQL: {result['fixed_sql']}")
 
         # 构造返回结果
         response = {

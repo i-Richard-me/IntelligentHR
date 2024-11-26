@@ -128,7 +128,7 @@ def sql_execution_node(state: SQLAssistantState) -> dict:
         sql_query = error_analysis["fixed_sql"]
     else:
         generated_sql = state.get("generated_sql", {})
-        if not generated_sql or not generated_sql.get('sql_query'):
+        if not generated_sql:
             return {
                 "execution_result": {
                     'success': False,
@@ -136,7 +136,17 @@ def sql_execution_node(state: SQLAssistantState) -> dict:
                 },
                 "retry_count": retry_count
             }
-        sql_query = generated_sql['sql_query']
+        
+        # 使用注入权限后的SQL
+        sql_query = generated_sql.get('permission_controlled_sql')
+        if not sql_query:
+            return {
+                "execution_result": {
+                    'success': False,
+                    'error': "状态中未找到权限控制后的SQL查询语句"
+                },
+                "retry_count": retry_count
+            }
 
     try:
         # 创建执行器实例
@@ -145,11 +155,16 @@ def sql_execution_node(state: SQLAssistantState) -> dict:
         # 执行SQL
         result = executor.execute_query(sql_query)
 
+        if result['success']:
+            logger.info(f"SQL执行成功: 返回 {result['row_count']} 条记录")
+        else:
+            logger.info(f"SQL执行失败: {result['error']}")
+
         # 在执行结果中添加额外信息
         result.update({
-            'sql_source': sql_source,  # 记录SQL来源
-            'executed_sql': sql_query,  # 记录实际执行的SQL
-            'retry_number': retry_count  # 记录这是第几次重试
+            'sql_source': sql_source,
+            'executed_sql': sql_query,
+            'retry_number': retry_count
         })
 
         # 更新状态
