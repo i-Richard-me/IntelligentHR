@@ -48,8 +48,8 @@ def merge_python_files(directory: str, output_file: str):
 
 if __name__ == '__main__':
     # 设置源代码目录和输出文件路径
-    source_dir = '../backend/sql_assistant'
-    output_path = '../data/temp/function_code.py'
+    source_dir = 'backend/text_processing/classification'
+    output_path = 'data/temp/function_code.py'
     
     # 执行合并
     merge_python_files(source_dir, output_path)
