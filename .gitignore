@@ -170,8 +170,8 @@ data/temp/*
 !data/temp/.gitkeep
 data/ml_models/*
 
-# Test
-test/
+# Tests
+tests/
 
 # MacOS
 .DS_Store

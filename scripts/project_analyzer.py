@@ -17,47 +17,54 @@ def analyze_project(directory):
     complexity_counts = {"A": 0, "B": 0, "C": 0, "D": 0, "E": 0, "F": 0}
 
     for root, _, files in os.walk(directory):
+
+        if "tests" in root.split(os.path.sep):
+            continue
+            
         for file in files:
             if file.endswith(".py"):
                 file_path = os.path.join(root, file)
-                with open(file_path, "r", encoding="utf-8") as f:
-                    content = f.read()
+                try:
+                    with open(file_path, "r", encoding="utf-8") as f:
+                        content = f.read()
 
-                # 原始指标分析
-                analysis = analyze(content)
-                total_loc += analysis.loc
-                total_sloc += analysis.sloc
-                total_comments += analysis.comments
-                total_multi += analysis.multi
-                total_blank += analysis.blank
-                total_files += 1
+                    # 原始指标分析
+                    analysis = analyze(content)
+                    total_loc += analysis.loc
+                    total_sloc += analysis.sloc
+                    total_comments += analysis.comments
+                    total_multi += analysis.multi
+                    total_blank += analysis.blank
+                    total_files += 1
 
-                # 圈复杂度分析
-                complexity = cc_visit(content)
-                if complexity:
-                    file_max_complexity = max(item.complexity for item in complexity)
-                    max_complexity = max(max_complexity, file_max_complexity)
-                    total_complexity += sum(item.complexity for item in complexity)
+                    # 圈复杂度分析
+                    try:
+                        complexity = cc_visit(content)
+                        if complexity:
+                            file_max_complexity = max(item.complexity for item in complexity)
+                            max_complexity = max(max_complexity, file_max_complexity)
+                            total_complexity += sum(item.complexity for item in complexity)
 
-                    for item in complexity:
-                        if item.complexity <= 5:
-                            complexity_counts["A"] += 1
-                        elif item.complexity <= 10:
-                            complexity_counts["B"] += 1
-                        elif item.complexity <= 20:
-                            complexity_counts["C"] += 1
-                        elif item.complexity <= 30:
-                            complexity_counts["D"] += 1
-                        elif item.complexity <= 40:
-                            complexity_counts["E"] += 1
-                        else:
-                            complexity_counts["F"] += 1
+                            for item in complexity:
+                                if item.complexity <= 5:
+                                    complexity_counts["A"] += 1
+                                elif item.complexity <= 10:
+                                    complexity_counts["B"] += 1
+                                elif item.complexity <= 20:
+                                    complexity_counts["C"] += 1
+                                elif item.complexity <= 30:
+                                    complexity_counts["D"] += 1
+                                elif item.complexity <= 40:
+                                    complexity_counts["E"] += 1
+                                else:
+                                    complexity_counts["F"] += 1
+                    except SyntaxError:
+                        print(f"警告: 无法分析文件的复杂度: {file_path}")
+                        continue
 
-                # Halstead 指标
-                h_visit_result = h_visit(content)
-                if h_visit_result:
-                    # 这里可以添加 Halstead 指标的处理，如果需要的话
-                    pass
+                except Exception as e:
+                    print(f"警告: 处理文件时出错 {file_path}: {str(e)}")
+                    continue
 
     return {
         "total_files": total_files,
