@@ -78,6 +78,7 @@ def table_structure_analysis_node(state: SQLAssistantState) -> dict:
 
     解析匹配到的数据表的详细结构信息，
     为后续的SQL生成提供必要的表结构信息。
+    当某个表结构解析失败时，会跳过该表继续处理其他表。
 
     Args:
         state: 当前状态对象
@@ -97,16 +98,29 @@ def table_structure_analysis_node(state: SQLAssistantState) -> dict:
         # 创建结构解析器
         parser = DatabaseSchemaParser()
         table_structures = []
+        failed_tables = []
 
         # 获取每个匹配表的结构
         for table in matched_tables:
-            structure = parser.get_table_structure(table["table_name"])
-            structure["description"] = table.get("description", "")
-            table_structures.append(structure)
+            try:
+                structure = parser.get_table_structure(table["table_name"])
+                structure["description"] = table.get("description", "")
+                structure["additional_info"] = table.get("additional_info", "")
+                table_structures.append(structure)
+            except Exception as table_error:
+                # 记录失败的表
+                failed_tables.append({
+                    "table_name": table["table_name"],
+                    "error": str(table_error)
+                })
+                logger.warning(f"表 {table['table_name']} 结构解析失败: {str(table_error)}")
+                continue
 
-        # 更新状态
+        logger.info(f"表结构分析完成，成功解析 {len(table_structures)} 个表的结构，失败 {len(failed_tables)} 个表")
+        
         return {
-            "table_structures": table_structures
+            "table_structures": table_structures,
+            "failed_tables": failed_tables
         }
 
     except Exception as e:
@@ -114,5 +128,6 @@ def table_structure_analysis_node(state: SQLAssistantState) -> dict:
         logger.error(error_msg)
         return {
             "table_structures": [],
+            "failed_tables": [],
             "error": error_msg
         }
