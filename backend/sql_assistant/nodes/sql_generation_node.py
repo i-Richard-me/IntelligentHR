@@ -5,6 +5,7 @@ SQL生成节点模块。
 
 from pydantic import BaseModel, Field
 from typing import Optional
+import logging
 
 from backend.sql_assistant.states.assistant_state import SQLAssistantState
 from backend.sql_assistant.utils.format_utils import (
@@ -12,6 +13,8 @@ from backend.sql_assistant.utils.format_utils import (
     format_term_descriptions
 )
 from utils.llm_tools import init_language_model, LanguageModelChain
+
+logger = logging.getLogger(__name__)
 
 
 class SQLGenerationResult(BaseModel):
@@ -31,12 +34,15 @@ SQL_GENERATION_SYSTEM_PROMPT = """你是一个专业的数据分析师，负责�
    - 正确处理NULL值
    - 使用适当的聚合函数和分组
    - 当涉及到日期字段，注意将字符串或文本形式存储的日期字段转换为日期格式
+   - 如果查询涉及到业务术语解释中提供的相关信息，应参考其标准名称(如有)或使用说明(additional_info)来构建查询条件
 
 2. 优化建议：
-   - 只选择与查询需求相关的必要字段，控制在5个字段以内
+   - 选择与查询需求最相关的字段。除非用户指定，否则控制在5个字段以内
    - 避免使用SELECT *
    - 添加适当的WHERE条件
-   - 对于容易存在表述不精准的字段，如项目名称等，使用'%%keyword%%'进行模糊匹配"""
+   - 对于容易存在表述不精准的字段，如项目名称等，使用'%%keyword%%'进行模糊匹配
+   - 对于统计类查询，如果数据表中包含员工类型字段，除非用户明确指定其他条件，默认只统计正式员工数据(emp_class_type in ('0', '3'))
+"""
 
 
 SQL_GENERATION_USER_PROMPT = """请根据以下信息生成SQL查询语句：
@@ -47,7 +53,7 @@ SQL_GENERATION_USER_PROMPT = """请根据以下信息生成SQL查询语句：
 2. 可用的表结构：
 {table_structures}
 
-3. 检索到的业务术语信息(如果存在)：
+3. 业务术语解释(如果存在)：
 {term_descriptions}
 
 请生成标准的SQL查询语句，并以指定的JSON格式输出结果。"""
@@ -83,6 +89,8 @@ def sql_generation_node(state: SQLAssistantState) -> dict:
 
         generation_chain = create_sql_generation_chain()
         result = generation_chain.invoke(input_data)
+        
+        logger.info(f"生成的SQL查询: {result['sql_query']}")
 
         return {
             "generated_sql": {

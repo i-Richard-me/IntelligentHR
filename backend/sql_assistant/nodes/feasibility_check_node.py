@@ -5,6 +5,7 @@
 
 from pydantic import BaseModel, Field
 from typing import Optional
+import logging
 
 from backend.sql_assistant.states.assistant_state import SQLAssistantState
 from backend.sql_assistant.utils.format_utils import (
@@ -14,6 +15,8 @@ from backend.sql_assistant.utils.format_utils import (
 from utils.llm_tools import init_language_model, LanguageModelChain
 from langchain.schema import AIMessage
 
+logger = logging.getLogger(__name__)
+
 
 class FeasibilityCheckResult(BaseModel):
     """数据源匹配度评估结果
@@ -21,11 +24,14 @@ class FeasibilityCheckResult(BaseModel):
     评估给定的数据表结构是否包含回答用户查询所需的必要信息
     """
 
+    feasible_analysis: str = Field(
+        ..., description="评估判断的详细思考过程"
+    )
     is_feasible: bool = Field(
         ..., description="表示现有数据表是否包含回答用户查询所需的全部必要信息"
     )
-    infeasible_reason: Optional[str] = Field(
-        None, description="当数据表无法满足查询需求时,详细说明缺失的必要信息"
+    user_feedback: Optional[str] = Field(
+        None, description="当数据表无法满足查询需求时，面向用户的友好反馈信息"
     )
 
 
@@ -56,11 +62,20 @@ FEASIBILITY_CHECK_SYSTEM_PROMPT = """你是一位专业的数据分析专家,需
    - 数据表虽有相关字段但无法保证数据完整性
    - 需要通过复杂推导才能得到查询结果
 
-5. 结果说明要求
-   当判定为不匹配时,infeasible_reason必须清晰说明:
-   - 数据表与查询需求的具体差异
-   - 数据完整性或准确性方面的局限
-   - 为什么现有数据无法得到准确结果"""
+5. 输出要求：
+   a) feasible_analysis需要包含:
+      - 识别用户查询的核心数据需求
+      - 分析现有数据表的关键信息
+      - 说明匹配或不匹配的主要原因
+      - 保持简洁的思考过程记录
+   
+   b) 当判定为不匹配时，user_feedback需要:
+      - 简明扼要地告知用户原因
+      - 区分两种情况：
+        * 数据库中没有用户查询相关的数据表
+        * 存在相关表但缺少必要的字段信息
+      - 使用自然语言描述表名和字段，不暴露数据库表名
+"""
 
 
 FEASIBILITY_CHECK_USER_PROMPT = """请评估以下数据表是否包含足够信息来回答用户查询:
@@ -108,18 +123,20 @@ def feasibility_check_node(state: SQLAssistantState) -> dict:
 
         check_chain = create_feasibility_check_chain()
         result = check_chain.invoke(input_data)
+        
+        logger.info(f"可行性检查结果: {'通过' if result['is_feasible'] else '不通过'}" + 
+                   (f", 原因: {result['user_feedback']}" if not result['is_feasible'] else ""))
 
         response = {
             "feasibility_check": {
                 "is_feasible": result["is_feasible"],
-                "infeasible_reason": (
-                    result["infeasible_reason"] if not result["is_feasible"] else None
-                ),
+                "feasible_analysis": result["feasible_analysis"],
+                "user_feedback": result["user_feedback"] if not result["is_feasible"] else None,
             }
         }
 
-        if not result["is_feasible"] and result["infeasible_reason"]:
-            response["messages"] = [AIMessage(content=result["infeasible_reason"])]
+        if not result["is_feasible"] and result["user_feedback"]:
+            response["messages"] = [AIMessage(content=result["user_feedback"])]
 
         return response
 
