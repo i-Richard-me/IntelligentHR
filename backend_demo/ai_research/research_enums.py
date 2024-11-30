@@ -1,4 +1,4 @@
-# backend/ai_research/research_enums.py
+# backend_demo/ai_research/research_enums.py
 
 from enum import Enum
 
