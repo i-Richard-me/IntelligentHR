@@ -13,6 +13,7 @@ from modules.text_analysis.workflows.content_analysis_result import (
 )
 from langfuse.callback import CallbackHandler
 
+
 class TextContentAnalysisWorkflow:
     """文本内容分析工作流程类"""
 
@@ -42,7 +43,8 @@ class TextContentAnalysisWorkflow:
             分析结果，包含有效性、情感倾向和敏感信息标识
         """
         session_id = session_id or str(uuid.uuid4())
-        langfuse_handler = create_langfuse_handler(session_id, "content_analysis")
+        langfuse_handler = create_langfuse_handler(
+            session_id, "content_analysis")
 
         result = self.analysis_chain.invoke(
             {
@@ -66,7 +68,8 @@ class TextContentAnalysisWorkflow:
             分析结果，包含有效性、情感倾向和敏感信息标识
         """
         session_id = session_id or str(uuid.uuid4())
-        langfuse_handler = create_langfuse_handler(session_id, "content_analysis")
+        langfuse_handler = create_langfuse_handler(
+            session_id, "content_analysis")
 
         result = await self.analysis_chain.ainvoke(
             {
@@ -100,6 +103,7 @@ class TextContentAnalysisWorkflow:
 
         tasks = [analyze_with_semaphore(text) for text in texts]
         return await asyncio.gather(*tasks)
+
 
 def create_langfuse_handler(session_id: str, step: str) -> CallbackHandler:
     """创建Langfuse回调处理器
