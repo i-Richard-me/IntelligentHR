@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException, Response
+from fastapi.responses import FileResponse
 from typing import List
 import logging
 from modules.text_analysis.models import (
@@ -139,3 +140,27 @@ async def list_tasks(
     ).order_by(AnalysisTask.created_at.desc()).all()
     
     return [TaskResponse(**task.to_dict()) for task in tasks]
+
+@router.get("/tasks/{task_id}/download")
+async def download_result(
+    task_id: str,
+    user_id: str = Depends(get_user_id),
+    db = Depends(get_db)
+):
+    """下载分析结果"""
+    task = db.query(AnalysisTask).filter(
+        AnalysisTask.task_id == task_id,
+        AnalysisTask.user_id == user_id
+    ).first()
+    
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+        
+    if not task.result_file_url:
+        raise HTTPException(status_code=400, detail="Result file not available")
+        
+    return FileResponse(
+        task.result_file_url,
+        filename=f"analysis_result_{task.task_id}.csv",
+        media_type='text/csv'
+    )
