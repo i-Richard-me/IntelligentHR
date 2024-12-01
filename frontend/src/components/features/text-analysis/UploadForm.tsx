@@ -27,7 +27,6 @@ import {
 } from '@/components/ui/form';
 import { useToast } from '@/hooks/use-toast';
 import { textAnalysisApi } from '@/services';
-import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
 
 const uploadFormSchema = z.object({
   file: z.custom<File>((v) => v instanceof File, {
@@ -91,9 +90,7 @@ export default function UploadForm({ open, onOpenChange, onSuccess }: UploadForm
       <DialogContent className="overflow-hidden p-0 md:max-w-[700px] lg:max-w-[800px]">
         <div className="p-6 pb-0">
           <DialogHeader>
-            <VisuallyHidden>
-              <DialogTitle>创建评估任务</DialogTitle>
-            </VisuallyHidden>
+            <DialogTitle>创建评估任务</DialogTitle>
             <DialogDescription>
               上传文本文件并设置评估要求，系统将自动分析文本内容并生成评估报告。
             </DialogDescription>

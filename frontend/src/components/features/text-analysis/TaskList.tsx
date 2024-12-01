@@ -50,9 +50,7 @@ export function TaskList({ tasks, onDownload }: TaskListProps) {
         <DataTableColumnHeader column={column} title="创建时间" />
       ),
       cell: ({ row }) => (
-        <div className="hidden md:block">
-          {formatDate(row.original.created_at)}
-        </div>
+        <div>{formatDate(row.original.created_at)}</div>
       ),
     },
     {
@@ -61,16 +59,11 @@ export function TaskList({ tasks, onDownload }: TaskListProps) {
         <DataTableColumnHeader column={column} title="分析上下文" />
       ),
       cell: ({ row }) => (
-        <div className="flex flex-col md:flex-row md:items-center gap-2">
-          <div className="flex items-center gap-2">
-            <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
-            <span className="truncate font-medium">
-              {row.original.context}
-            </span>
-          </div>
-          <div className="text-sm text-muted-foreground md:hidden">
-            {formatDate(row.original.created_at)}
-          </div>
+        <div className="flex items-center gap-2">
+          <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+          <span className="truncate font-medium">
+            {row.original.context}
+          </span>
         </div>
       ),
     },
@@ -85,7 +78,7 @@ export function TaskList({ tasks, onDownload }: TaskListProps) {
           <div className="flex items-center gap-2">
             <Badge variant={status.variant}>{status.label}</Badge>
             {row.original.error_message && (
-              <span className="hidden md:inline text-sm text-muted-foreground truncate max-w-[200px]">
+              <span className="text-sm text-muted-foreground truncate max-w-[200px]">
                 {row.original.error_message}
               </span>
             )}
@@ -101,7 +94,7 @@ export function TaskList({ tasks, onDownload }: TaskListProps) {
       cell: ({ row }) => {
         const task = row.original;
         return (
-          <div className="hidden md:block w-[80px] text-right">
+          <div className="w-[80px] text-right">
             {task.total_records?.toLocaleString() || '-'}
           </div>
         );
@@ -119,11 +112,8 @@ export function TaskList({ tasks, onDownload }: TaskListProps) {
         const percentage = total > 0 ? Math.round((processed / total) * 100) : 0;
         
         return (
-          <div className="w-full md:w-[120px]">
+          <div className="w-[120px]">
             <Progress value={percentage} />
-            <span className="text-xs text-muted-foreground md:hidden mt-1">
-              {processed} / {total} 行
-            </span>
           </div>
         );
       },
@@ -143,11 +133,10 @@ export function TaskList({ tasks, onDownload }: TaskListProps) {
               task.task_id, 
               `分析结果_${formatDate(task.created_at)}`
             )}
-            className="flex items-center gap-2 w-full md:w-auto justify-center"
+            className="flex items-center gap-2"
           >
             <Download className="h-4 w-4" />
-            <span className="md:hidden">下载结果</span>
-            <span className="hidden md:inline">下载</span>
+            <span>下载</span>
           </Button>
         );
       },
