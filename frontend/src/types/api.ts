@@ -19,6 +19,16 @@ export interface TaskCreateRequest {
 }
 
 /**
+ * 文本分类任务创建请求参数
+ */
+export interface ClassificationTaskCreateRequest {
+  file: File;
+  context: string;
+  categories: Record<string, string>;
+  is_multi_label: boolean;
+}
+
+/**
  * 任务详情响应
  */
 export interface TaskResponse {
@@ -34,6 +44,14 @@ export interface TaskResponse {
   total_records: number | null;
   processed_records: number | null;
   progress: string;
+}
+
+/**
+ * 文本分类任务响应
+ */
+export interface ClassificationTaskResponse extends TaskResponse {
+  categories: Record<string, string>;
+  is_multi_label: boolean;
 }
 
 /**
