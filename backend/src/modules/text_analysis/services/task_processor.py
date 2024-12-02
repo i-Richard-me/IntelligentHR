@@ -18,10 +18,10 @@ class TaskProcessor:
 
     def __init__(self):
         """初始化任务处理器"""
-        self.queue = TaskQueue()
+        self.queue = TaskQueue("analysis")
         self.file_service = FileService()
         self.analyzer = TextContentAnalysisWorkflow()
-        logger.info("任务处理器初始化完成")
+        logger.info("分析任务处理器初始化完成")
 
     async def process_task(self, task_id: str) -> None:
         """处理单个任务
