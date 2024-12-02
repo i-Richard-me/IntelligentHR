@@ -24,7 +24,7 @@ router = APIRouter(
 
 # 初始化服务
 file_service = FileService()
-task_queue = TaskQueue()
+task_queue = TaskQueue("analysis")
 
 @router.post(
     "/tasks", 
