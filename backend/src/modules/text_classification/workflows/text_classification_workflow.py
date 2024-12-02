@@ -1,7 +1,9 @@
+# modules/text_classification/workflows/text_classification_workflow.py
+
 import os
 import uuid
 import asyncio
-from typing import Union, List
+from typing import Union, List, Callable
 from common.utils.llm_tools import init_language_model, LanguageModelChain
 from .workflow_constants import (
     SINGLE_LABEL_CLASSIFICATION_SYSTEM_PROMPT,
@@ -38,39 +40,8 @@ class TextClassificationWorkflow:
             self.language_model,
         )()
 
-    def classify_text(
-        self, input_data: TextClassificationInput, session_id: str = None
-    ) -> Union[TextClassificationResult, MultiLabelTextClassificationResult]:
-        """执行单个文本分类任务
-
-        Args:
-            input_data: 包含待分类文本、上下文和分类规则的输入数据
-            session_id: 可选的会话ID
-
-        Returns:
-            分类结果，包含对应的类别（单标签或多标签）
-        """
-        session_id = session_id or str(uuid.uuid4())
-        langfuse_handler = create_langfuse_handler(
-            session_id, "text_classification")
-
-        chain = self.multi_label_chain if input_data.is_multi_label else self.single_label_chain
-
-        result = chain.invoke(
-            {
-                "text": input_data.text,
-                "context": input_data.context,
-                "categories": input_data.categories,
-            },
-            config={"callbacks": [langfuse_handler]},
-        )
-
-        if input_data.is_multi_label:
-            return MultiLabelTextClassificationResult(**result)
-        return TextClassificationResult(**result)
-
     async def async_classify_text(
-        self, input_data: TextClassificationInput, session_id: str = None
+            self, input_data: TextClassificationInput, session_id: str = None
     ) -> Union[TextClassificationResult, MultiLabelTextClassificationResult]:
         """异步执行单个文本分类任务
 
@@ -96,33 +67,27 @@ class TextClassificationWorkflow:
             config={"callbacks": [langfuse_handler]},
         )
 
-        # 处理字典格式的输出
         if input_data.is_multi_label:
             if isinstance(result, dict) and 'categories' in result:
-                # 如果结果是字典且包含categories字段
                 categories = result['categories']
-                # 确保categories是列表
                 if isinstance(categories, str):
                     categories = [categories]
                 return MultiLabelTextClassificationResult(categories=categories)
-            else:
-                # 如果结果格式不正确，返回空列表
-                return MultiLabelTextClassificationResult(categories=[])
+            return MultiLabelTextClassificationResult(categories=[])
         else:
             if isinstance(result, dict) and 'category' in result:
                 return TextClassificationResult(category=result['category'])
-            else:
-                # 如果结果格式不正确，返回"其他"类别
-                return TextClassificationResult(category="其他")
+            return TextClassificationResult(category="其他")
 
     async def async_batch_classify(
-        self,
-        texts: List[str],
-        context: str,
-        categories: dict,
-        is_multi_label: bool,
-        session_id: str,
-        max_concurrency: int = 3,
+            self,
+            texts: List[str],
+            context: str,
+            categories: dict,
+            is_multi_label: bool,
+            session_id: str,
+            max_concurrency: int = 3,
+            progress_callback: Callable[[int], None] = None,
     ) -> List[Union[TextClassificationResult, MultiLabelTextClassificationResult]]:
         """异步批量执行文本分类任务
 
@@ -133,13 +98,16 @@ class TextClassificationWorkflow:
             is_multi_label: 是否为多标签分类
             session_id: 批量任务的会话ID
             max_concurrency: 最大并发数
+            progress_callback: 进度回调函数，接收已完成的任务数量作为参数
 
         Returns:
             分类结果列表
         """
         semaphore = asyncio.Semaphore(max_concurrency)
+        results = [None] * len(texts)  # 预分配结果列表
+        completed_count = 0
 
-        async def classify_with_semaphore(text: str) -> Union[TextClassificationResult, MultiLabelTextClassificationResult]:
+        async def classify_with_semaphore(text: str, index: int):
             async with semaphore:
                 input_data = TextClassificationInput(
                     text=text,
@@ -147,10 +115,25 @@ class TextClassificationWorkflow:
                     categories=categories,
                     is_multi_label=is_multi_label
                 )
-                return await self.async_classify_text(input_data, session_id)
+                result = await self.async_classify_text(input_data, session_id)
+                results[index] = result  # 保持原始顺序
 
-        tasks = [classify_with_semaphore(text) for text in texts]
-        results = await asyncio.gather(*tasks)
+                nonlocal completed_count
+                completed_count += 1
+                if progress_callback:
+                    progress_callback(completed_count)
+
+                return result
+
+        # 创建所有任务
+        tasks = [
+            classify_with_semaphore(text, i)
+            for i, text in enumerate(texts)
+        ]
+
+        # 使用 as_completed 处理任务
+        for task in asyncio.as_completed(tasks):
+            await task  # 等待每个任务完成，但不需要其结果，因为已经存储在results中
 
         return results
 
