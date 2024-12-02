@@ -30,13 +30,17 @@ const data = {
   navMain: [
     {
       title: "文本分析",
-      url: "/text-analysis/review",
+      url: "/text-analysis",
       icon: FileText,
       isActive: true,
       items: [
         {
           title: "文本评估",
           url: "/text-analysis/review",
+        },
+        {
+          title: "文本分类",
+          url: "/text-analysis/classification",
         },
       ],
     },
