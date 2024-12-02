@@ -1,7 +1,9 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from api.v1 import v1_router
-from modules.text_analysis.services import TaskProcessor
+from modules.text_analysis.services import TaskProcessor as AnalysisTaskProcessor
+from modules.text_classification.services import TaskProcessor as ClassificationTaskProcessor
 from common.utils.env_loader import load_env
 from common.database.init_db import init_database
 import asyncio
@@ -15,11 +17,51 @@ logger = logging.getLogger(__name__)
 # 加载环境变量
 load_env()
 
+# 创建任务处理器实例
+analysis_processor = None
+classification_processor = None
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    应用程序生命周期管理器
+    处理启动和关闭事件
+    """
+    # 启动时的初始化代码
+    try:
+        # 初始化数据库
+        logger.info("正在初始化数据库...")
+        init_database()
+
+        # 启动文本分析任务处理器
+        logger.info("正在启动文本分析任务处理器...")
+        global analysis_processor
+        analysis_processor = AnalysisTaskProcessor()
+        asyncio.create_task(analysis_processor.start_processing())
+
+        # 启动文本分类任务处理器
+        logger.info("正在启动文本分类任务处理器...")
+        global classification_processor
+        classification_processor = ClassificationTaskProcessor()
+        asyncio.create_task(classification_processor.start_processing())
+
+        logger.info("所有任务处理器初始化完成")
+    except Exception as e:
+        logger.error(f"应用启动失败: {str(e)}")
+        raise
+
+    yield  # 应用运行中...
+
+    # 关闭时的清理代码
+    logger.info("正在关闭应用...")
+    # 这里可以添加需要的清理代码，比如关闭数据库连接等
+
 # 创建FastAPI应用
 app = FastAPI(
     title="Text Analysis API",
     description="文本分析服务API",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan  # 使用新的生命周期管理器
 )
 
 # 添加 CORS 配置
@@ -33,25 +75,6 @@ app.add_middleware(
 
 # 注册V1版本的路由
 app.include_router(v1_router, prefix="/api")
-
-
-@app.on_event("startup")
-async def startup_event():
-    """应用启动时初始化"""
-    try:
-        # 初始化数据库
-        logger.info("正在初始化数据库...")
-        init_database()
-
-        # 启动任务处理器
-        logger.info("正在启动任务处理器...")
-        processor = TaskProcessor()
-        asyncio.create_task(processor.start_processing())
-
-        logger.info("应用初始化完成")
-    except Exception as e:
-        logger.error(f"应用启动失败: {str(e)}")
-        raise
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
