@@ -1,3 +1,5 @@
+# modules/text_analysis/services/task_processor.py
+
 import asyncio
 import logging
 from sqlalchemy.orm import Session
@@ -10,9 +12,10 @@ from modules.text_analysis.models import TaskQueue
 
 logger = logging.getLogger(__name__)
 
+
 class TaskProcessor:
     """任务处理器类
-    
+
     处理文本分析任务的核心服务类
     """
 
@@ -25,7 +28,7 @@ class TaskProcessor:
 
     async def process_task(self, task_id: str) -> None:
         """处理单个任务
-        
+
         Args:
             task_id: 任务ID
         """
@@ -68,7 +71,7 @@ class TaskProcessor:
 
     async def _get_task(self, db: Session, task_id: str) -> Optional[AnalysisTask]:
         """获取任务信息
-        
+
         Args:
             db: 数据库会话
             task_id: 任务ID
@@ -79,10 +82,10 @@ class TaskProcessor:
         return db.query(AnalysisTask).filter(AnalysisTask.task_id == task_id).first()
 
     async def _update_task_status(
-        self, db: Session, task: AnalysisTask, status: TaskStatus
+            self, db: Session, task: AnalysisTask, status: TaskStatus
     ) -> None:
         """更新任务状态
-        
+
         Args:
             db: 数据库会话
             task: 任务对象
@@ -94,7 +97,7 @@ class TaskProcessor:
 
     async def _process_task_content(self, db: Session, task: AnalysisTask) -> None:
         """处理任务内容
-        
+
         Args:
             db: 数据库会话
             task: 任务对象
@@ -104,44 +107,66 @@ class TaskProcessor:
         task.total_records = len(df)
         db.commit()
 
-        # 读取原始文本并进行分析
         texts = df['text'].tolist()
-        results = await self.analyzer.async_batch_analyze(
-            texts=texts,
-            context=task.context,
-            session_id=task.task_id
-        )
+        last_update_count = 0  # 上次更新时的计数
 
-        # 合并结果
-        combined_results = []
-        for i, result_dict in enumerate(results):
-            combined_row = {
-                **df.iloc[i].to_dict(),  # 包含原始数据的所有列
-                'validity': result_dict.validity,
-                'sentiment_class': result_dict.sentiment_class,
-                'sensitive_info': result_dict.sensitive_info
-            }
-            combined_results.append(combined_row)
-            
-            # 更新处理进度
-            task.processed_records = i + 1
-            if (i + 1) % 10 == 0:  # 每处理10条记录提交一次
-                db.commit()
+        def update_progress(completed_count: int):
+            """更新任务进度，每10条记录更新一次
 
-        # 保存最终结果
-        result_file_path = self.file_service.save_results_to_csv(combined_results, task.task_id)
-        
-        # 更新任务状态
-        task.status = TaskStatus.COMPLETED
-        task.result_file_url = result_file_path
-        task.processed_records = task.total_records
-        db.commit()
+            Args:
+                completed_count: 已完成的记录数
+            """
+            nonlocal last_update_count
+            # 每10条记录更新一次，或者在处理完所有记录时更新
+            if completed_count == task.total_records or completed_count - last_update_count >= 10:
+                task.processed_records = completed_count
+                try:
+                    db.commit()
+                    last_update_count = completed_count
+                    logger.info(f"任务 {task.task_id} 进度更新: {completed_count}/{task.total_records}")
+                except Exception as e:
+                    logger.error(f"更新进度失败: {str(e)}")
+                    db.rollback()
+
+        try:
+            # 执行批量分析
+            results = await self.analyzer.async_batch_analyze(
+                texts=texts,
+                context=task.context,
+                session_id=task.task_id,
+                progress_callback=update_progress
+            )
+
+            # 合并结果
+            combined_results = []
+            for i, result in enumerate(results):
+                combined_row = {
+                    **df.iloc[i].to_dict(),  # 包含原始数据的所有列
+                    'validity': result.validity,
+                    'sentiment_class': result.sentiment_class,
+                    'sensitive_info': result.sensitive_info
+                }
+                combined_results.append(combined_row)
+
+            # 保存最终结果
+            result_file_path = self.file_service.save_results_to_csv(
+                combined_results, task.task_id)
+
+            # 更新任务状态为完成
+            task.status = TaskStatus.COMPLETED
+            task.result_file_url = result_file_path
+            task.processed_records = task.total_records
+            db.commit()
+
+        except Exception as e:
+            logger.error(f"处理任务内容失败: {str(e)}")
+            raise
 
     async def _handle_task_error(
-        self, db: Session, task_id: str, error_message: str
+            self, db: Session, task_id: str, error_message: str
     ) -> None:
         """处理任务错误
-        
+
         Args:
             db: 数据库会话
             task_id: 任务ID
