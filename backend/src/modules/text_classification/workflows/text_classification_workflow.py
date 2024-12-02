@@ -96,9 +96,24 @@ class TextClassificationWorkflow:
             config={"callbacks": [langfuse_handler]},
         )
 
+        # 处理字典格式的输出
         if input_data.is_multi_label:
-            return MultiLabelTextClassificationResult(**result)
-        return TextClassificationResult(**result)
+            if isinstance(result, dict) and 'categories' in result:
+                # 如果结果是字典且包含categories字段
+                categories = result['categories']
+                # 确保categories是列表
+                if isinstance(categories, str):
+                    categories = [categories]
+                return MultiLabelTextClassificationResult(categories=categories)
+            else:
+                # 如果结果格式不正确，返回空列表
+                return MultiLabelTextClassificationResult(categories=[])
+        else:
+            if isinstance(result, dict) and 'category' in result:
+                return TextClassificationResult(category=result['category'])
+            else:
+                # 如果结果格式不正确，返回"其他"类别
+                return TextClassificationResult(category="其他")
 
     async def async_batch_classify(
         self,
