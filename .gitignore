@@ -14,7 +14,7 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
+/lib/
 lib64/
 parts/
 sdist/
@@ -162,16 +162,13 @@ cython_debug/
 .idea/
 
 # Data
-data/llm_cache/*
-!data/llm_cache/.gitkeep
-data/datasets/*
-!data/datasets/.gitkeep
-data/temp/*
-!data/temp/.gitkeep
-data/ml_models/*
+/data
 
 # Tests
-tests/
+/tests
+
+# Config
+/config
 
 # MacOS
 .DS_Store
