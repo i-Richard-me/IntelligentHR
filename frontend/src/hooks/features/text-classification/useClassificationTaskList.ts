@@ -71,19 +71,10 @@ export function useClassificationTaskList() {
   const downloadResult = useCallback(async (taskId: string, fileName: string) => {
     try {
       await textClassificationApi.downloadResult(taskId, fileName);
-      toast({
-        title: '下载成功',
-        description: '分类结果已开始下载',
-      });
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : '下载失败';
-      toast({
-        variant: 'destructive',
-        title: '下载失败',
-        description: errorMessage,
-      });
+      console.error('Download failed:', error);
     }
-  }, [toast]);
+  }, []);
 
   return {
     tasks,
