@@ -4,6 +4,7 @@ import asyncio
 import logging
 from sqlalchemy.orm import Session
 from typing import Optional
+from config.config import config
 from common.storage.file_service import FileService
 from common.database.base import SessionLocal
 from modules.text_classification.models.task import ClassificationTask, TaskStatus
@@ -117,8 +118,8 @@ class TaskProcessor:
                 completed_count: 已完成的记录数
             """
             nonlocal last_update_count
-            # 每10条记录更新一次，或者在处理完所有记录时更新
-            if completed_count == task.total_records or completed_count - last_update_count >= 10:
+            # 每n条记录更新一次，或者在处理完所有记录时更新
+            if completed_count == task.total_records or completed_count - last_update_count >= config.text_classification.batch_size:
                 task.processed_records = completed_count
                 try:
                     db.commit()
@@ -136,6 +137,7 @@ class TaskProcessor:
                 categories=task.categories,
                 is_multi_label=task.is_multi_label,
                 session_id=task.task_id,
+                max_concurrency=config.text_classification.max_concurrency,
                 progress_callback=update_progress
             )
 

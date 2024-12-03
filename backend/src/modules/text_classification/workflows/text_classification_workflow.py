@@ -4,6 +4,7 @@ import os
 import uuid
 import asyncio
 from typing import Union, List, Callable
+from config.config import config
 from common.utils.llm_tools import init_language_model, LanguageModelChain
 from .workflow_constants import (
     SINGLE_LABEL_CLASSIFICATION_SYSTEM_PROMPT,
@@ -24,8 +25,9 @@ class TextClassificationWorkflow:
     def __init__(self):
         """初始化文本分类工作流程"""
         self.language_model = init_language_model(
-            provider=os.getenv("SMART_LLM_PROVIDER"),
-            model_name=os.getenv("SMART_LLM_MODEL"),
+            provider=config.text_classification.llm_provider,
+            model_name=config.text_classification.llm_model,
+            temperature=config.text_classification.temperature,
         )
         self.single_label_chain = LanguageModelChain(
             TextClassificationResult,
@@ -133,7 +135,7 @@ class TextClassificationWorkflow:
 
         # 使用 as_completed 处理任务
         for task in asyncio.as_completed(tasks):
-            await task  # 等待每个任务完成，但不需要其结果，因为已经存储在results中
+            await task
 
         return results
 

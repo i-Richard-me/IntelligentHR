@@ -1,3 +1,4 @@
+from config.config import config
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -61,7 +62,7 @@ app = FastAPI(
     title="Text Analysis API",
     description="文本分析服务API",
     version="1.0.0",
-    lifespan=lifespan  # 使用新的生命周期管理器
+    lifespan=lifespan
 )
 
 # 添加 CORS 配置
@@ -77,4 +78,9 @@ app.add_middleware(
 app.include_router(v1_router, prefix="/api")
 
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run(
+        "main:app", 
+        host=config.server.host,
+        port=config.server.port,
+        reload=config.server.reload
+    )

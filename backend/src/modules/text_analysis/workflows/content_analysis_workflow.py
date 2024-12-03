@@ -4,6 +4,7 @@ import os
 import uuid
 import asyncio
 from typing import List, Callable
+from config.config import config
 from common.utils.llm_tools import init_language_model, LanguageModelChain
 from .workflow_constants import (
     CONTENT_ANALYSIS_SYSTEM_PROMPT,
@@ -22,8 +23,9 @@ class TextContentAnalysisWorkflow:
     def __init__(self):
         """初始化文本内容分析工作流程"""
         self.language_model = init_language_model(
-            provider=os.getenv("SMART_LLM_PROVIDER"),
-            model_name=os.getenv("SMART_LLM_MODEL"),
+            provider=config.text_analysis.llm_provider,
+            model_name=config.text_analysis.llm_model,
+            temperature=config.text_analysis.temperature,
         )
         self.analysis_chain = LanguageModelChain(
             ContentAnalysisResult,
