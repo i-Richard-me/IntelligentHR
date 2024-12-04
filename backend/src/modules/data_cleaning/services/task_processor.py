@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from typing import Optional
 from config.config import config
 from common.storage.file_service import FileService
-from common.database.base import SessionLocal
+from common.database.dependencies import get_task_db, get_entity_config_db
 from ..models.task import CleaningTask, TaskStatus
 from ..models.entity_config import EntityConfig
 from ..services.entity_config_service import EntityConfigService
@@ -16,7 +16,6 @@ from ..models import TaskQueue
 from ..tools.retrieval_tools import RetrievalTools
 
 logger = logging.getLogger(__name__)
-
 
 class TaskProcessor:
     """任务处理器类
@@ -36,33 +35,38 @@ class TaskProcessor:
         Args:
             task_id: 任务ID
         """
-        db = SessionLocal()
+        # 获取任务数据库会话
+        task_db = next(get_task_db())
+        # 获取实体配置数据库会话
+        entity_config_db = next(get_entity_config_db())
+        
         try:
             # 获取任务信息
-            task = await self._get_task(db, task_id)
+            task = await self._get_task(task_db, task_id)
             if not task:
                 logger.error(f"任务未找到: {task_id}")
                 return
 
             # 获取实体配置
-            entity_config = await self._get_entity_config(db, task)
+            entity_config = await self._get_entity_config(entity_config_db, task)
             if not entity_config:
                 raise ValueError(f"未找到实体类型配置: {task.entity_type}")
 
             # 更新任务状态
-            await self._update_task_status(db, task, TaskStatus.PROCESSING)
+            await self._update_task_status(task_db, task, TaskStatus.PROCESSING)
 
             # 处理任务
-            await self._process_task_content(db, task, entity_config)
+            await self._process_task_content(task_db, task, entity_config)
 
             logger.info(f"任务处理完成: {task_id}")
 
         except Exception as e:
             logger.error(f"任务处理失败: {task_id}, 错误={str(e)}")
-            await self._handle_task_error(db, task_id, str(e))
+            await self._handle_task_error(task_db, task_id, str(e))
         finally:
             self.queue.complete_task(task_id)
-            db.close()
+            task_db.close()
+            entity_config_db.close()
 
     async def start_processing(self) -> None:
         """启动任务处理循环"""
@@ -82,7 +86,7 @@ class TaskProcessor:
         """获取任务信息
 
         Args:
-            db: 数据库会话
+            db: 任务数据库会话
             task_id: 任务ID
 
         Returns:
@@ -94,7 +98,7 @@ class TaskProcessor:
         """获取实体配置
 
         Args:
-            db: 数据库会话
+            db: 实体配置数据库会话
             task: 任务对象
 
         Returns:

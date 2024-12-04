@@ -1,3 +1,6 @@
+"""
+数据清洗模块的路由定义
+"""
 from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException, Response
 from fastapi.responses import FileResponse
 from typing import List
@@ -7,12 +10,12 @@ from modules.data_cleaning.models import (
     TaskResponse,
     TaskQueue,
     EntityConfigResponse,
-    get_db
 )
 from modules.data_cleaning.models.task import CleaningTask
 from modules.data_cleaning.services.entity_config_service import EntityConfigService
 from common.storage.file_service import FileService
 from api.dependencies.auth import get_user_id
+from common.database.dependencies import get_task_db, get_entity_config_db
 import uuid
 
 logger = logging.getLogger(__name__)
@@ -36,17 +39,9 @@ task_queue = TaskQueue("cleaning")
 )
 async def list_entity_types(
     user_id: str = Depends(get_user_id),
-    db=Depends(get_db)
+    db=Depends(get_entity_config_db)
 ) -> List[EntityConfigResponse]:
-    """获取所有支持的实体类型
-
-    Args:
-        user_id: 用户ID（从请求头获取）
-        db: 数据库会话
-
-    Returns:
-        List[EntityConfigResponse]: 实体类型配置列表
-    """
+    """获取所有支持的实体类型"""
     try:
         config_service = EntityConfigService(db)
         configs = config_service.list_configs()
@@ -68,28 +63,13 @@ async def create_task(
         search_enabled: bool = Form(True, description="是否启用搜索功能"),
         retrieval_enabled: bool = Form(True, description="是否启用检索功能"),
         user_id: str = Depends(get_user_id),
-        db=Depends(get_db)
+        task_db=Depends(get_task_db),
+        entity_config_db=Depends(get_entity_config_db)
 ) -> TaskResponse:
-    """创建新的数据清洗任务
-
-    Args:
-        response: FastAPI响应对象
-        file: 上传的CSV文件
-        entity_type: 实体类型
-        search_enabled: 是否启用搜索功能
-        retrieval_enabled: 是否启用检索功能
-        user_id: 用户ID（从请求头获取）
-        db: 数据库会话
-
-    Returns:
-        TaskResponse: 创建的任务信息
-
-    Raises:
-        HTTPException: 当文件上传或任务创建失败时抛出
-    """
+    """创建新的数据清洗任务"""
     try:
         # 验证实体类型是否支持
-        config_service = EntityConfigService(db)
+        config_service = EntityConfigService(entity_config_db)
         if not config_service.is_valid_entity_type(entity_type):
             raise HTTPException(
                 status_code=400,
@@ -110,8 +90,8 @@ async def create_task(
             source_file_url=file_path
         )
         
-        db.add(task)
-        db.commit()
+        task_db.add(task)
+        task_db.commit()
         logger.info(f"任务记录创建成功: {task.task_id}")
 
         # 将任务添加到队列
@@ -136,21 +116,9 @@ async def create_task(
 async def get_task_status(
         task_id: str,
         user_id: str = Depends(get_user_id),
-        db=Depends(get_db)
+        db=Depends(get_task_db)
 ) -> TaskResponse:
-    """获取任务状态
-
-    Args:
-        task_id: 任务ID
-        user_id: 用户ID（从请求头获取）
-        db: 数据库会话
-
-    Returns:
-        TaskResponse: 任务信息
-
-    Raises:
-        HTTPException: 当任务不存在或无权访问时抛出
-    """
+    """获取任务状态"""
     task = db.query(CleaningTask).filter(
         CleaningTask.task_id == task_id,
         CleaningTask.user_id == user_id
@@ -170,17 +138,9 @@ async def get_task_status(
 )
 async def list_tasks(
         user_id: str = Depends(get_user_id),
-        db=Depends(get_db)
+        db=Depends(get_task_db)
 ) -> List[TaskResponse]:
-    """获取用户的所有任务
-
-    Args:
-        user_id: 用户ID（从请求头获取）
-        db: 数据库会话
-
-    Returns:
-        List[TaskResponse]: 任务列表
-    """
+    """获取用户的所有任务"""
     tasks = db.query(CleaningTask).filter(
         CleaningTask.user_id == user_id
     ).order_by(CleaningTask.created_at.desc()).all()
@@ -195,21 +155,9 @@ async def list_tasks(
 async def download_result(
         task_id: str,
         user_id: str = Depends(get_user_id),
-        db=Depends(get_db)
+        db=Depends(get_task_db)
 ) -> FileResponse:
-    """下载清洗结果
-
-    Args:
-        task_id: 任务ID
-        user_id: 用户ID（从请求头获取）
-        db: 数据库会话
-
-    Returns:
-        FileResponse: 清洗结果文件
-
-    Raises:
-        HTTPException: 当任务不存在、无权访问或结果文件不可用时抛出
-    """
+    """下载清洗结果"""
     task = db.query(CleaningTask).filter(
         CleaningTask.task_id == task_id,
         CleaningTask.user_id == user_id

@@ -1,11 +1,10 @@
-"""
-任务相关的数据模型定义
+"""任务相关的数据模型定义
 """
 from datetime import datetime
 from sqlalchemy import Column, Integer, String, Text, DateTime, Enum as SQLEnum
 from sqlalchemy.sql import func
 import enum
-from common.database.base import Base
+from common.database.base import TaskBase
 from pydantic import BaseModel, Field
 
 
@@ -17,7 +16,7 @@ class TaskStatus(enum.Enum):
     FAILED = "failed"  # 失败
 
 
-class CleaningTask(Base):
+class CleaningTask(TaskBase):
     """数据清洗任务数据库模型"""
     __tablename__ = "cleaning_tasks"
 

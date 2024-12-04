@@ -1,11 +1,11 @@
 """实体配置模型定义
 """
 from sqlalchemy import Column, String, Text
-from common.database.base import Base
+from common.database.base import EntityConfigBase
 from pydantic import BaseModel
 
 
-class EntityConfig(Base):
+class EntityConfig(EntityConfigBase):
     """实体配置表数据库模型
 
     存储不同实体类型的配置信息，包括验证指令、分析指令、验证指令和collection名称
