@@ -14,7 +14,7 @@ class Config:
         
         # 加载配置文件
         config_path = root_dir / "config" / f"{self.env}.yml"
-        self.__dict__.update(OmegaConf.load(config_path))
+        self.__dict__.update(OmegaConf.load(str(config_path)))
 
     @classmethod
     def get_config(cls) -> "Config":
