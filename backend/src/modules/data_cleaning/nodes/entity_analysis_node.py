@@ -2,20 +2,15 @@
 实体分析节点，专门负责分析搜索结果并提取实体信息
 """
 from typing import Dict
-import os
 from common.utils.llm_tools import init_language_model, LanguageModelChain
 from ..models.state import GraphState, ProcessingStatus
 from ..models.schema import EntityRecognition
+import logging
+
+logger = logging.getLogger(__name__)
 
 # 初始化语言模型
-language_model = init_language_model(
-    provider=os.getenv("SMART_LLM_PROVIDER"),
-    model_name=os.getenv("SMART_LLM_MODEL")
-)
-
-# 从环境变量获取配置
-ENTITY_TYPE = os.getenv("ENTITY_TYPE", "实体")
-ANALYSIS_INSTRUCTIONS = os.getenv("ANALYSIS_INSTRUCTIONS", "")
+language_model = init_language_model()
 
 # 定义系统消息模板
 SYSTEM_MESSAGE = """
@@ -39,40 +34,61 @@ HUMAN_MESSAGE = """
 """
 
 async def entity_analysis_node(state: GraphState) -> Dict:
-    """
-    实体分析节点处理函数
+    """实体分析节点处理函数
 
     Args:
-        state: 当前图状态
+        state: 当前图状态，必须包含 entity_config 和 search_results
 
     Returns:
         更新状态的字典
+
+    Raises:
+        ValueError: 当state中缺少必要的信息时抛出
     """
-    # 创建分析链
-    analyzer = LanguageModelChain(
-        EntityRecognition,
-        SYSTEM_MESSAGE,
-        HUMAN_MESSAGE,
-        language_model
-    )()
+    try:
+        if not state.get("entity_config"):
+            raise ValueError("实体配置信息缺失")
 
-    # 准备分析参数
-    analysis_params = {
-        "user_query": state["original_input"],
-        "snippets": state["search_results"],
-        "entity_type": ENTITY_TYPE,
-        "analysis_instructions": ANALYSIS_INSTRUCTIONS
-    }
+        if not state.get("search_results"):
+            raise ValueError("搜索结果缺失")
 
-    # 执行分析
-    analysis_result = await analyzer.ainvoke(analysis_params)
+        # 创建分析链
+        analyzer = LanguageModelChain(
+            EntityRecognition,
+            SYSTEM_MESSAGE,
+            HUMAN_MESSAGE,
+            language_model
+        )()
 
-    # 处理结果
-    is_identified = analysis_result["recognition_status"] == "known"
+        # 准备分析参数
+        analysis_params = {
+            "user_query": state["original_input"],
+            "snippets": state["search_results"],
+            "entity_type": state["entity_config"]["display_name"],
+            "analysis_instructions": state["entity_config"]["analysis_instructions"]
+        }
 
-    # 返回结果
-    return {
-        "is_identified": is_identified,
-        "identified_entity_name": analysis_result["identified_entity"] if is_identified else None,
-        "status": ProcessingStatus.IDENTIFIED if is_identified else ProcessingStatus.UNIDENTIFIED
-    }
+        # 执行分析
+        analysis_result = await analyzer.ainvoke(analysis_params)
+
+        # 处理结果
+        is_identified = analysis_result["recognition_status"] == "known"
+
+        logger.debug(f"分析结果: query={state['original_input']}, "
+                    f"is_identified={is_identified}, "
+                    f"entity={analysis_result.get('identified_entity')}")
+
+        # 返回结果
+        return {
+            "is_identified": is_identified,
+            "identified_entity_name": analysis_result["identified_entity"] if is_identified else None,
+            "status": ProcessingStatus.IDENTIFIED if is_identified else ProcessingStatus.UNIDENTIFIED
+        }
+
+    except Exception as e:
+        logger.error(f"实体分析节点处理失败: {str(e)}")
+        return {
+            "is_identified": False,
+            "status": ProcessingStatus.ERROR,
+            "error_message": f"实体分析失败: {str(e)}"
+        }

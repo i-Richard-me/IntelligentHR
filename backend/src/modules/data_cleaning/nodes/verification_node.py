@@ -2,20 +2,15 @@
 验证节点，负责验证检索到的实体是否与用户查询匹配
 """
 from typing import Dict
-import os
 from common.utils.llm_tools import init_language_model, LanguageModelChain
 from ..models.state import GraphState, ProcessingStatus
 from ..models.schema import EntityVerification
+import logging
+
+logger = logging.getLogger(__name__)
 
 # 初始化语言模型
-language_model = init_language_model(
-    provider=os.getenv("SMART_LLM_PROVIDER"),
-    model_name=os.getenv("SMART_LLM_MODEL")
-)
-
-# 从环境变量获取配置
-ENTITY_TYPE = os.getenv("ENTITY_TYPE", "实体")
-VERIFICATION_INSTRUCTIONS = os.getenv("VERIFICATION_INSTRUCTIONS", "")
+language_model = init_language_model()
 
 # 定义系统消息模板
 SYSTEM_MESSAGE = """
@@ -37,51 +32,75 @@ HUMAN_MESSAGE = """
 """
 
 async def verification_node(state: GraphState) -> Dict:
-    """
-    验证节点处理函数
+    """验证节点处理函数
 
     Args:
-        state: 当前图状态
+        state: 当前图状态，必须包含 entity_config
 
     Returns:
         更新状态的字典
+
+    Raises:
+        ValueError: 当state中缺少必要的信息时抛出
     """
-    # 确定需要验证的实体名称
-    entity_to_verify = state.get("retrieved_entity_name") or state.get("identified_entity_name")
+    try:
+        if not state.get("entity_config"):
+            raise ValueError("实体配置信息缺失")
 
-    # 创建验证链
-    verifier = LanguageModelChain(
-        EntityVerification,
-        SYSTEM_MESSAGE,
-        HUMAN_MESSAGE,
-        language_model
-    )()
+        # 确定需要验证的实体名称
+        entity_to_verify = state.get("retrieved_entity_name") or state.get("identified_entity_name")
+        if not entity_to_verify:
+            logger.warning("没有可供验证的实体名称")
+            return {
+                "status": ProcessingStatus.UNVERIFIED,
+                "final_entity_name": state.get("original_input")
+            }
 
-    # 准备验证参数
-    verification_params = {
-        "user_query": state["original_input"],
-        "retrieved_name": entity_to_verify,
-        "search_results": state.get("search_results", ""),
-        "entity_type": ENTITY_TYPE,
-        "verification_instructions": VERIFICATION_INSTRUCTIONS
-    }
+        # 创建验证链
+        verifier = LanguageModelChain(
+            EntityVerification,
+            SYSTEM_MESSAGE,
+            HUMAN_MESSAGE,
+            language_model
+        )()
 
-    # 执行验证
-    verification_result = await verifier.ainvoke(verification_params)
+        # 准备验证参数
+        verification_params = {
+            "user_query": state["original_input"],
+            "retrieved_name": entity_to_verify,
+            "search_results": state.get("search_results", ""),
+            "entity_type": state["entity_config"]["display_name"],
+            "verification_instructions": state["entity_config"]["verification_instructions"]
+        }
 
-    # 处理验证结果
-    is_verified = verification_result["verification_status"] == "verified"
+        # 执行验证
+        verification_result = await verifier.ainvoke(verification_params)
 
-    # 确定最终实体名称
-    final_name = (
-        state.get("standard_name")  # 首选标准名称
-        or state.get("retrieved_entity_name")  # 其次是检索到的名称
-        or state.get("identified_entity_name")  # 最后是识别出的名称
-        or state.get("original_input")  # 兜底使用原始输入
-    )
+        # 处理验证结果
+        is_verified = verification_result["verification_status"] == "verified"
 
-    # 返回结果
-    return {
-        "status": ProcessingStatus.VERIFIED if is_verified else ProcessingStatus.UNVERIFIED,
-        "final_entity_name": final_name
-    }
+        # 确定最终实体名称
+        final_name = (
+            state.get("standard_name")  # 首选标准名称
+            or state.get("retrieved_entity_name")  # 其次是检索到的名称
+            or state.get("identified_entity_name")  # 最后是识别出的名称
+            or state.get("original_input")  # 兜底使用原始输入
+        )
+
+        logger.debug(f"验证结果: query={state['original_input']}, "
+                    f"is_verified={is_verified}, "
+                    f"final_name={final_name}")
+
+        # 返回结果
+        return {
+            "status": ProcessingStatus.VERIFIED if is_verified else ProcessingStatus.UNVERIFIED,
+            "final_entity_name": final_name
+        }
+
+    except Exception as e:
+        logger.error(f"验证节点处理失败: {str(e)}")
+        return {
+            "status": ProcessingStatus.ERROR,
+            "error_message": f"验证失败: {str(e)}",
+            "final_entity_name": state.get("original_input")
+        }
