@@ -1,3 +1,6 @@
+"""
+任务处理器模块，负责数据清洗任务的执行和管理
+"""
 import asyncio
 import logging
 from sqlalchemy.orm import Session
@@ -5,9 +8,12 @@ from typing import Optional
 from config.config import config
 from common.storage.file_service import FileService
 from common.database.base import SessionLocal
-from modules.data_cleaning.models.task import CleaningTask, TaskStatus
-from modules.data_cleaning.workflows.data_cleaning_workflow import DataCleaningWorkflow
-from modules.data_cleaning.models import TaskQueue
+from ..models.task import CleaningTask, TaskStatus
+from ..models.entity_config import EntityConfig
+from ..services.entity_config_service import EntityConfigService
+from ..workflows.data_cleaning_workflow import DataCleaningWorkflow
+from ..models import TaskQueue
+from ..tools.retrieval_tools import RetrievalTools
 
 logger = logging.getLogger(__name__)
 
@@ -38,11 +44,16 @@ class TaskProcessor:
                 logger.error(f"任务未找到: {task_id}")
                 return
 
+            # 获取实体配置
+            entity_config = await self._get_entity_config(db, task)
+            if not entity_config:
+                raise ValueError(f"未找到实体类型配置: {task.entity_type}")
+
             # 更新任务状态
             await self._update_task_status(db, task, TaskStatus.PROCESSING)
 
             # 处理任务
-            await self._process_task_content(db, task)
+            await self._process_task_content(db, task, entity_config)
 
             logger.info(f"任务处理完成: {task_id}")
 
@@ -79,6 +90,25 @@ class TaskProcessor:
         """
         return db.query(CleaningTask).filter(CleaningTask.task_id == task_id).first()
 
+    async def _get_entity_config(self, db: Session, task: CleaningTask) -> Optional[EntityConfig]:
+        """获取实体配置
+
+        Args:
+            db: 数据库会话
+            task: 任务对象
+
+        Returns:
+            Optional[EntityConfig]: 实体配置对象
+
+        Raises:
+            ValueError: 当找不到对应的实体配置时抛出
+        """
+        config_service = EntityConfigService(db)
+        config = config_service.get_config(task.entity_type)
+        if not config:
+            raise ValueError(f"未找到实体类型配置: {task.entity_type}")
+        return config
+
     async def _update_task_status(
             self, db: Session, task: CleaningTask, status: TaskStatus
     ) -> None:
@@ -93,12 +123,15 @@ class TaskProcessor:
         db.commit()
         logger.info(f"任务状态已更新: {task.task_id} -> {status.value}")
 
-    async def _process_task_content(self, db: Session, task: CleaningTask) -> None:
+    async def _process_task_content(
+            self, db: Session, task: CleaningTask, entity_config: EntityConfig
+    ) -> None:
         """处理任务内容
 
         Args:
             db: 数据库会话
             task: 任务对象
+            entity_config: 实体配置对象
         """
         # 读取CSV文件
         df = self.file_service.read_csv_file(task.source_file_url)
@@ -106,15 +139,11 @@ class TaskProcessor:
         db.commit()
 
         # 获取待处理的实体列表
-        entities = df['entity'].tolist()  # 假设实体列名为'entity'
+        entities = df['original_name'].tolist()
         last_update_count = 0  # 上次更新时的计数
 
         def update_progress(completed_count: int):
-            """更新任务进度
-
-            Args:
-                completed_count: 已完成的记录数
-            """
+            """更新任务进度"""
             nonlocal last_update_count
             if completed_count == task.total_records or completed_count - last_update_count >= config.data_cleaning.batch_size:
                 task.processed_records = completed_count
@@ -129,7 +158,8 @@ class TaskProcessor:
         try:
             # 创建清洗工作流实例
             workflow = DataCleaningWorkflow(
-                enable_validation=task.validation_rules is not None,
+                entity_config=entity_config,
+                enable_validation=True,
                 enable_search=task.search_enabled == 'enabled',
                 enable_retrieval=task.retrieval_enabled == 'enabled'
             )
