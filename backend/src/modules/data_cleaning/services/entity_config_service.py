@@ -18,7 +18,7 @@ class EntityConfigService:
         """初始化服务
 
         Args:
-            db: 数据库会话
+            db: 实体配置数据库会话
         """
         self.db = db
 

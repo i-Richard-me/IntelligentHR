@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from typing import Optional
 from config.config import config
 from common.storage.file_service import FileService
-from common.database.base import SessionLocal
+from common.database.dependencies import get_task_db
 from modules.text_classification.models.task import ClassificationTask, TaskStatus
 from modules.text_classification.workflows.text_classification_workflow import TextClassificationWorkflow
 from modules.text_classification.models import TaskQueue
@@ -33,7 +33,7 @@ class TaskProcessor:
         Args:
             task_id: 任务ID
         """
-        db = SessionLocal()
+        db = next(get_task_db())
         try:
             # 获取任务信息
             task = await self._get_task(db, task_id)

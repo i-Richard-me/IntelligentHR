@@ -6,8 +6,8 @@ from modules.text_classification.models import (
     TaskCreate,
     TaskResponse,
     TaskQueue,
-    get_db
 )
+from common.database.dependencies import get_task_db
 from modules.text_classification.models.task import ClassificationTask
 from common.storage.file_service import FileService
 from api.dependencies.auth import get_user_id
@@ -40,7 +40,7 @@ async def create_task(
         categories: str = Form(..., description="分类规则 JSON 字符串"),
         is_multi_label: bool = Form(False, description="是否为多标签分类"),
         user_id: str = Depends(get_user_id),
-        db=Depends(get_db)
+        db=Depends(get_task_db)
 ) -> TaskResponse:
     """创建新的文本分类任务
 
@@ -105,7 +105,7 @@ async def create_task(
 async def get_task_status(
         task_id: str,
         user_id: str = Depends(get_user_id),
-        db=Depends(get_db)
+        db=Depends(get_task_db)
 ) -> TaskResponse:
     """获取任务状态
 
@@ -140,7 +140,7 @@ async def get_task_status(
 )
 async def list_tasks(
         user_id: str = Depends(get_user_id),
-        db=Depends(get_db)
+        db=Depends(get_task_db)
 ) -> List[TaskResponse]:
     """获取用户的所有任务
 
@@ -166,7 +166,7 @@ async def list_tasks(
 async def download_result(
         task_id: str,
         user_id: str = Depends(get_user_id),
-        db=Depends(get_db)
+        db=Depends(get_task_db)
 ) -> FileResponse:
     """下载分类结果
 
