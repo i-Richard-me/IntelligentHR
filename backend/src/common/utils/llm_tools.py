@@ -315,13 +315,16 @@ def batch_process_data(
 class CustomEmbeddings(Embeddings):
     def __init__(
         self,
-        api_key: str,
-        api_url: str,
         model: str,
+        api_key: Optional[str] = None,
+        api_url: Optional[str] = None,
     ):
-        self.api_key = api_key
-        self.api_url = api_url
+        self.api_key = api_key or os.getenv("EMBEDDING_API_KEY")
+        self.api_url = api_url or os.getenv("EMBEDDING_API_BASE")
         self.model = model
+
+        if not self.api_key or not self.api_url:
+            raise ValueError("API密钥和URL必须通过参数提供或在环境变量中设置")
 
     def _get_embeddings(self, texts: List[str]) -> List[List[float]]:
         headers = {
@@ -354,11 +357,13 @@ class VectorEncoder:
     def __init__(
         self,
         model: str,
+        api_key: Optional[str] = None,
+        api_url: Optional[str] = None,
     ):
         self.embeddings = CustomEmbeddings(
-            api_key=os.getenv("EMBEDDING_API_KEY", ""),
-            api_url=os.getenv("EMBEDDING_API_BASE", ""),
             model=model,
+            api_key=api_key,
+            api_url=api_url,
         )
 
     def get_embedding(self, text: str) -> Optional[List[float]]:
