@@ -1,12 +1,16 @@
 # modules/text_analysis/services/task_processor.py
 
+"""任务处理器模块
+
+处理文本分析任务的核心服务类
+"""
 import asyncio
 import logging
 from sqlalchemy.orm import Session
 from typing import Optional
 from config.config import config
 from common.storage.file_service import FileService
-from common.database.base import SessionLocal
+from common.database.dependencies import get_task_db
 from modules.text_analysis.models.task import AnalysisTask, TaskStatus
 from modules.text_analysis.workflows.content_analysis_workflow import TextContentAnalysisWorkflow
 from modules.text_analysis.models import TaskQueue
@@ -33,7 +37,8 @@ class TaskProcessor:
         Args:
             task_id: 任务ID
         """
-        db = SessionLocal()
+        # 获取任务数据库会话
+        db = next(get_task_db())
         try:
             # 获取任务信息
             task = await self._get_task(db, task_id)
@@ -55,6 +60,7 @@ class TaskProcessor:
         finally:
             self.queue.complete_task(task_id)
             db.close()
+
 
     async def start_processing(self) -> None:
         """启动任务处理循环"""

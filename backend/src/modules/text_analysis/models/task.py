@@ -2,7 +2,7 @@ from datetime import datetime
 from sqlalchemy import Column, Integer, String, Text, DateTime, Enum as SQLEnum
 from sqlalchemy.sql import func
 import enum
-from common.database.base import Base
+from common.database.base import TaskBase
 from pydantic import BaseModel
 
 class TaskStatus(enum.Enum):
@@ -12,7 +12,7 @@ class TaskStatus(enum.Enum):
     COMPLETED = "completed"    # 已完成
     FAILED = "failed"         # 失败
 
-class AnalysisTask(Base):
+class AnalysisTask(TaskBase):
     """文本分析任务数据库模型"""
     __tablename__ = "analysis_tasks"
 
