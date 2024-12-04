@@ -1,3 +1,6 @@
+"""
+任务相关的数据模型定义
+"""
 from datetime import datetime
 from sqlalchemy import Column, Integer, String, Text, DateTime, Enum as SQLEnum
 from sqlalchemy.sql import func
@@ -31,10 +34,18 @@ class CleaningTask(Base):
     error_message = Column(Text, nullable=True, comment="错误信息")
     total_records = Column(Integer, nullable=True, comment="总记录数")
     processed_records = Column(Integer, nullable=True, default=0, comment="已处理记录数")
-    validation_rules = Column(Text, nullable=True, comment="验证规则")
-    search_enabled = Column(SQLEnum('enabled', 'disabled'), nullable=False, default='enabled', comment="是否启用搜索")
-    retrieval_enabled = Column(SQLEnum('enabled', 'disabled'), nullable=False, default='enabled',
-                               comment="是否启用检索")
+    search_enabled = Column(
+        SQLEnum('enabled', 'disabled'),
+        nullable=False,
+        default='enabled',
+        comment="是否启用搜索"
+    )
+    retrieval_enabled = Column(
+        SQLEnum('enabled', 'disabled'),
+        nullable=False,
+        default='enabled',
+        comment="是否启用检索"
+    )
 
     def to_dict(self) -> dict:
         """将模型转换为字典
@@ -55,7 +66,6 @@ class CleaningTask(Base):
             "total_records": self.total_records,
             "processed_records": self.processed_records,
             "progress": f"{(self.processed_records or 0)}/{self.total_records or '?'}",
-            "validation_rules": self.validation_rules,
             "search_enabled": self.search_enabled,
             "retrieval_enabled": self.retrieval_enabled
         }
@@ -65,7 +75,6 @@ class TaskCreate(BaseModel):
     """任务创建请求模型"""
     entity_type: str = Field(..., description="实体类型")
     user_id: str = Field(..., description="用户ID")
-    validation_rules: str | None = Field(None, description="验证规则")
     search_enabled: bool = Field(default=True, description="是否启用搜索")
     retrieval_enabled: bool = Field(default=True, description="是否启用检索")
 
@@ -84,7 +93,6 @@ class TaskResponse(BaseModel):
     total_records: int | None
     processed_records: int | None
     progress: str
-    validation_rules: str | None
     search_enabled: str
     retrieval_enabled: str
 
