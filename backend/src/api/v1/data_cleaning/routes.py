@@ -6,9 +6,11 @@ from modules.data_cleaning.models import (
     TaskCreate,
     TaskResponse,
     TaskQueue,
+    EntityConfigResponse,
     get_db
 )
 from modules.data_cleaning.models.task import CleaningTask
+from modules.data_cleaning.services.entity_config_service import EntityConfigService
 from common.storage.file_service import FileService
 from api.dependencies.auth import get_user_id
 import uuid
@@ -26,6 +28,32 @@ router = APIRouter(
 file_service = FileService()
 task_queue = TaskQueue("cleaning")
 
+@router.get(
+    "/entity-types",
+    response_model=List[EntityConfigResponse],
+    summary="获取支持的实体类型列表",
+    description="获取系统支持的所有实体类型及其配置信息"
+)
+async def list_entity_types(
+    user_id: str = Depends(get_user_id),
+    db=Depends(get_db)
+) -> List[EntityConfigResponse]:
+    """获取所有支持的实体类型
+
+    Args:
+        user_id: 用户ID（从请求头获取）
+        db: 数据库会话
+
+    Returns:
+        List[EntityConfigResponse]: 实体类型配置列表
+    """
+    try:
+        config_service = EntityConfigService(db)
+        configs = config_service.list_configs()
+        return [EntityConfigResponse.model_validate(config.to_dict()) for config in configs]
+    except Exception as e:
+        logger.error(f"获取实体类型列表失败: {str(e)}")
+        raise HTTPException(status_code=500, detail="获取实体类型列表失败")
 
 @router.post(
     "/tasks",
@@ -37,7 +65,6 @@ async def create_task(
         response: Response,
         file: UploadFile = File(..., description="待清洗的CSV文件"),
         entity_type: str = Form(..., description="实体类型"),
-        validation_rules: str = Form(None, description="验证规则"),
         search_enabled: bool = Form(True, description="是否启用搜索功能"),
         retrieval_enabled: bool = Form(True, description="是否启用检索功能"),
         user_id: str = Depends(get_user_id),
@@ -49,7 +76,6 @@ async def create_task(
         response: FastAPI响应对象
         file: 上传的CSV文件
         entity_type: 实体类型
-        validation_rules: 可选的验证规则
         search_enabled: 是否启用搜索功能
         retrieval_enabled: 是否启用检索功能
         user_id: 用户ID（从请求头获取）
@@ -62,6 +88,14 @@ async def create_task(
         HTTPException: 当文件上传或任务创建失败时抛出
     """
     try:
+        # 验证实体类型是否支持
+        config_service = EntityConfigService(db)
+        if not config_service.is_valid_entity_type(entity_type):
+            raise HTTPException(
+                status_code=400,
+                detail=f"不支持的实体类型: {entity_type}"
+            )
+
         # 保存上传的文件
         file_path = await file_service.save_upload_file(file)
         logger.info(f"文件上传成功: {file_path}")
@@ -71,11 +105,11 @@ async def create_task(
             task_id=str(uuid.uuid4()),
             user_id=user_id,
             entity_type=entity_type,
-            validation_rules=validation_rules,
             search_enabled='enabled' if search_enabled else 'disabled',
             retrieval_enabled='enabled' if retrieval_enabled else 'disabled',
             source_file_url=file_path
         )
+        
         db.add(task)
         db.commit()
         logger.info(f"任务记录创建成功: {task.task_id}")
@@ -85,12 +119,13 @@ async def create_task(
 
         # 设置响应状态码为201 Created
         response.status_code = 201
-        return TaskResponse(**task.to_dict())
+        return TaskResponse.model_validate(task.to_dict())
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"创建任务失败: {str(e)}")
         raise HTTPException(status_code=500, detail="创建任务失败")
-
 
 @router.get(
     "/tasks/{task_id}",
@@ -125,8 +160,7 @@ async def get_task_status(
         logger.warning(f"任务未找到或无权访问: {task_id}")
         raise HTTPException(status_code=404, detail="Task not found")
 
-    return TaskResponse(**task.to_dict())
-
+    return TaskResponse.model_validate(task.to_dict())
 
 @router.get(
     "/tasks",
@@ -151,8 +185,7 @@ async def list_tasks(
         CleaningTask.user_id == user_id
     ).order_by(CleaningTask.created_at.desc()).all()
 
-    return [TaskResponse(**task.to_dict()) for task in tasks]
-
+    return [TaskResponse.model_validate(task.to_dict()) for task in tasks]
 
 @router.get(
     "/tasks/{task_id}/download",

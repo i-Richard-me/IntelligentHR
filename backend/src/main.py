@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from api.v1 import v1_router
 from modules.text_analysis.services import TaskProcessor as AnalysisTaskProcessor
 from modules.text_classification.services import TaskProcessor as ClassificationTaskProcessor
+from modules.data_cleaning.services import TaskProcessor as CleaningTaskProcessor
 from common.utils.env_loader import load_env
 from common.database.init_db import init_database
 import asyncio
@@ -21,6 +22,7 @@ load_env()
 # 创建任务处理器实例
 analysis_processor = None
 classification_processor = None
+cleaning_processor = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -45,6 +47,12 @@ async def lifespan(app: FastAPI):
         global classification_processor
         classification_processor = ClassificationTaskProcessor()
         asyncio.create_task(classification_processor.start_processing())
+
+        # 启动数据清洗任务处理器
+        logger.info("正在启动数据清洗任务处理器...")
+        global cleaning_processor
+        cleaning_processor = CleaningTaskProcessor()
+        asyncio.create_task(cleaning_processor.start_processing())
 
         logger.info("所有任务处理器初始化完成")
     except Exception as e:
