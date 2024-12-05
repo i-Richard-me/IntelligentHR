@@ -10,10 +10,11 @@ from pydantic import BaseModel, Field
 
 class TaskStatus(enum.Enum):
     """任务状态枚举类"""
-    WAITING = "waiting"  # 等待处理
+    WAITING = "waiting"      # 等待处理
     PROCESSING = "processing"  # 处理中
-    COMPLETED = "completed"  # 已完成
-    FAILED = "failed"  # 失败
+    COMPLETED = "completed"    # 已完成
+    FAILED = "failed"         # 失败
+    CANCELLED = "cancelled"   # 已取消
 
 
 class CleaningTask(TaskBase):
@@ -45,6 +46,7 @@ class CleaningTask(TaskBase):
         default='enabled',
         comment="是否启用检索"
     )
+    cancelled_at = Column(DateTime, nullable=True, comment="取消时间")
 
     def to_dict(self) -> dict:
         """将模型转换为字典
@@ -66,7 +68,8 @@ class CleaningTask(TaskBase):
             "processed_records": self.processed_records,
             "progress": f"{(self.processed_records or 0)}/{self.total_records or '?'}",
             "search_enabled": self.search_enabled,
-            "retrieval_enabled": self.retrieval_enabled
+            "retrieval_enabled": self.retrieval_enabled,
+            "cancelled_at": self.cancelled_at.isoformat() if self.cancelled_at else None
         }
 
 
@@ -94,6 +97,7 @@ class TaskResponse(BaseModel):
     progress: str
     search_enabled: str
     retrieval_enabled: str
+    cancelled_at: datetime | None
 
     class Config:
         from_attributes = True

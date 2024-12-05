@@ -11,7 +11,7 @@ from modules.data_cleaning.models import (
     TaskQueue,
     EntityConfigResponse,
 )
-from modules.data_cleaning.models.task import CleaningTask
+from modules.data_cleaning.models.task import CleaningTask, TaskStatus
 from modules.data_cleaning.services.entity_config_service import EntityConfigService
 from common.storage.file_service import FileService
 from api.dependencies.auth import get_user_id
@@ -89,7 +89,7 @@ async def create_task(
             retrieval_enabled='enabled' if retrieval_enabled else 'disabled',
             source_file_url=file_path
         )
-        
+
         task_db.add(task)
         task_db.commit()
         logger.info(f"任务记录创建成功: {task.task_id}")
@@ -106,6 +106,58 @@ async def create_task(
     except Exception as e:
         logger.error(f"创建任务失败: {str(e)}")
         raise HTTPException(status_code=500, detail="创建任务失败")
+
+@router.post(
+    "/tasks/{task_id}/cancel",
+    response_model=TaskResponse,
+    summary="取消任务",
+    description="取消指定的数据清洗任务"
+)
+async def cancel_task(
+    task_id: str,
+    user_id: str = Depends(get_user_id),
+    db = Depends(get_task_db)
+) -> TaskResponse:
+    """取消指定的任务
+
+    Args:
+        task_id: 要取消的任务ID
+        user_id: 用户ID
+        db: 数据库会话
+
+    Returns:
+        TaskResponse: 更新后的任务信息
+
+    Raises:
+        HTTPException: 当任务不存在、无权访问或无法取消时抛出
+    """
+    # 检查任务是否存在且属于当前用户
+    task = db.query(CleaningTask).filter(
+        CleaningTask.task_id == task_id,
+        CleaningTask.user_id == user_id
+    ).first()
+
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    # 检查任务是否可以被取消
+    if task.status in [TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.CANCELLED]:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Task cannot be cancelled in current status: {task.status.value}"
+        )
+
+    # 从TaskProcessor获取实例并取消任务
+    from modules.data_cleaning.services import TaskProcessor
+    processor = TaskProcessor()  # 这里利用了单例模式
+    success = await processor.cancel_task(task_id)
+
+    if not success:
+        raise HTTPException(status_code=400, detail="Failed to cancel task")
+
+    # 返回更新后的任务信息
+    db.refresh(task)
+    return TaskResponse.model_validate(task.to_dict())
 
 @router.get(
     "/tasks/{task_id}",
