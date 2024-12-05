@@ -8,10 +8,11 @@ from modules.text_analysis.models import (
     TaskQueue,
 )
 from common.database.dependencies import get_task_db
-from modules.text_analysis.models.task import AnalysisTask
+from modules.text_analysis.models.task import AnalysisTask, TaskStatus
 from common.storage.file_service import FileService
 from api.dependencies.auth import get_user_id
 import uuid
+from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
@@ -26,39 +27,31 @@ router = APIRouter(
 file_service = FileService()
 task_queue = TaskQueue("analysis")
 
+
+# 新增: 任务取消请求模型
+class TaskCancelRequest(BaseModel):
+    reason: str | None = None
+
+
 @router.post(
-    "/tasks", 
+    "/tasks",
     response_model=TaskResponse,
     summary="创建文本分析任务",
     description="上传文件并创建新的文本分析任务"
 )
 async def create_task(
-    response: Response,
-    file: UploadFile = File(..., description="待分析的CSV文件"),
-    context: str = Form(..., description="分析上下文"),
-    user_id: str = Depends(get_user_id),
-    db = Depends(get_task_db)
+        response: Response,
+        file: UploadFile = File(..., description="待分析的CSV文件"),
+        context: str = Form(..., description="分析上下文"),
+        user_id: str = Depends(get_user_id),
+        db=Depends(get_task_db)
 ) -> TaskResponse:
-    """创建新的文本分析任务
-    
-    Args:
-        response: FastAPI响应对象
-        file: 上传的CSV文件
-        context: 分析上下文
-        user_id: 用户ID（从请求头获取）
-        db: 数据库会话
-        
-    Returns:
-        TaskResponse: 创建的任务信息
-        
-    Raises:
-        HTTPException: 当文件上传或任务创建失败时抛出
-    """
+    """创建新的文本分析任务"""
     try:
         # 保存上传的文件
         file_path = await file_service.save_upload_file(file)
         logger.info(f"文件上传成功: {file_path}")
-        
+
         # 创建任务记录
         task = AnalysisTask(
             task_id=str(uuid.uuid4()),
@@ -69,17 +62,18 @@ async def create_task(
         db.add(task)
         db.commit()
         logger.info(f"任务记录创建成功: {task.task_id}")
-        
+
         # 将任务添加到队列
         await task_queue.add_task(task.task_id)
-        
+
         # 设置响应状态码为201 Created
         response.status_code = 201
         return TaskResponse(**task.to_dict())
-        
+
     except Exception as e:
         logger.error(f"创建任务失败: {str(e)}")
         raise HTTPException(status_code=500, detail="创建任务失败")
+
 
 @router.get(
     "/tasks/{task_id}",
@@ -88,33 +82,75 @@ async def create_task(
     description="通过任务ID获取分析任务的当前状态"
 )
 async def get_task_status(
-    task_id: str,
-    user_id: str = Depends(get_user_id),
-    db = Depends(get_task_db)
+        task_id: str,
+        user_id: str = Depends(get_user_id),
+        db=Depends(get_task_db)
 ) -> TaskResponse:
-    """获取任务状态
-    
-    Args:
-        task_id: 任务ID
-        user_id: 用户ID（从请求头获取）
-        db: 数据库会话
-        
-    Returns:
-        TaskResponse: 任务信息
-        
-    Raises:
-        HTTPException: 当任务不存在或无权访问时抛出
-    """
+    """获取任务状态"""
     task = db.query(AnalysisTask).filter(
         AnalysisTask.task_id == task_id,
         AnalysisTask.user_id == user_id
     ).first()
-    
+
     if not task:
         logger.warning(f"任务未找到或无权访问: {task_id}")
         raise HTTPException(status_code=404, detail="Task not found")
-        
+
     return TaskResponse(**task.to_dict())
+
+
+@router.post(
+    "/tasks/{task_id}/cancel",
+    response_model=TaskResponse,
+    summary="取消任务",
+    description="取消指定的文本分析任务"
+)
+async def cancel_task(
+    task_id: str,
+    user_id: str = Depends(get_user_id),
+    db = Depends(get_task_db)
+) -> TaskResponse:
+    """取消指定的任务
+
+    Args:
+        task_id: 要取消的任务ID
+        user_id: 用户ID
+        db: 数据库会话
+
+    Returns:
+        TaskResponse: 更新后的任务信息
+
+    Raises:
+        HTTPException: 当任务不存在、无权访问或无法取消时抛出
+    """
+    # 检查任务是否存在且属于当前用户
+    task = db.query(AnalysisTask).filter(
+        AnalysisTask.task_id == task_id,
+        AnalysisTask.user_id == user_id
+    ).first()
+
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    # 检查任务是否可以被取消
+    if task.status in [TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.CANCELLED]:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Task cannot be cancelled in current status: {task.status.value}"
+        )
+
+    # 从TaskProcessor获取实例并取消任务
+    from modules.text_analysis.services import TaskProcessor
+    processor = TaskProcessor()  # 这里利用了单例模式
+    success = await processor.cancel_task(task_id)
+
+    if not success:
+        raise HTTPException(status_code=400, detail="Failed to cancel task")
+
+    # 返回更新后的任务信息
+    db.refresh(task)
+    return TaskResponse(**task.to_dict())
+
 
 @router.get(
     "/tasks",
@@ -123,42 +159,35 @@ async def get_task_status(
     description="获取当前用户的所有文本分析任务"
 )
 async def list_tasks(
-    user_id: str = Depends(get_user_id),
-    db = Depends(get_task_db)
+        user_id: str = Depends(get_user_id),
+        db=Depends(get_task_db)
 ) -> List[TaskResponse]:
-    """获取用户的所有任务
-    
-    Args:
-        user_id: 用户ID（从请求头获取）
-        db: 数据库会话
-        
-    Returns:
-        List[TaskResponse]: 任务列表
-    """
+    """获取用户的所有任务"""
     tasks = db.query(AnalysisTask).filter(
         AnalysisTask.user_id == user_id
     ).order_by(AnalysisTask.created_at.desc()).all()
-    
+
     return [TaskResponse(**task.to_dict()) for task in tasks]
+
 
 @router.get("/tasks/{task_id}/download")
 async def download_result(
-    task_id: str,
-    user_id: str = Depends(get_user_id),
-    db = Depends(get_task_db)
+        task_id: str,
+        user_id: str = Depends(get_user_id),
+        db=Depends(get_task_db)
 ):
     """下载分析结果"""
     task = db.query(AnalysisTask).filter(
         AnalysisTask.task_id == task_id,
         AnalysisTask.user_id == user_id
     ).first()
-    
+
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
-        
+
     if not task.result_file_url:
         raise HTTPException(status_code=400, detail="Result file not available")
-        
+
     return FileResponse(
         task.result_file_url,
         filename=f"analysis_result_{task.task_id}.csv",
