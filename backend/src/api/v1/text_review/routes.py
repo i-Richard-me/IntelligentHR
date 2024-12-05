@@ -25,7 +25,7 @@ router = APIRouter(
 
 # 初始化服务
 file_service = FileService()
-task_queue = TaskQueue("analysis")
+task_queue = TaskQueue("review")
 
 
 # 新增: 任务取消请求模型
