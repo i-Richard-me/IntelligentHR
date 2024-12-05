@@ -23,16 +23,16 @@ interface DashboardLayoutProps {
 
 // 页面路径配置
 const pathConfig = {
-  '/text-analysis/review': {
-    parent: { label: '文本分析', path: '/text-analysis' },
+  '/text-review': {
+    parent: { label: '文本分析', path: '' },
     current: '文本评估'
   },
-  '/text-analysis/classification': {
-    parent: { label: '文本分析', path: '/text-analysis' },
+  '/text-classification': {
+    parent: { label: '文本分析', path: '' },
     current: '文本分类'
   },
-  '/data/cleaning': {
-    parent: { label: '数据处理', path: '/data' },
+  '/data-cleaning': {
+    parent: { label: '数据处理', path: '' },
     current: '数据清洗'
   }
 };

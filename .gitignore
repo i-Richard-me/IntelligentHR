@@ -165,7 +165,7 @@ cython_debug/
 /data
 
 # Tests
-/tests
+tests
 
 # Config
 /config

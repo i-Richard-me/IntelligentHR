@@ -31,35 +31,35 @@ const data = {
   navMain: [
     {
       title: "文本分析",
-      url: "/text-analysis",
+      url: "",
       icon: FileText,
       isActive: true,
       items: [
         {
           title: "文本评估",
-          url: "/text-analysis/review",
+          url: "/text-review",
         },
         {
           title: "文本分类",
-          url: "/text-analysis/classification",
+          url: "/text-classification",
         },
       ],
     },
     {
       title: "数据处理",
-      url: "/data",
+      url: "",
       icon: Database,
       isActive: true,
       items: [
         {
           title: "数据清洗",
-          url: "/data/cleaning",
+          url: "/data-cleaning",
         },
       ],
     },
     {
       title: "数据可视化",
-      url: "/visualization/reports",
+      url: "",
       icon: PieChart,
       items: [
         {
@@ -70,7 +70,7 @@ const data = {
     },
     {
       title: "数据管理",
-      url: "/data/datasets",
+      url: "",
       icon: Layers,
       items: [
         {
@@ -81,7 +81,7 @@ const data = {
     },
     {
       title: "系统设置",
-      url: "/settings",
+      url: "",
       icon: Settings2,
       items: [
         {
