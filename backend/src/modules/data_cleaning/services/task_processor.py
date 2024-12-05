@@ -17,6 +17,7 @@ from ..models import TaskQueue
 
 logger = logging.getLogger(__name__)
 
+
 class TaskProcessor:
     """任务处理器类"""
 
@@ -36,37 +37,36 @@ class TaskProcessor:
         Returns:
             bool: 是否成功取消任务
         """
-        db = next(get_task_db())
-        try:
-            task = await self._get_task(db, task_id)
-            if not task:
-                logger.warning(f"要取消的任务未找到: {task_id}")
+        with next(get_task_db()) as db:
+            try:
+                task = db.query(CleaningTask).get(task_id)
+                if not task:
+                    logger.warning(f"要取消的任务未找到: {task_id}")
+                    return False
+
+                # 如果任务已经完成或已经取消，则返回False
+                if task.status in [TaskStatus.COMPLETED, TaskStatus.CANCELLED]:
+                    logger.info(f"任务 {task_id} 已经处于终态: {task.status.value}")
+                    return False
+
+                # 更新任务状态为已取消
+                task.status = TaskStatus.CANCELLED
+                task.cancelled_at = datetime.now()
+                db.commit()
+
+                # 如果任务正在处理中，则取消处理
+                if task_id in self._processing_tasks:
+                    process_task = self._processing_tasks[task_id]
+                    process_task.cancel()
+                    logger.info(f"已取消正在处理的任务: {task_id}")
+
+                logger.info(f"任务已成功取消: {task_id}")
+                return True
+
+            except Exception as e:
+                logger.error(f"取消任务时发生错误: {task_id}, 错误={str(e)}")
+                db.rollback()
                 return False
-
-            # 如果任务已经完成或已经取消，则返回False
-            if task.status in [TaskStatus.COMPLETED, TaskStatus.CANCELLED]:
-                logger.info(f"任务 {task_id} 已经处于终态: {task.status.value}")
-                return False
-
-            # 更新任务状态为已取消
-            task.status = TaskStatus.CANCELLED
-            task.cancelled_at = datetime.now()
-            db.commit()
-
-            # 如果任务正在处理中，则取消处理
-            if task_id in self._processing_tasks:
-                process_task = self._processing_tasks[task_id]
-                process_task.cancel()
-                logger.info(f"已取消正在处理的任务: {task_id}")
-
-            logger.info(f"任务已成功取消: {task_id}")
-            return True
-
-        except Exception as e:
-            logger.error(f"取消任务时发生错误: {task_id}, 错误={str(e)}")
-            return False
-        finally:
-            db.close()
 
     async def process_task(self, task_id: str) -> None:
         """处理单个任务"""
@@ -91,19 +91,21 @@ class TaskProcessor:
             await self._update_task_status(task_db, task, TaskStatus.PROCESSING)
 
             # 存储处理任务的Future对象
-            process_task = asyncio.create_task(self._process_task_content(task_db, task, entity_config))
+            process_task = asyncio.create_task(
+                self._process_task_content(task_db, task, entity_config))
             self._processing_tasks[task_id] = process_task
 
             try:
                 await process_task
             except asyncio.CancelledError:
                 logger.info(f"任务被取消: {task_id}")
-                # 如果任务被取消，更新数据库状态
-                task = await self._get_task(task_db, task_id)
-                if task.status != TaskStatus.CANCELLED:  # 避免重复更新
-                    task.status = TaskStatus.CANCELLED
-                    task.cancelled_at = datetime.now()
-                    task_db.commit()
+                # 在新的数据库会话中更新状态
+                with next(get_task_db()) as new_db:
+                    current_task = new_db.query(CleaningTask).get(task_id)
+                    if current_task and current_task.status != TaskStatus.CANCELLED:
+                        current_task.status = TaskStatus.CANCELLED
+                        current_task.cancelled_at = datetime.now()
+                        new_db.commit()
             finally:
                 self._processing_tasks.pop(task_id, None)
 
@@ -126,7 +128,7 @@ class TaskProcessor:
                 if task_id:
                     asyncio.create_task(self.process_task(task_id))
                 else:
-                    await asyncio.sleep(1)  # 避免过度循环
+                    await asyncio.sleep(1)
             except Exception as e:
                 logger.error(f"任务处理循环错误: {str(e)}")
                 await asyncio.sleep(1)
@@ -166,19 +168,22 @@ class TaskProcessor:
             """更新任务进度"""
             nonlocal last_update_count
             if completed_count == task.total_records or completed_count - last_update_count >= config.data_cleaning.batch_size:
-                # 检查任务是否已被取消
-                db.refresh(task)
-                if task.status == TaskStatus.CANCELLED:
-                    raise asyncio.CancelledError("Task was cancelled")
-
-                task.processed_records = completed_count
                 try:
-                    db.commit()
-                    last_update_count = completed_count
-                    logger.info(f"任务 {task.task_id} 进度更新: {completed_count}/{task.total_records}")
+                    # 获取新的数据库会话和任务实例
+                    with next(get_task_db()) as new_db:
+                        current_task = new_db.query(
+                            CleaningTask).get(task.task_id)
+                        if current_task is None or current_task.status == TaskStatus.CANCELLED:
+                            raise asyncio.CancelledError("Task was cancelled")
+
+                        current_task.processed_records = completed_count
+                        new_db.commit()
+                        last_update_count = completed_count
+                        logger.info(f"任务 {task.task_id} 进度更新: {
+                                    completed_count}/{task.total_records}")
                 except Exception as e:
                     logger.error(f"更新进度失败: {str(e)}")
-                    db.rollback()
+                    raise
 
         try:
             workflow = DataCleaningWorkflow(
@@ -195,6 +200,7 @@ class TaskProcessor:
                 progress_callback=update_progress
             )
 
+            # 合并结果
             combined_results = []
             for i, result in enumerate(results):
                 combined_row = {
@@ -205,13 +211,16 @@ class TaskProcessor:
                 }
                 combined_results.append(combined_row)
 
-            result_file_path = self.file_service.save_results_to_csv(
-                combined_results, task.task_id)
-
-            task.status = TaskStatus.COMPLETED
-            task.result_file_url = result_file_path
-            task.processed_records = task.total_records
-            db.commit()
+            # 在新的数据库会话中保存结果
+            with next(get_task_db()) as new_db:
+                current_task = new_db.query(CleaningTask).get(task.task_id)
+                if current_task and current_task.status != TaskStatus.CANCELLED:
+                    result_file_path = self.file_service.save_results_to_csv(
+                        combined_results, task.task_id)
+                    current_task.status = TaskStatus.COMPLETED
+                    current_task.result_file_url = result_file_path
+                    current_task.processed_records = task.total_records
+                    new_db.commit()
 
         except asyncio.CancelledError:
             logger.info(f"任务处理被取消: {task.task_id}")
@@ -224,9 +233,10 @@ class TaskProcessor:
             self, db: Session, task_id: str, error_message: str
     ) -> None:
         """处理任务错误"""
-        task = await self._get_task(db, task_id)
-        if task and task.status != TaskStatus.CANCELLED:  # 只在非取消状态下更新为失败
-            task.status = TaskStatus.FAILED
-            task.error_message = error_message
-            db.commit()
-            logger.error(f"任务处理失败: {task_id}, 错误={error_message}")
+        with next(get_task_db()) as new_db:
+            task = new_db.query(CleaningTask).get(task_id)
+            if task and task.status != TaskStatus.CANCELLED:
+                task.status = TaskStatus.FAILED
+                task.error_message = error_message
+                new_db.commit()
+                logger.error(f"任务处理失败: {task_id}, 错误={error_message}")
