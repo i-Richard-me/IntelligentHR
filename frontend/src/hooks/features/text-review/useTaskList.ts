@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { TaskResponse } from '@/types/api';
-import { textAnalysisApi } from '@/services';
+import { textReviewApi } from '@/services';
 import { useToast } from '@/hooks/use-toast';
 
 export function useTaskList() {
@@ -13,7 +13,7 @@ export function useTaskList() {
     try {
         setLoading(true);
         setError(null);
-        const response = await textAnalysisApi.getTasks();
+        const response = await textReviewApi.getTasks();
         console.log('Task list response:', response); // 添加响应日志
         if (response.data) {
             console.log('Setting tasks:', response.data); // 添加设置数据日志

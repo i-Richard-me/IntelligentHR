@@ -1,9 +1,9 @@
 import { apiRequest } from './api-client';
 import { TaskCreateRequest, TaskResponse } from '@/types/api';
 
-export const textAnalysisApi = {
+export const textReviewApi = {
   /**
-   * 创建文本分析任务
+   * 创建文本评估任务
    */
   createTask: async (data: TaskCreateRequest) => {
     const formData = new FormData();
@@ -12,7 +12,7 @@ export const textAnalysisApi = {
 
     return apiRequest<TaskResponse>({
       method: 'POST',
-      url: '/text-analysis/tasks',
+      url: '/text-review/tasks',
       data: formData,
       headers: {
         'Content-Type': 'multipart/form-data',
@@ -26,7 +26,7 @@ export const textAnalysisApi = {
   getTaskStatus: async (taskId: string) => {
     return apiRequest<TaskResponse>({
       method: 'GET',
-      url: `/text-analysis/tasks/${taskId}`,
+      url: `/text-review/tasks/${taskId}`,
     });
   },
 
@@ -36,17 +36,17 @@ export const textAnalysisApi = {
   getTasks: async () => {
     return apiRequest<TaskResponse[]>({
         method: 'GET',
-        url: '/text-analysis/tasks',
+        url: '/text-review/tasks',
     });
 },
 
   /**
-   * 下载分析结果
+   * 下载评估结果
    */
   downloadResult: async (taskId: string, fileName: string) => {
     const response = await apiRequest<Blob>({
       method: 'GET',
-      url: `/text-analysis/tasks/${taskId}/download`,
+      url: `/text-review/tasks/${taskId}/download`,
       responseType: 'blob',
     });
 
@@ -63,7 +63,7 @@ export const textAnalysisApi = {
   async cancelTask(taskId: string) {
     return apiRequest<TaskResponse>({
       method: 'POST',
-      url: `/text-analysis/tasks/${taskId}/cancel`,
+      url: `/text-review/tasks/${taskId}/cancel`,
     });
   },
 };

@@ -26,7 +26,7 @@ import {
   FormDescription,
 } from '@/components/ui/form';
 import { useToast } from '@/hooks/use-toast';
-import { textAnalysisApi } from '@/services';
+import { textReviewApi } from '@/services';
 
 const uploadFormSchema = z.object({
   file: z.custom<File>((v) => v instanceof File, {
@@ -57,7 +57,7 @@ export default function UploadForm({ open, onOpenChange, onSuccess }: UploadForm
       setUploading(true);
       setProgress(0);
       
-      const response = await textAnalysisApi.createTask({
+      const response = await textReviewApi.createTask({
         file: data.file,
         context: data.context,
       });

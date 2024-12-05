@@ -7,13 +7,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Dialog, DialogTrigger } from "@/components/ui/dialog";
 import { Skeleton } from '@/components/ui/skeleton';
 import { Plus } from "lucide-react";
-import UploadForm from '@/components/features/text-analysis/UploadForm';
-import { TaskList } from '@/components/features/text-analysis/TaskList';
-import { useTaskList } from '@/hooks/features/text-analysis/useTaskList';
-import { textAnalysisApi } from '@/services';
+import UploadForm from '@/components/features/text-review/UploadForm';
+import { TaskList } from '@/components/features/text-review/TaskList';
+import { useTaskList } from '@/hooks/features/text-review/useTaskList';
+import { textReviewApi } from '@/services';
 import { useToast } from '@/hooks/use-toast';
 
-export default function TextAnalysisPage() {
+export default function TextReviewPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const { tasks, loading, error, fetchTasks } = useTaskList();
   const { toast } = useToast();
@@ -26,7 +26,7 @@ export default function TextAnalysisPage() {
 
   const handleDownload = async (taskId: string, fileName: string) => {
     try {
-      await textAnalysisApi.downloadResult(taskId, fileName);
+      await textReviewApi.downloadResult(taskId, fileName);
     } catch (error) {
       console.error('Download failed:', error);
     }
@@ -39,7 +39,7 @@ export default function TextAnalysisPage() {
 
   const handleCancel = async (taskId: string) => {
     try {
-      await textAnalysisApi.cancelTask(taskId);
+      await textReviewApi.cancelTask(taskId);
       toast({
         title: '已发送取消请求',
         description: '任务将在当前处理完成后停止',
