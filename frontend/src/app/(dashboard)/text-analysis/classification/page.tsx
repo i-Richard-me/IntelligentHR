@@ -13,7 +13,14 @@ import { useClassificationTaskList } from '@/hooks/features/text-classification/
 
 export default function TextClassificationPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const { tasks, loading, error, fetchTasks, downloadResult } = useClassificationTaskList();
+  const {
+    tasks,
+    loading,
+    error,
+    fetchTasks,
+    downloadResult,
+    cancelTask
+  } = useClassificationTaskList();
 
   useEffect(() => {
     fetchTasks();
@@ -24,6 +31,14 @@ export default function TextClassificationPage() {
   const handleUploadSuccess = () => {
     fetchTasks();
     setIsDialogOpen(false);
+  };
+
+  const handleCancel = async (taskId: string) => {
+    try {
+      await cancelTask(taskId);
+    } catch (error) {
+      console.error('Cancel task failed:', error);
+    }
   };
 
   return (
@@ -93,6 +108,7 @@ export default function TextClassificationPage() {
             <ClassificationTaskList
               tasks={tasks}
               onDownload={downloadResult}
+              onCancel={handleCancel}
             />
           )}
         </CardContent>

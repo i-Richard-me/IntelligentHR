@@ -61,4 +61,14 @@ export const textClassificationApi = {
     link.remove();
     window.URL.revokeObjectURL(url);
   },
+
+  /**
+   * 取消任务
+   */
+  cancelTask: async (taskId: string) => {
+    return apiRequest<ClassificationTaskResponse>({
+      method: 'POST',
+      url: `/text-classification/tasks/${taskId}/cancel`,
+    });
+  },
 };

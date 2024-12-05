@@ -73,8 +73,31 @@ export function useClassificationTaskList() {
       await textClassificationApi.downloadResult(taskId, fileName);
     } catch (error) {
       console.error('Download failed:', error);
+      toast({
+        variant: 'destructive',
+        title: '下载失败',
+        description: error instanceof Error ? error.message : '请稍后重试',
+      });
     }
-  }, []);
+  }, [toast]);
+
+  const cancelTask = useCallback(async (taskId: string) => {
+    try {
+      await textClassificationApi.cancelTask(taskId);
+      toast({
+        title: '已发送取消请求',
+        description: '任务将在当前处理完成后停止',
+      });
+      // 刷新任务列表
+      await fetchTasks();
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: '取消失败',
+        description: error instanceof Error ? error.message : '请稍后重试',
+      });
+    }
+  }, [fetchTasks, toast]);
 
   return {
     tasks,
@@ -83,5 +106,6 @@ export function useClassificationTaskList() {
     fetchTasks,
     createTask,
     downloadResult,
+    cancelTask,
   };
 }
