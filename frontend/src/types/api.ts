@@ -7,7 +7,8 @@ export enum TaskStatus {
   WAITING = "waiting",
   PROCESSING = "processing",
   COMPLETED = "completed",
-  FAILED = "failed"
+  FAILED = "failed",
+  CANCELLED = "cancelled"
 }
 
 /**
@@ -44,6 +45,8 @@ export interface TaskResponse {
   total_records: number | null;
   processed_records: number | null;
   progress: string;
+  cancellation_requested: boolean;
+  cancelled_at: string | null;
 }
 
 /**

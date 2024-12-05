@@ -59,4 +59,11 @@ export const textAnalysisApi = {
     link.remove();
     window.URL.revokeObjectURL(url);
   },
+
+  async cancelTask(taskId: string) {
+    return apiRequest<TaskResponse>({
+      method: 'POST',
+      url: `/text-analysis/tasks/${taskId}/cancel`,
+    });
+  },
 };

@@ -10,7 +10,7 @@ import {
   getSortedRowModel,
   useReactTable,
 } from '@tanstack/react-table';
-import { Download, FileText } from 'lucide-react';
+import { Download, FileText, Ban } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
@@ -32,14 +32,16 @@ const statusMap = {
   [TaskStatus.PROCESSING]: { label: '处理中', variant: 'default' as const },
   [TaskStatus.COMPLETED]: { label: '已完成', variant: 'secondary' as const },
   [TaskStatus.FAILED]: { label: '失败', variant: 'destructive' as const },
+  [TaskStatus.CANCELLED]: { label: '已取消', variant: 'secondary' as const },
 };
 
 interface TaskListProps {
   tasks: TaskResponse[];
   onDownload: (taskId: string, fileName: string) => void;
+  onCancel?: (taskId: string) => void;
 }
 
-export function TaskList({ tasks, onDownload }: TaskListProps) {
+export function TaskList({ tasks, onDownload, onCancel }: TaskListProps) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
 
@@ -123,25 +125,40 @@ export function TaskList({ tasks, onDownload }: TaskListProps) {
       cell: ({ row }) => {
         const task = row.original;
         const canDownload = task.status === TaskStatus.COMPLETED;
+        const canCancel = task.status === TaskStatus.WAITING || task.status === TaskStatus.PROCESSING;
         
         return (
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={!canDownload}
-            onClick={() => canDownload && onDownload(
-              task.task_id, 
-              `分析结果_${formatDate(task.created_at)}`
+          <div className="flex items-center gap-2">
+            {canDownload && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onDownload(
+                  task.task_id, 
+                  `分析结果_${formatDate(task.created_at)}`
+                )}
+                className="flex items-center gap-2"
+              >
+                <Download className="h-4 w-4" />
+                <span>下载</span>
+              </Button>
             )}
-            className="flex items-center gap-2"
-          >
-            <Download className="h-4 w-4" />
-            <span>下载</span>
-          </Button>
+            {canCancel && onCancel && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onCancel(task.task_id)}
+                className="flex items-center gap-2 text-destructive hover:text-destructive"
+              >
+                <Ban className="h-4 w-4" />
+                <span>取消</span>
+              </Button>
+            )}
+          </div>
         );
       },
     },
-  ], [onDownload]);
+  ], [onDownload, onCancel]);
 
   const table = useReactTable({
     data: tasks,

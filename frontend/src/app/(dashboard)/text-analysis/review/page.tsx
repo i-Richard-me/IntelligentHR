@@ -11,10 +11,12 @@ import UploadForm from '@/components/features/text-analysis/UploadForm';
 import { TaskList } from '@/components/features/text-analysis/TaskList';
 import { useTaskList } from '@/hooks/features/text-analysis/useTaskList';
 import { textAnalysisApi } from '@/services';
+import { useToast } from '@/hooks/use-toast';
 
 export default function TextAnalysisPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const { tasks, loading, error, fetchTasks } = useTaskList();
+  const { toast } = useToast();
 
   useEffect(() => {
     fetchTasks();
@@ -33,6 +35,24 @@ export default function TextAnalysisPage() {
   const handleUploadSuccess = () => {
     fetchTasks();
     setIsDialogOpen(false);
+  };
+
+  const handleCancel = async (taskId: string) => {
+    try {
+      await textAnalysisApi.cancelTask(taskId);
+      toast({
+        title: '已发送取消请求',
+        description: '任务将在当前处理完成后停止',
+      });
+      // 刷新任务列表
+      fetchTasks();
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: '取消失败',
+        description: error instanceof Error ? error.message : '请稍后重试',
+      });
+    }
   };
 
   return (
@@ -101,6 +121,7 @@ export default function TextAnalysisPage() {
             <TaskList 
               tasks={tasks}
               onDownload={handleDownload}
+              onCancel={handleCancel}
             />
           )}
         </CardContent>
