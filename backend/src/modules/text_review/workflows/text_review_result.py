@@ -1,10 +1,9 @@
-# content_analysis_result.py
 from typing import List, Literal
 from pydantic import BaseModel, Field
 
 
-class ContentAnalysisResult(BaseModel):
-    """文本内容分析的输出格式类
+class TextReviewResult(BaseModel):
+    """文本评估的输出格式类
 
     包含回复的有效性、情感倾向和是否包含敏感信息
     """
@@ -19,10 +18,10 @@ class ContentAnalysisResult(BaseModel):
     )
 
 
-class ContentAnalysisInput(BaseModel):
-    """文本内容分析的输入格式类
+class TextReviewInput(BaseModel):
+    """文本评估的输入格式类
 
-    包含需要分类的文本和文本的上下文或主题
+    包含需要评估的文本和文本的上下文或主题
     """
-    text: str = Field(..., description="需要分类的文本")
+    text: str = Field(..., description="需要评估的文本")
     context: str = Field(..., description="文本的上下文或主题")

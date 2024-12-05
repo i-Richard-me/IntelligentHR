@@ -1,4 +1,4 @@
-CONTENT_ANALYSIS_SYSTEM_PROMPT = """
+TEXT_REVIEW_SYSTEM_PROMPT = """
 作为一个NLP专家，你需要评估给出的{context}中的回复文本。请按照以下步骤操作：
 
 1. 回复有效性判断：若回复非常短，如一个词、符号或空白，判断为"无效"。超过10个字即为"有效"。
@@ -17,8 +17,8 @@ CONTENT_ANALYSIS_SYSTEM_PROMPT = """
 - 在判断是否包含敏感信息时，使用"是"或"否"来明确回答。
 """
 
-CONTENT_ANALYSIS_HUMAN_PROMPT = """
-请对以下文本进行分类：
+TEXT_REVIEW_HUMAN_PROMPT = """
+请对以下文本进行评估：
 
 {text}
 """

@@ -6,9 +6,9 @@ from typing import Optional, Dict
 from config.config import config
 from common.storage.file_service import FileService
 from common.database.dependencies import get_task_db
-from modules.text_analysis.models.task import AnalysisTask, TaskStatus
-from modules.text_analysis.workflows.content_analysis_workflow import TextContentAnalysisWorkflow
-from modules.text_analysis.models import TaskQueue
+from modules.text_review.models.task import ReviewTask, TaskStatus
+from modules.text_review.workflows.text_review_workflow import TextReviewWorkflow
+from modules.text_review.models import TaskQueue
 
 logger = logging.getLogger(__name__)
 
@@ -16,16 +16,16 @@ logger = logging.getLogger(__name__)
 class TaskProcessor:
     """任务处理器类
 
-    处理文本分析任务的核心服务类
+    处理文本评估任务的核心服务类
     """
 
     def __init__(self):
         """初始化任务处理器"""
-        self.queue = TaskQueue("analysis")
+        self.queue = TaskQueue("review")
         self.file_service = FileService()
-        self.analyzer = TextContentAnalysisWorkflow()
+        self.reviewer = TextReviewWorkflow()
         self._processing_tasks: Dict[str, asyncio.Task] = {}
-        logger.info("分析任务处理器初始化完成")
+        logger.info("评估任务处理器初始化完成")
 
     async def process_task(self, task_id: str) -> None:
         """处理单个任务
@@ -56,7 +56,7 @@ class TaskProcessor:
                 logger.info(f"任务被取消: {task_id}")
                 # 在新的数据库会话中更新状态
                 with next(get_task_db()) as new_db:
-                    current_task = new_db.query(AnalysisTask).get(task_id)
+                    current_task = new_db.query(ReviewTask).get(task_id)
                     if current_task and current_task.status != TaskStatus.CANCELLED:
                         current_task.status = TaskStatus.CANCELLED
                         current_task.cancelled_at = datetime.now()
@@ -84,7 +84,7 @@ class TaskProcessor:
         """
         with next(get_task_db()) as db:
             try:
-                task = db.query(AnalysisTask).get(task_id)
+                task = db.query(ReviewTask).get(task_id)
                 if not task:
                     logger.warning(f"要取消的任务未找到: {task_id}")
                     return False
@@ -124,19 +124,19 @@ class TaskProcessor:
                 logger.error(f"任务处理循环错误: {str(e)}")
                 await asyncio.sleep(1)
 
-    async def _get_task(self, db: Session, task_id: str) -> Optional[AnalysisTask]:
+    async def _get_task(self, db: Session, task_id: str) -> Optional[ReviewTask]:
         """获取任务信息"""
-        return db.query(AnalysisTask).filter(AnalysisTask.task_id == task_id).first()
+        return db.query(ReviewTask).filter(ReviewTask.task_id == task_id).first()
 
     async def _update_task_status(
-            self, db: Session, task: AnalysisTask, status: TaskStatus
+            self, db: Session, task: ReviewTask, status: TaskStatus
     ) -> None:
         """更新任务状态"""
         task.status = status
         db.commit()
         logger.info(f"任务状态已更新: {task.task_id} -> {status.value}")
 
-    async def _process_task_content(self, db: Session, task: AnalysisTask) -> None:
+    async def _process_task_content(self, db: Session, task: ReviewTask) -> None:
         """处理任务内容"""
         df = self.file_service.read_csv_file(task.source_file_url)
         task.total_records = len(df)
@@ -148,12 +148,12 @@ class TaskProcessor:
         def update_progress(completed_count: int):
             """更新任务进度"""
             nonlocal last_update_count
-            if completed_count == task.total_records or completed_count - last_update_count >= config.text_analysis.batch_size:
+            if completed_count == task.total_records or completed_count - last_update_count >= config.text_review.batch_size:
                 try:
                     # 获取新的数据库会话和任务实例
                     with next(get_task_db()) as new_db:
                         current_task = new_db.query(
-                            AnalysisTask).get(task.task_id)
+                            ReviewTask).get(task.task_id)
                         if current_task is None or current_task.status == TaskStatus.CANCELLED:
                             raise asyncio.CancelledError("Task was cancelled")
 
@@ -167,11 +167,11 @@ class TaskProcessor:
                     raise
 
         try:
-            results = await self.analyzer.async_batch_analyze(
+            results = await self.reviewer.async_batch_review(
                 texts=texts,
                 context=task.context,
                 session_id=task.task_id,
-                max_concurrency=config.text_analysis.max_concurrency,
+                max_concurrency=config.text_review.max_concurrency,
                 progress_callback=update_progress
             )
 
@@ -189,7 +189,7 @@ class TaskProcessor:
 
             # 在新的数据库会话中保存结果
             with next(get_task_db()) as new_db:
-                current_task = new_db.query(AnalysisTask).get(task.task_id)
+                current_task = new_db.query(ReviewTask).get(task.task_id)
                 if current_task and current_task.status != TaskStatus.CANCELLED:
                     result_file_path = self.file_service.save_results_to_csv(
                         combined_results, task.task_id)
@@ -210,7 +210,7 @@ class TaskProcessor:
     ) -> None:
         """处理任务错误"""
         with next(get_task_db()) as new_db:
-            task = new_db.query(AnalysisTask).get(task_id)
+            task = new_db.query(ReviewTask).get(task_id)
             if task and task.status != TaskStatus.CANCELLED:
                 task.status = TaskStatus.FAILED
                 task.error_message = error_message

@@ -15,14 +15,14 @@ class TaskStatus(enum.Enum):
     CANCELLED = "cancelled"  # 已取消
 
 
-class AnalysisTask(TaskBase):
-    """文本分析任务数据库模型"""
-    __tablename__ = "analysis_tasks"
+class ReviewTask(TaskBase):
+    """文本评估任务数据库模型"""
+    __tablename__ = "review_tasks"
 
     task_id = Column(String(36), primary_key=True, comment="任务ID")
     user_id = Column(String(36), nullable=False, index=True, comment="用户ID")
     status = Column(SQLEnum(TaskStatus), nullable=False, default=TaskStatus.WAITING, comment="任务状态")
-    context = Column(Text, nullable=False, comment="分析上下文")
+    context = Column(Text, nullable=False, comment="评估上下文")
     source_file_url = Column(Text, nullable=False, comment="源文件URL")
     result_file_url = Column(Text, nullable=True, comment="结果文件URL")
     created_at = Column(DateTime, nullable=False, default=func.now(), comment="创建时间")

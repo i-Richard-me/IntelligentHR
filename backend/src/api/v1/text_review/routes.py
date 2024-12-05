@@ -2,13 +2,13 @@ from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException, R
 from fastapi.responses import FileResponse
 from typing import List
 import logging
-from modules.text_analysis.models import (
+from modules.text_review.models import (
     TaskCreate,
     TaskResponse,
     TaskQueue,
 )
 from common.database.dependencies import get_task_db
-from modules.text_analysis.models.task import AnalysisTask, TaskStatus
+from modules.text_review.models.task import ReviewTask, TaskStatus
 from common.storage.file_service import FileService
 from api.dependencies.auth import get_user_id
 import uuid
@@ -18,8 +18,8 @@ logger = logging.getLogger(__name__)
 
 # 创建路由器
 router = APIRouter(
-    prefix="/text-analysis",
-    tags=["文本分析"],
+    prefix="/text-review",
+    tags=["文本评估"],
     responses={404: {"description": "未找到"}}
 )
 
@@ -36,8 +36,8 @@ class TaskCancelRequest(BaseModel):
 @router.post(
     "/tasks",
     response_model=TaskResponse,
-    summary="创建文本分析任务",
-    description="上传文件并创建新的文本分析任务"
+    summary="创建文本评估任务",
+    description="上传文件并创建新的文本评估任务"
 )
 async def create_task(
         response: Response,
@@ -46,14 +46,14 @@ async def create_task(
         user_id: str = Depends(get_user_id),
         db=Depends(get_task_db)
 ) -> TaskResponse:
-    """创建新的文本分析任务"""
+    """创建新的文本评估任务"""
     try:
         # 保存上传的文件
         file_path = await file_service.save_upload_file(file)
         logger.info(f"文件上传成功: {file_path}")
 
         # 创建任务记录
-        task = AnalysisTask(
+        task = ReviewTask(
             task_id=str(uuid.uuid4()),
             user_id=user_id,
             context=context,
@@ -79,7 +79,7 @@ async def create_task(
     "/tasks/{task_id}",
     response_model=TaskResponse,
     summary="获取任务状态",
-    description="通过任务ID获取分析任务的当前状态"
+    description="通过任务ID获取评估任务的当前状态"
 )
 async def get_task_status(
         task_id: str,
@@ -87,9 +87,9 @@ async def get_task_status(
         db=Depends(get_task_db)
 ) -> TaskResponse:
     """获取任务状态"""
-    task = db.query(AnalysisTask).filter(
-        AnalysisTask.task_id == task_id,
-        AnalysisTask.user_id == user_id
+    task = db.query(ReviewTask).filter(
+        ReviewTask.task_id == task_id,
+        ReviewTask.user_id == user_id
     ).first()
 
     if not task:
@@ -103,7 +103,7 @@ async def get_task_status(
     "/tasks/{task_id}/cancel",
     response_model=TaskResponse,
     summary="取消任务",
-    description="取消指定的文本分析任务"
+    description="取消指定的文本评估任务"
 )
 async def cancel_task(
     task_id: str,
@@ -124,9 +124,9 @@ async def cancel_task(
         HTTPException: 当任务不存在、无权访问或无法取消时抛出
     """
     # 检查任务是否存在且属于当前用户
-    task = db.query(AnalysisTask).filter(
-        AnalysisTask.task_id == task_id,
-        AnalysisTask.user_id == user_id
+    task = db.query(ReviewTask).filter(
+        ReviewTask.task_id == task_id,
+        ReviewTask.user_id == user_id
     ).first()
 
     if not task:
@@ -140,7 +140,7 @@ async def cancel_task(
         )
 
     # 从TaskProcessor获取实例并取消任务
-    from modules.text_analysis.services import TaskProcessor
+    from modules.text_review.services import TaskProcessor
     processor = TaskProcessor()  # 这里利用了单例模式
     success = await processor.cancel_task(task_id)
 
@@ -156,16 +156,16 @@ async def cancel_task(
     "/tasks",
     response_model=List[TaskResponse],
     summary="获取任务列表",
-    description="获取当前用户的所有文本分析任务"
+    description="获取当前用户的所有文本评估任务"
 )
 async def list_tasks(
         user_id: str = Depends(get_user_id),
         db=Depends(get_task_db)
 ) -> List[TaskResponse]:
     """获取用户的所有任务"""
-    tasks = db.query(AnalysisTask).filter(
-        AnalysisTask.user_id == user_id
-    ).order_by(AnalysisTask.created_at.desc()).all()
+    tasks = db.query(ReviewTask).filter(
+        ReviewTask.user_id == user_id
+    ).order_by(ReviewTask.created_at.desc()).all()
 
     return [TaskResponse(**task.to_dict()) for task in tasks]
 
@@ -177,9 +177,9 @@ async def download_result(
         db=Depends(get_task_db)
 ):
     """下载分析结果"""
-    task = db.query(AnalysisTask).filter(
-        AnalysisTask.task_id == task_id,
-        AnalysisTask.user_id == user_id
+    task = db.query(ReviewTask).filter(
+        ReviewTask.task_id == task_id,
+        ReviewTask.user_id == user_id
     ).first()
 
     if not task:
@@ -190,6 +190,6 @@ async def download_result(
 
     return FileResponse(
         task.result_file_url,
-        filename=f"analysis_result_{task.task_id}.csv",
+        filename=f"review_result_{task.task_id}.csv",
         media_type='text/csv'
     )

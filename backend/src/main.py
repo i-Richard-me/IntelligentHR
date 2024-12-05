@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from api.v1 import v1_router
-from modules.text_analysis.services import TaskProcessor as AnalysisTaskProcessor
+from modules.text_review.services import TaskProcessor as ReviewTaskProcessor
 from modules.text_classification.services import TaskProcessor as ClassificationTaskProcessor
 from modules.data_cleaning.services import TaskProcessor as CleaningTaskProcessor
 from common.utils.env_loader import load_env
@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 load_env()
 
 # 创建任务处理器实例
-analysis_processor = None
+review_processor = None
 classification_processor = None
 cleaning_processor = None
 
@@ -36,11 +36,11 @@ async def lifespan(app: FastAPI):
         logger.info("正在初始化数据库...")
         init_database()
 
-        # 启动文本分析任务处理器
-        logger.info("正在启动文本分析任务处理器...")
-        global analysis_processor
-        analysis_processor = AnalysisTaskProcessor()
-        asyncio.create_task(analysis_processor.start_processing())
+        # 启动文本评估任务处理器
+        logger.info("正在启动文本评估任务处理器...")
+        global review_processor
+        review_processor = ReviewTaskProcessor()
+        asyncio.create_task(review_processor.start_processing())
 
         # 启动文本分类任务处理器
         logger.info("正在启动文本分类任务处理器...")
@@ -67,8 +67,8 @@ async def lifespan(app: FastAPI):
 
 # 创建FastAPI应用
 app = FastAPI(
-    title="Text Analysis API",
-    description="文本分析服务API",
+    title="Text Review API",
+    description="文本评估服务API",
     version="1.0.0",
     lifespan=lifespan
 )
