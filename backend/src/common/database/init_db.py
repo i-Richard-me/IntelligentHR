@@ -10,17 +10,16 @@ from .base import TaskBase, EntityConfigBase
 
 logger = logging.getLogger(__name__)
 
-
 def init_database() -> None:
     """初始化所有数据库
-
+    
     - 确保数据库目录存在
     - 初始化数据库连接
     - 创建数据库表
     """
     try:
-        # 确保数据库目录存在
-        for db_config in config.database.values():
+
+        for db_name, db_config in config.database.items():
             if db_config.url.startswith('sqlite:///'):
                 db_path = Path(db_config.url.replace('sqlite:///', ''))
                 db_path.parent.mkdir(parents=True, exist_ok=True)

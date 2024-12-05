@@ -7,8 +7,6 @@ logger = logging.getLogger(__name__)
 
 class TaskQueue:
     """任务队列管理类
-
-    使用单例模式确保每种任务类型只有一个队列实例
     """
     _instances: Dict[str, 'TaskQueue'] = {}
 
