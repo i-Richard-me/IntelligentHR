@@ -84,6 +84,25 @@ export function useCleaningTaskList() {
     }
   }, [fetchTasks, toast]);
 
+  const cancelTask = useCallback(async (taskId: string) => {
+    try {
+      await dataCleaningApi.cancelTask(taskId);
+      toast({
+        title: '已发送取消请求',
+        description: '任务将在当前处理完成后停止',
+      });
+      // 刷新任务列表
+      fetchTasks();
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: '取消失败',
+        description: error instanceof Error ? error.message : '请稍后重试',
+      });
+      throw error;
+    }
+  }, [fetchTasks, toast]);
+
   const downloadResult = useCallback(async (taskId: string, fileName: string) => {
     try {
       await dataCleaningApi.downloadResult(taskId, fileName);
@@ -106,6 +125,7 @@ export function useCleaningTaskList() {
     fetchTasks,
     fetchEntityTypes,
     createTask,
+    cancelTask,
     downloadResult,
   };
 }

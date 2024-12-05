@@ -76,4 +76,14 @@ export const dataCleaningApi = {
     link.remove();
     window.URL.revokeObjectURL(url);
   },
+
+  /**
+   * 取消任务
+   */
+  cancelTask: async (taskId: string) => {
+    return apiRequest<TaskResponse>({
+      method: 'POST',
+      url: `/data-cleaning/tasks/${taskId}/cancel`,
+    });
+  },
 };
