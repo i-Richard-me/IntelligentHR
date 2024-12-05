@@ -7,6 +7,7 @@ import {
   Settings2,
   Send,
   LifeBuoy,
+  Database
 } from "lucide-react";
 import { NavMain } from '@/components/shared/layout/NavMain';
 import { NavSecondary } from '@/components/shared/layout/NavSecondary';
@@ -41,6 +42,18 @@ const data = {
         {
           title: "文本分类",
           url: "/text-analysis/classification",
+        },
+      ],
+    },
+    {
+      title: "数据处理",
+      url: "/data",
+      icon: Database,
+      isActive: true,
+      items: [
+        {
+          title: "数据清洗",
+          url: "/data/cleaning",
         },
       ],
     },

@@ -30,6 +30,10 @@ const pathConfig = {
   '/text-analysis/classification': {
     parent: { label: '文本分析', path: '/text-analysis' },
     current: '文本分类'
+  },
+  '/data/cleaning': {
+    parent: { label: '数据处理', path: '/data' },
+    current: '数据清洗'
   }
 };
 
