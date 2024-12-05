@@ -8,10 +8,11 @@ from modules.text_classification.models import (
     TaskQueue,
 )
 from common.database.dependencies import get_task_db
-from modules.text_classification.models.task import ClassificationTask
+from modules.text_classification.models.task import ClassificationTask, TaskStatus
 from common.storage.file_service import FileService
 from api.dependencies.auth import get_user_id
 import uuid
+from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +26,11 @@ router = APIRouter(
 # 初始化服务
 file_service = FileService()
 task_queue = TaskQueue("classification")
+
+
+# 新增: 任务取消请求模型
+class TaskCancelRequest(BaseModel):
+    reason: str | None = None
 
 
 @router.post(
@@ -42,23 +48,7 @@ async def create_task(
         user_id: str = Depends(get_user_id),
         db=Depends(get_task_db)
 ) -> TaskResponse:
-    """创建新的文本分类任务
-
-    Args:
-        response: FastAPI响应对象
-        file: 上传的CSV文件
-        context: 分类上下文
-        categories: 分类规则的JSON字符串
-        is_multi_label: 是否为多标签分类
-        user_id: 用户ID（从请求头获取）
-        db: 数据库会话
-
-    Returns:
-        TaskResponse: 创建的任务信息
-
-    Raises:
-        HTTPException: 当文件上传或任务创建失败时抛出
-    """
+    """创建新的文本分类任务"""
     try:
         # 保存上传的文件
         file_path = await file_service.save_upload_file(file)
@@ -107,19 +97,7 @@ async def get_task_status(
         user_id: str = Depends(get_user_id),
         db=Depends(get_task_db)
 ) -> TaskResponse:
-    """获取任务状态
-
-    Args:
-        task_id: 任务ID
-        user_id: 用户ID（从请求头获取）
-        db: 数据库会话
-
-    Returns:
-        TaskResponse: 任务信息
-
-    Raises:
-        HTTPException: 当任务不存在或无权访问时抛出
-    """
+    """获取任务状态"""
     task = db.query(ClassificationTask).filter(
         ClassificationTask.task_id == task_id,
         ClassificationTask.user_id == user_id
@@ -129,6 +107,59 @@ async def get_task_status(
         logger.warning(f"任务未找到或无权访问: {task_id}")
         raise HTTPException(status_code=404, detail="Task not found")
 
+    return TaskResponse(**task.to_dict())
+
+
+@router.post(
+    "/tasks/{task_id}/cancel",
+    response_model=TaskResponse,
+    summary="取消任务",
+    description="取消指定的文本分类任务"
+)
+async def cancel_task(
+    task_id: str,
+    user_id: str = Depends(get_user_id),
+    db = Depends(get_task_db)
+) -> TaskResponse:
+    """取消指定的任务
+
+    Args:
+        task_id: 要取消的任务ID
+        user_id: 用户ID
+        db: 数据库会话
+
+    Returns:
+        TaskResponse: 更新后的任务信息
+
+    Raises:
+        HTTPException: 当任务不存在、无权访问或无法取消时抛出
+    """
+    # 检查任务是否存在且属于当前用户
+    task = db.query(ClassificationTask).filter(
+        ClassificationTask.task_id == task_id,
+        ClassificationTask.user_id == user_id
+    ).first()
+
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    # 检查任务是否可以被取消
+    if task.status in [TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.CANCELLED]:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Task cannot be cancelled in current status: {task.status.value}"
+        )
+
+    # 从TaskProcessor获取实例并取消任务
+    from modules.text_classification.services import TaskProcessor
+    processor = TaskProcessor()  # 这里利用了单例模式
+    success = await processor.cancel_task(task_id)
+
+    if not success:
+        raise HTTPException(status_code=400, detail="Failed to cancel task")
+
+    # 返回更新后的任务信息
+    db.refresh(task)
     return TaskResponse(**task.to_dict())
 
 
@@ -142,15 +173,7 @@ async def list_tasks(
         user_id: str = Depends(get_user_id),
         db=Depends(get_task_db)
 ) -> List[TaskResponse]:
-    """获取用户的所有任务
-
-    Args:
-        user_id: 用户ID（从请求头获取）
-        db: 数据库会话
-
-    Returns:
-        List[TaskResponse]: 任务列表
-    """
+    """获取用户的所有任务"""
     tasks = db.query(ClassificationTask).filter(
         ClassificationTask.user_id == user_id
     ).order_by(ClassificationTask.created_at.desc()).all()
@@ -168,19 +191,7 @@ async def download_result(
         user_id: str = Depends(get_user_id),
         db=Depends(get_task_db)
 ) -> FileResponse:
-    """下载分类结果
-
-    Args:
-        task_id: 任务ID
-        user_id: 用户ID（从请求头获取）
-        db: 数据库会话
-
-    Returns:
-        FileResponse: 分类结果文件
-
-    Raises:
-        HTTPException: 当任务不存在、无权访问或结果文件不可用时抛出
-    """
+    """下载分类结果"""
     task = db.query(ClassificationTask).filter(
         ClassificationTask.task_id == task_id,
         ClassificationTask.user_id == user_id

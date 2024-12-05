@@ -11,6 +11,7 @@ class TaskStatus(enum.Enum):
     PROCESSING = "processing"  # 处理中
     COMPLETED = "completed"    # 已完成
     FAILED = "failed"         # 失败
+    CANCELLED = "cancelled"   # 已取消
 
 class ClassificationTask(TaskBase):
     """文本分类任务数据库模型"""
@@ -31,6 +32,7 @@ class ClassificationTask(TaskBase):
     error_message = Column(Text, nullable=True, comment="错误信息")
     total_records = Column(Integer, nullable=True, comment="总记录数")
     processed_records = Column(Integer, nullable=True, default=0, comment="已处理记录数")
+    cancelled_at = Column(DateTime, nullable=True, comment="取消时间")
 
     def to_dict(self) -> dict:
         """将模型转换为字典
@@ -53,6 +55,7 @@ class ClassificationTask(TaskBase):
             "total_records": self.total_records,
             "processed_records": self.processed_records,
             "progress": f"{(self.processed_records or 0)}/{self.total_records or '?'}",
+            "cancelled_at": self.cancelled_at.isoformat() if self.cancelled_at else None,
         }
 
 class TaskCreate(BaseModel):
@@ -78,6 +81,7 @@ class TaskResponse(BaseModel):
     total_records: int | None
     processed_records: int | None
     progress: str
+    cancelled_at: datetime | None
 
     class Config:
         from_attributes = True
