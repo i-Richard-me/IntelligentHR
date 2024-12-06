@@ -26,12 +26,12 @@ const data = {
   user: {
     name: "Demo User",
     email: "demo@example.com",
-    avatar: "/avatars/default.jpg",
+    avatar: "",
   },
   navMain: [
     {
       title: "文本分析",
-      url: "",
+      url: "#",
       icon: FileText,
       isActive: true,
       items: [
@@ -47,7 +47,7 @@ const data = {
     },
     {
       title: "数据处理",
-      url: "",
+      url: "#",
       icon: Database,
       isActive: true,
       items: [
@@ -59,7 +59,7 @@ const data = {
     },
     {
       title: "数据可视化",
-      url: "",
+      url: "#",
       icon: PieChart,
       items: [
         {
@@ -83,10 +83,11 @@ const data = {
       title: "系统设置",
       url: "",
       icon: Settings2,
+      isActive: true,
       items: [
         {
-          title: "通用设置",
-          url: "/settings/general",
+          title: "功能配置",
+          url: "/feature-config",
         },
         {
           title: "个人信息",
