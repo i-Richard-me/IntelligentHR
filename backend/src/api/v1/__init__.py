@@ -2,6 +2,7 @@ from fastapi import APIRouter
 from .text_review.routes import router as text_review_router
 from .text_classification.routes import router as text_classification_router
 from .data_cleaning.routes import router as data_cleaning_router
+from .table_manager.routes import router as table_manager_router
 
 # 创建v1版本的路由器
 v1_router = APIRouter(prefix="/v1")
@@ -12,3 +13,5 @@ v1_router.include_router(text_review_router)
 v1_router.include_router(text_classification_router)
 # 注册数据清洗路由
 v1_router.include_router(data_cleaning_router)
+# 注册表格管理路由
+v1_router.include_router(table_manager_router)
