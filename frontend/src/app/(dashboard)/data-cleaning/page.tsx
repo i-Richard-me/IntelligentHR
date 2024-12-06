@@ -10,6 +10,7 @@ import { Plus } from "lucide-react";
 import { CleaningUploadForm } from '@/components/features/data-cleaning/CleaningUploadForm';
 import { CleaningTaskList } from '@/components/features/data-cleaning/CleaningTaskList';
 import { useCleaningTaskList } from '@/hooks/features/data-cleaning/useCleaningTaskList';
+import { useToast } from '@/hooks/use-toast';
 
 export default function DataCleaningPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -20,8 +21,10 @@ export default function DataCleaningPage() {
     error,
     fetchTasks,
     fetchEntityTypes,
-    downloadResult
+    downloadResult,
+    cancelTask
   } = useCleaningTaskList();
+  const { toast } = useToast();
 
   useEffect(() => {
     // 初始化加载实体类型和任务列表
@@ -35,6 +38,15 @@ export default function DataCleaningPage() {
   const handleUploadSuccess = () => {
     fetchTasks();
     setIsDialogOpen(false);
+  };
+
+  const handleCancel = async (taskId: string) => {
+    try {
+      await cancelTask(taskId);
+      // fetchTasks() 已经在 cancelTask 中调用了
+    } catch (error) {
+      // 错误处理已经在 cancelTask 中完成了
+    }
   };
 
   return (
@@ -106,6 +118,7 @@ export default function DataCleaningPage() {
               tasks={tasks}
               entityTypes={entityTypes}
               onDownload={downloadResult}
+              onCancel={handleCancel}
             />
           )}
         </CardContent>
