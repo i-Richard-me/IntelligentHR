@@ -3,6 +3,7 @@
 """
 from typing import Dict
 from common.utils.llm_tools import init_language_model, LanguageModelChain
+from config.config import config
 from ..models.state import GraphState, ProcessingStatus
 from ..models.schema import EntityRecognition
 import logging
@@ -10,7 +11,11 @@ import logging
 logger = logging.getLogger(__name__)
 
 # 初始化语言模型
-language_model = init_language_model()
+language_model = init_language_model(
+    provider=config.data_cleaning.llm_provider,
+    model_name=config.data_cleaning.llm_model,
+    temperature=config.data_cleaning.temperature
+)
 
 # 定义系统消息模板
 SYSTEM_MESSAGE = """

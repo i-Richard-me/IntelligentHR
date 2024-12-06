@@ -15,7 +15,7 @@ from modules.data_cleaning.models.task import CleaningTask, TaskStatus
 from modules.data_cleaning.services.entity_config_service import EntityConfigService
 from common.storage.file_service import FileService
 from api.dependencies.auth import get_user_id
-from common.database.dependencies import get_task_db, get_entity_config_db
+from common.database.dependencies import get_task_db, get_app_config_db
 import uuid
 
 logger = logging.getLogger(__name__)
@@ -39,7 +39,7 @@ task_queue = TaskQueue("cleaning")
 )
 async def list_entity_types(
     user_id: str = Depends(get_user_id),
-    db=Depends(get_entity_config_db)
+    db=Depends(get_app_config_db)
 ) -> List[EntityConfigResponse]:
     """获取所有支持的实体类型"""
     try:
@@ -64,12 +64,12 @@ async def create_task(
         retrieval_enabled: bool = Form(True, description="是否启用检索功能"),
         user_id: str = Depends(get_user_id),
         task_db=Depends(get_task_db),
-        entity_config_db=Depends(get_entity_config_db)
+        app_config_db=Depends(get_app_config_db)
 ) -> TaskResponse:
     """创建新的数据清洗任务"""
     try:
         # 验证实体类型是否支持
-        config_service = EntityConfigService(entity_config_db)
+        config_service = EntityConfigService(app_config_db)
         if not config_service.is_valid_entity_type(entity_type):
             raise HTTPException(
                 status_code=400,

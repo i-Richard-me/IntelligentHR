@@ -1,8 +1,8 @@
 from .task import CleaningTask, TaskStatus, TaskCreate, TaskResponse
 from .entity_config import EntityConfig, EntityConfigResponse
 from .state import GraphState, ProcessingStatus
-from common.database.dependencies import get_task_db, get_entity_config_db
 from common.queue.task_queue import TaskQueue
+from common.database.dependencies import get_task_db, get_app_config_db
 
 __all__ = [
     'CleaningTask',
@@ -14,6 +14,6 @@ __all__ = [
     'GraphState',
     'ProcessingStatus',
     'get_task_db',
-    'get_entity_config_db',
+    'get_app_config_db',
     'TaskQueue'
 ]

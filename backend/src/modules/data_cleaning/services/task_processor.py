@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from typing import Optional
 from config.config import config
 from common.storage.file_service import FileService
-from common.database.dependencies import get_task_db, get_entity_config_db
+from common.database.dependencies import get_task_db, get_app_config_db
 from ..models.task import CleaningTask, TaskStatus
 from ..models.entity_config import EntityConfig
 from ..services.entity_config_service import EntityConfigService
@@ -71,7 +71,7 @@ class TaskProcessor:
     async def process_task(self, task_id: str) -> None:
         """处理单个任务"""
         task_db = next(get_task_db())
-        entity_config_db = next(get_entity_config_db())
+        app_config_db = next(get_app_config_db())
 
         try:
             task = await self._get_task(task_db, task_id)
@@ -84,7 +84,7 @@ class TaskProcessor:
                 logger.info(f"任务已被取消，跳过执行: {task_id}")
                 return
 
-            entity_config = await self._get_entity_config(entity_config_db, task)
+            entity_config = await self._get_entity_config(app_config_db, task)
             if not entity_config:
                 raise ValueError(f"未找到实体类型配置: {task.entity_type}")
 
@@ -117,7 +117,7 @@ class TaskProcessor:
         finally:
             self.queue.complete_task(task_id)
             task_db.close()
-            entity_config_db.close()
+            app_config_db.close()
 
     async def start_processing(self) -> None:
         """启动任务处理循环"""

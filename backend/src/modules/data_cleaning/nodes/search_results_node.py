@@ -2,16 +2,12 @@
 搜索结果节点，专门负责执行网络搜索
 """
 from typing import Dict
-import os
 from ..models.state import GraphState, ProcessingStatus
 from ..tools.search_tools import SearchTools
-
-# 从环境变量获取搜索配置
-MAX_SEARCH_RESULTS = int(os.getenv("MAX_SEARCH_RESULTS", "5"))
-SEARCH_TYPE = os.getenv("SEARCH_TYPE", "tavily")
+from config.config import config
 
 # 初始化搜索工具
-search_tools = SearchTools(max_results=MAX_SEARCH_RESULTS)
+search_tools = SearchTools(max_results=config.data_cleaning.max_search_results)
 
 async def search_results_node(state: GraphState) -> Dict:
     """
@@ -26,7 +22,7 @@ async def search_results_node(state: GraphState) -> Dict:
     # 执行搜索
     search_results = await search_tools.asearch(
         state["original_input"],
-        search_type=SEARCH_TYPE
+        search_type=config.data_cleaning.search_type
     )
 
     # 返回搜索结果
