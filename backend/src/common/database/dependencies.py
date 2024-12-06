@@ -24,15 +24,15 @@ def get_task_db() -> Generator[Session, None, None]:
     finally:
         db.close()
 
-def get_entity_config_db() -> Generator[Session, None, None]:
-    """获取实体配置数据库会话
+def get_app_config_db() -> Generator[Session, None, None]:
+    """获取应用配置数据库会话
 
     Yields:
         Session: 数据库会话对象
     """
-    db = db_connections.get_session("entity_config_db")
+    db = db_connections.get_session("app_config_db")
     if db is None:
-        raise RuntimeError("无法获取实体配置数据库会话")
+        raise RuntimeError("无法获取应用配置数据库会话")
     try:
         yield db
     finally:

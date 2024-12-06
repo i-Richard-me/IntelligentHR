@@ -3,11 +3,12 @@
 提供统一的数据库连接管理，支持多数据库配置和连接
 """
 from typing import Dict, Optional, Any
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy import create_engine, text, event
 from sqlalchemy.engine import Engine
+from sqlalchemy.orm import sessionmaker, Session
 import logging
 from pathlib import Path
+import urllib.parse
 
 logger = logging.getLogger(__name__)
 
@@ -47,21 +48,39 @@ class DatabaseConnections:
             if db_name in self._engines:
                 logger.warning(f"数据库引擎 {db_name} 已存在，将被覆盖")
 
-            # 如果是SQLite数据库且需要确保路径存在
-            if ensure_path and db_url.startswith('sqlite:///'):
-                db_path = db_url.replace('sqlite:///', '')
-                Path(db_path).parent.mkdir(parents=True, exist_ok=True)
+            # 解析数据库URL以确定数据库类型
+            parsed_url = urllib.parse.urlparse(db_url)
+            db_type = parsed_url.scheme.split('+')[0]
+
+            # 数据库特定的配置
+            connect_args = kwargs.pop('connect_args', {})
+            if db_type == 'sqlite':
+                if ensure_path:
+                    db_path = db_url.replace('sqlite:///', '')
+                    Path(db_path).parent.mkdir(parents=True, exist_ok=True)
+                connect_args.setdefault('check_same_thread', False)
+            elif db_type == 'mysql':
+                # MySQL特定配置
+                connect_args.setdefault('charset', 'utf8mb4')
+                kwargs.setdefault('pool_recycle', 3600)
+                kwargs.setdefault('pool_pre_ping', True)  # 启用连接池预检
 
             # 创建引擎
-            connect_args = kwargs.pop('connect_args', {})
-            if db_url.startswith('sqlite:///'):
-                connect_args.setdefault('check_same_thread', False)
-
             engine = create_engine(
                 db_url,
                 connect_args=connect_args,
                 **kwargs
             )
+
+            # 为MySQL添加事件监听器
+            if db_type == 'mysql':
+                @event.listens_for(engine, 'engine_connect')
+                def receive_engine_connect(connection):
+                    if not connection.closed:
+                        with connection.begin():
+                            connection.execute(text("SET NAMES utf8mb4"))
+                            connection.execute(text("SET CHARACTER SET utf8mb4"))
+                            connection.execute(text("SET character_set_connection=utf8mb4"))
 
             self._engines[db_name] = engine
             self._session_makers[db_name] = sessionmaker(
@@ -70,7 +89,7 @@ class DatabaseConnections:
                 bind=engine
             )
 
-            logger.info(f"数据库引擎 {db_name} 初始化成功")
+            logger.info(f"数据库引擎 {db_name} ({db_type}) 初始化成功")
             return engine
 
         except Exception as e:
@@ -78,34 +97,16 @@ class DatabaseConnections:
             raise
 
     def get_engine(self, db_name: str) -> Optional[Engine]:
-        """获取数据库引擎
-
-        Args:
-            db_name: 数据库标识名
-
-        Returns:
-            数据库引擎实例，如果不存在返回None
-        """
+        """获取数据库引擎"""
         return self._engines.get(db_name)
 
     def get_session(self, db_name: str) -> Optional[Session]:
-        """获取数据库会话
-
-        Args:
-            db_name: 数据库标识名
-
-        Returns:
-            数据库会话实例，如果不存在返回None
-        """
+        """获取数据库会话"""
         session_maker = self._session_makers.get(db_name)
         return session_maker() if session_maker else None
 
     def dispose_engine(self, db_name: str) -> None:
-        """释放数据库引擎资源
-
-        Args:
-            db_name: 数据库标识名
-        """
+        """释放数据库引擎资源"""
         if db_name in self._engines:
             self._engines[db_name].dispose()
             del self._engines[db_name]
