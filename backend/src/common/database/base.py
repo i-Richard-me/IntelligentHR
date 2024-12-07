@@ -17,12 +17,12 @@ naming_convention = {
 # 创建支持 MySQL 的元数据对象
 task_metadata = MetaData(naming_convention=naming_convention)
 entity_config_metadata = MetaData(naming_convention=naming_convention)
+collection_metadata = MetaData(naming_convention=naming_convention)
 
-# 创建任务数据库的Base类
+# 创建各数据库的Base类
 TaskBase = declarative_base(metadata=task_metadata)
-
-# 创建实体配置数据库的Base类
 EntityConfigBase = declarative_base(metadata=entity_config_metadata)
+CollectionBase = declarative_base(metadata=collection_metadata)
 
 # 添加通用表参数方法
 def get_table_args():

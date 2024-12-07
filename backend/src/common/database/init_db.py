@@ -6,7 +6,7 @@ from pathlib import Path
 import logging
 from config.config import config
 from .connections import db_connections
-from .base import TaskBase, EntityConfigBase
+from .base import TaskBase, EntityConfigBase, CollectionBase  # 更新导入
 from sqlalchemy import create_engine, text
 from urllib.parse import urlparse, parse_qs
 
@@ -61,7 +61,6 @@ def init_database() -> None:
                 db_path = Path(db_config.url.replace('sqlite:///', ''))
                 db_path.parent.mkdir(parents=True, exist_ok=True)
             else:
-                # 对MySQL数据库，确保数据库存在
                 create_database_if_not_exists(db_config.url)
 
         # 初始化任务数据库
@@ -85,6 +84,17 @@ def init_database() -> None:
         )
         EntityConfigBase.metadata.create_all(bind=entity_config_engine)
         logger.info("实体配置数据库表初始化完成")
+
+        # 初始化Collection配置数据库（新增）
+        collection_engine = db_connections.init_engine(
+            "app_config_db",
+            config.database.app_config_db.url,
+            echo=config.database.app_config_db.echo,
+            pool_size=config.database.app_config_db.pool_size,
+            max_overflow=config.database.app_config_db.max_overflow,
+        )
+        CollectionBase.metadata.create_all(bind=collection_engine)
+        logger.info("Collection配置数据库表初始化完成")
 
     except Exception as e:
         logger.error(f"数据库初始化失败: {str(e)}")
