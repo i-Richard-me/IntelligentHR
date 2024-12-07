@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { ModelConfigTab } from '@/components/features/feature-config/ModelConfigTab';
+import { CollectionConfigTab } from '@/components/features/feature-config/CollectionConfigTab';
 
 export default function FeatureConfigPage() {
   const [activeTab, setActiveTab] = useState('model-config');
@@ -17,7 +18,7 @@ export default function FeatureConfigPage() {
           <div className="flex flex-col gap-4">
             <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-foreground/90">功能配置</h1>
             <p className="text-sm md:text-base text-muted-foreground max-w-3xl">
-              在这里可以管理系统的各项功能配置，包括业务分析模型、系统参数等设置。
+              在这里可以管理系统的各项功能配置，包括业务分析模型、向量数据库、系统参数等设置。
             </p>
           </div>
         </div>
@@ -38,10 +39,9 @@ export default function FeatureConfigPage() {
             onValueChange={setActiveTab}
             className="space-y-4"
           >
-            <TabsList>
+            <TabsList className="grid w-full grid-cols-2 lg:w-[400px]">
               <TabsTrigger value="model-config">业务分析模型</TabsTrigger>
-              <TabsTrigger value="system-params" disabled>系统参数</TabsTrigger>
-              <TabsTrigger value="api-config" disabled>API 配置</TabsTrigger>
+              <TabsTrigger value="collection-config">向量数据库</TabsTrigger>
             </TabsList>
 
             <TabsContent value="model-config" className="space-y-4">
@@ -53,20 +53,13 @@ export default function FeatureConfigPage() {
               <ModelConfigTab />
             </TabsContent>
 
-            <TabsContent value="system-params">
+            <TabsContent value="collection-config" className="space-y-4">
               <Alert>
                 <AlertDescription>
-                  系统参数配置功能正在开发中...
+                  在这里可以管理向量数据库中的 Collection 配置，包括字段定义、向量化设置等。
                 </AlertDescription>
               </Alert>
-            </TabsContent>
-
-            <TabsContent value="api-config">
-              <Alert>
-                <AlertDescription>
-                  API 配置功能正在开发中...
-                </AlertDescription>
-              </Alert>
+              <CollectionConfigTab />
             </TabsContent>
           </Tabs>
         </CardContent>
