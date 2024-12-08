@@ -1,10 +1,17 @@
 'use client';
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
+import {
+  ColumnDef,
+  flexRender,
+  getCoreRowModel,
+  useReactTable,
+  getPaginationRowModel,
+} from "@tanstack/react-table";
 import { useCollectionData } from '@/hooks/features/feature-config/useCollectionData';
 import { useCollectionConfigs } from '@/hooks/features/feature-config/useCollectionConfigs';
 import { CollectionConfig } from '@/types/table-manager';
-import { Search } from 'lucide-react';
+import { Search, Upload, Trash2, Pencil } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -24,9 +31,20 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from '@/components/ui/button';
-import { SimplePagination } from '@/components/shared/tables/SimplePagination';
+import { DataTablePagination } from '@/components/shared/tables/DataTablePagination';
 import { Skeleton } from '@/components/ui/skeleton';
 import { DataUploadDialog } from './DataUploadDialog';
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from "@/components/ui/alert-dialog";
+import { Checkbox } from "@/components/ui/checkbox";
 
 // 支持的数据库列表
 const SUPPORTED_DATABASES = [
@@ -35,15 +53,28 @@ const SUPPORTED_DATABASES = [
   { id: 'examples', name: '示例库' },
 ];
 
+interface DataTableProps {
+  columns: ColumnDef<any>[];
+  data: any[];
+  pageCount: number;
+  onPaginationChange: (pagination: { pageIndex: number; pageSize: number }) => void;
+}
+
 export function CollectionDataTab() {
   const { toast } = useToast();
   const [selectedDatabase, setSelectedDatabase] = useState<string | undefined>();
   const [selectedCollection, setSelectedCollection] = useState<CollectionConfig | null>(null);
   const [searchField, setSearchField] = useState<string | null>(null);
   const [searchText, setSearchText] = useState('');
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [{ pageIndex, pageSize }, setPagination] = useState({
+    pageIndex: 0,
+    pageSize: 10,
+  });
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
+  const [selectedRows, setSelectedRows] = useState<string[]>([]);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [recordToDelete, setRecordToDelete] = useState<string | null>(null);
+  const [recordToEdit, setRecordToEdit] = useState<Record<string, any> | null>(null);
 
   // 获取 Collection 配置列表
   const {
@@ -66,7 +97,8 @@ export function CollectionDataTab() {
     error,
     queryData,
     getTableColumns,
-    formatTableData
+    formatTableData,
+    batchDelete
   } = useCollectionData({
     database: selectedDatabase,
     collection: selectedCollection
@@ -78,7 +110,7 @@ export function CollectionDataTab() {
     setSelectedCollection(null);
     setSearchField(null);
     setSearchText('');
-    setPage(1);
+    setPagination(prev => ({ ...prev, pageIndex: 0 }));
   }, []);
 
   // 处理 Collection 选择
@@ -87,7 +119,7 @@ export function CollectionDataTab() {
     setSelectedCollection(collection || null);
     setSearchField(null);
     setSearchText('');
-    setPage(1);
+    setPagination(prev => ({ ...prev, pageIndex: 0 }));
   }, [availableCollections]);
 
   // 处理搜索
@@ -95,13 +127,13 @@ export function CollectionDataTab() {
     if (!selectedDatabase || !selectedCollection) return;
 
     queryData({
-      page,
+      page: pageIndex + 1,
       page_size: pageSize,
       search_field: searchField || undefined,
       search_text: searchText,
       top_k: searchField ? pageSize : undefined
     });
-  }, [queryData, page, pageSize, searchField, searchText, selectedDatabase, selectedCollection]);
+  }, [queryData, pageIndex, pageSize, searchField, searchText, selectedDatabase, selectedCollection]);
 
   // 获取可搜索字段（向量字段）
   const getSearchableFields = useCallback(() => {
@@ -109,11 +141,198 @@ export function CollectionDataTab() {
     return selectedCollection.fields.filter(field => field.is_vector);
   }, [selectedCollection]);
 
-  // 表格列配置
-  const columns = selectedCollection ? getTableColumns() : [];
+  // 处理删除确认
+  const handleDelete = async () => {
+    if (!recordToDelete) return;
 
-  // 格式化表格数据
-  const tableData = formatTableData(data);
+    try {
+      await batchDelete({ ids: [recordToDelete] });
+      toast({
+        title: "删除成功",
+        description: "数据已删除",
+      });
+      // 刷新数据
+      queryData({
+        page: pageIndex + 1,
+        page_size: pageSize,
+        search_field: searchField || undefined,
+        search_text: searchText,
+        top_k: searchField ? pageSize : undefined
+      });
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "删除失败",
+        description: error instanceof Error ? error.message : "请稍后重试",
+      });
+    } finally {
+      setIsDeleteDialogOpen(false);
+      setRecordToDelete(null);
+    }
+  };
+
+  // 处理批量删除
+  const handleBatchDelete = async () => {
+    if (selectedRows.length === 0) return;
+
+    try {
+      await batchDelete({ ids: selectedRows });
+      toast({
+        title: "批量删除成功",
+        description: `已删除 ${selectedRows.length} 条数据`,
+      });
+      // 刷新数据
+      queryData({
+        page: pageIndex + 1,
+        page_size: pageSize,
+        search_field: searchField || undefined,
+        search_text: searchText,
+        top_k: searchField ? pageSize : undefined
+      });
+      setSelectedRows([]);
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "批量删除失败",
+        description: error instanceof Error ? error.message : "请稍后重试",
+      });
+    }
+  };
+
+  // 构建表格列配置
+  const columns = useMemo<ColumnDef<any>[]>(() => {
+    if (!selectedCollection) return [];
+    
+    const baseColumns = getTableColumns().map(col => ({
+      accessorKey: col.field,
+      header: col.title,
+    }));
+
+    return [
+      {
+        id: 'select',
+        header: ({ table }) => (
+          <Checkbox
+            checked={table.getIsAllPageRowsSelected()}
+            onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+            aria-label="Select all"
+          />
+        ),
+        cell: ({ row }) => (
+          <Checkbox
+            checked={row.getIsSelected()}
+            onCheckedChange={(value) => row.toggleSelected(!!value)}
+            aria-label="Select row"
+          />
+        ),
+        enableSorting: false,
+        enableHiding: false,
+      },
+      ...baseColumns,
+      {
+        accessorKey: 'distance',
+        header: '相似度',
+        cell: ({ row }) => {
+          const distance = row.original.distance;
+          return distance ? `${(distance * 100).toFixed(2)}%` : '-';
+        },
+      },
+      {
+        id: 'actions',
+        header: ({ column }) => (
+          <div className="text-right">操作</div>
+        ),
+        cell: ({ row }) => {
+          const record = row.original;
+          return (
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  // 准备编辑数据
+                  const editData = { ...record };
+                  delete editData.id;  // 移除 id 字段
+                  delete editData.distance;  // 移除 distance 字段
+                  setRecordToEdit(editData);
+                  setIsUploadDialogOpen(true);
+                }}
+              >
+                <Pencil className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setRecordToDelete(record.id);
+                  setIsDeleteDialogOpen(true);
+                }}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
+          );
+        },
+      },
+    ];
+  }, [selectedCollection, getTableColumns]);
+
+  // 处理分页变化
+  const handlePaginationChange = useCallback(
+    ({ pageIndex, pageSize }: { pageIndex: number; pageSize: number }) => {
+      setPagination({ pageIndex, pageSize });
+      queryData({
+        page: pageIndex + 1,
+        page_size: pageSize,
+        search_field: searchField || undefined,
+        search_text: searchText,
+        top_k: searchField ? pageSize : undefined
+      });
+    },
+    [queryData, searchField, searchText]
+  );
+
+  // 初始化表格
+  const table = useReactTable({
+    data: formatTableData(data) || [],
+    columns,
+    pageCount: data ? Math.ceil(data.total / pageSize) : -1,
+    state: {
+      pagination: {
+        pageIndex,
+        pageSize,
+      },
+    },
+    onPaginationChange: (updater) => {
+      const newPagination = 
+        typeof updater === 'function' 
+          ? updater({ pageIndex, pageSize })
+          : updater;
+      setPagination(newPagination);
+      queryData({
+        page: newPagination.pageIndex + 1,
+        page_size: newPagination.pageSize,
+        search_field: searchField || undefined,
+        search_text: searchText,
+        top_k: searchField ? newPagination.pageSize : undefined
+      });
+    },
+    getCoreRowModel: getCoreRowModel(),
+    manualPagination: true,
+  });
+
+  // 初始化加载数据
+  useEffect(() => {
+    if (selectedDatabase && selectedCollection) {
+      queryData({
+        page: pageIndex + 1,
+        page_size: pageSize,
+        search_field: searchField || undefined,
+        search_text: searchText,
+        top_k: searchField ? pageSize : undefined
+      });
+    }
+  }, [selectedDatabase, selectedCollection]);
 
   return (
     <div className="space-y-6">
@@ -205,35 +424,54 @@ export function CollectionDataTab() {
         )}
       </div>
 
-      {/* 数据操作按钮区域 */}
-      {selectedCollection && (
-        <div className="flex justify-between items-center">
-          <div>
+      {/* 操作栏 */}
+      <div className="flex justify-between items-center">
+        <div className="space-x-2">
+          <Button
+            onClick={() => {
+              setRecordToEdit(null);  // 清空编辑数据，表示新建
+              setIsUploadDialogOpen(true);
+            }}
+            className="flex items-center gap-2"
+          >
+            <Upload className="h-4 w-4" />
+            导入数据
+          </Button>
+          {selectedRows.length > 0 && (
             <Button
-              onClick={() => setIsUploadDialogOpen(true)}
-              disabled={loadingData}
+              variant="destructive"
+              size="sm"
+              onClick={handleBatchDelete}
+              className="flex items-center gap-2"
             >
-              导入数据
+              <Trash2 className="h-4 w-4" />
+              删除选中 ({selectedRows.length})
             </Button>
-          </div>
-          <div className="text-sm text-muted-foreground">
-            {data?.total ? `共 ${data.total} 条数据` : null}
-          </div>
+          )}
         </div>
-      )}
+        <div className="flex items-center gap-4">
+          {/* ... existing search components ... */}
+        </div>
+      </div>
 
       {/* 数据表格区域 */}
       <div className="rounded-md border">
         <Table>
           <TableHeader>
-            <TableRow>
-              {columns.map((column, index) => (
-                <TableHead key={index}>
-                  {column.title}
-                </TableHead>
-              ))}
-              {columns.length > 0 && <TableHead>相似度</TableHead>}
-            </TableRow>
+            {table.getHeaderGroups().map((headerGroup) => (
+              <TableRow key={headerGroup.id}>
+                {headerGroup.headers.map((header) => (
+                  <TableHead key={header.id}>
+                    {header.isPlaceholder
+                      ? null
+                      : flexRender(
+                          header.column.columnDef.header,
+                          header.getContext()
+                        )}
+                  </TableHead>
+                ))}
+              </TableRow>
+            ))}
           </TableHeader>
           <TableBody>
             {loadingData ? (
@@ -251,70 +489,90 @@ export function CollectionDataTab() {
               // 错误状态
               <TableRow>
                 <TableCell
-                  colSpan={columns.length + 1}
+                  colSpan={columns.length}
                   className="text-center text-destructive h-32"
                 >
                   {error.message}
                 </TableCell>
               </TableRow>
-            ) : !tableData.length ? (
+            ) : table.getRowModel().rows?.length ? (
+              // 数据展示
+              table.getRowModel().rows.map((row) => (
+                <TableRow key={row.id}>
+                  {row.getVisibleCells().map((cell) => (
+                    <TableCell key={cell.id}>
+                      {flexRender(
+                        cell.column.columnDef.cell,
+                        cell.getContext()
+                      )}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))
+            ) : (
               // 空状态
               <TableRow>
                 <TableCell
-                  colSpan={columns.length + 1}
+                  colSpan={columns.length}
                   className="text-center h-32"
                 >
                   暂无数据
                 </TableCell>
               </TableRow>
-            ) : (
-              // 数据展示
-              tableData.map((row, index) => (
-                <TableRow key={index}>
-                  {columns.map((column) => (
-                    <TableCell key={column.field}>
-                      {row[column.field]}
-                    </TableCell>
-                  ))}
-                  <TableCell>
-                    {row.distance ? (
-                      `${(row.distance * 100).toFixed(2)}%`
-                    ) : '-'}
-                  </TableCell>
-                </TableRow>
-              ))
             )}
           </TableBody>
         </Table>
       </div>
 
       {/* 分页区域 */}
-      {data && (
-        <SimplePagination
-          pageSize={pageSize}
-          setPageSize={setPageSize}
-          page={page}
-          setPage={setPage}
-          total={data.total}
-        />
-      )}
+      {data && <DataTablePagination table={table} />}
 
-      {/* 数据上传对话框 */}
-      {selectedCollection && selectedDatabase && (
+      {/* 数据上传/编辑对话框 */}
+      {selectedCollection && (
         <DataUploadDialog
           open={isUploadDialogOpen}
-          onOpenChange={setIsUploadDialogOpen}
+          onOpenChange={(open) => {
+            setIsUploadDialogOpen(open);
+            if (!open) {
+              setRecordToEdit(null);  // 关闭对话框时清空编辑数据
+            }
+          }}
           collection={selectedCollection}
-          database={selectedDatabase}
+          database={selectedDatabase || ''}
+          editData={recordToEdit}  // 传递编辑数据
           onSuccess={() => {
-            handleSearch();
-            toast({
-              title: "上传成功",
-              description: "数据已成功导入",
+            // 刷新数据
+            queryData({
+              page: pageIndex + 1,
+              page_size: pageSize,
+              search_field: searchField || undefined,
+              search_text: searchText,
+              top_k: searchField ? pageSize : undefined
             });
           }}
         />
       )}
+
+      {/* 删除确认对话框 */}
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>确认删除</AlertDialogTitle>
+            <AlertDialogDescription>
+              确定要删除这条数据吗？此操作不可撤销。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              删除
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
