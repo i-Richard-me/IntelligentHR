@@ -57,10 +57,10 @@ export function ConfigSidebar({
   return (
     <Sidebar
       collapsible="none"
-      className="sticky hidden lg:flex top-0 h-svh border-l"
+      className="hidden lg:flex h-full bg-background border-l"
       {...props}
     >
-      <SidebarContent>
+      <SidebarContent className="h-full">
         <SidebarGroup>
           <SidebarGroupLabel>功能模块</SidebarGroupLabel>
           <SidebarGroupContent>

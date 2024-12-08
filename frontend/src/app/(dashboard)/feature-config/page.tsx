@@ -4,7 +4,6 @@
 
 import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { SidebarInset } from "@/components/ui/sidebar";
 import { ConfigSidebar, featureModules, type FeatureModuleId } from '@/components/features/feature-config/ConfigSidebar';
 import { DataCleaningConfig } from '@/components/features/feature-config/DataCleaningConfig';
 
@@ -30,9 +29,9 @@ export default function FeatureConfigPage() {
   };
 
   return (
-    <div className="flex flex-1 overflow-hidden">
-      <SidebarInset className="flex flex-col min-w-0 flex-1">
-        <div className="flex-1 space-y-8 p-4 md:p-8 pt-6 overflow-auto">
+    <div className="flex h-full">
+      <div className="flex-1 min-w-0 overflow-auto">
+        <div className="space-y-8 p-4 md:p-8 pt-6">
           {/* 标题区域 */}
           <div className="border-b pb-6">
             <div className="container px-0">
@@ -63,7 +62,7 @@ export default function FeatureConfigPage() {
             </CardContent>
           </Card>
         </div>
-      </SidebarInset>
+      </div>
       <ConfigSidebar
         side="right"
         activeModule={activeModule}
