@@ -56,7 +56,7 @@ class CollectionConfig(BaseModel):
 
 class DataRecord(BaseModel):
     """数据记录模型"""
-    id: Optional[str] = Field(None, description="��录ID")
+    id: Optional[str] = Field(None, description="记录ID")
     data: Dict[str, Any] = Field(..., description="记录数据")
     distance: float = Field(default=0.0, description="向量距离")
 

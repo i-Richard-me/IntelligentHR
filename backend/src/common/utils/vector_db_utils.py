@@ -576,7 +576,7 @@ async def async_get_collection_loading_progress(collection: Collection) -> float
 
 async def async_drop_collection(collection_name: str) -> None:
     """
-    异步删除集���。
+    异步删除集合。
 
     Args:
         collection_name (str): 要删除的集合名称。

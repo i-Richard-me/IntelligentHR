@@ -47,7 +47,7 @@ class CollectionConfigTable(CollectionBase):
     name = Column(String(100), nullable=False, unique=True, comment='Collection名称')
     display_name = Column(String(100), comment='显示名称')
     description = Column(Text, comment='Collection描述')
-    fields = Column(JSON, nullable=False, comment='字段配��')
+    fields = Column(JSON, nullable=False, comment='字段配置')
     embedding_fields = Column(JSON, nullable=False, comment='需要向量化的字段列表')
     collection_databases = Column(JSON, nullable=False, comment='包含该Collection的数据库列表')
     feature_modules = Column(JSON, comment='所属功能模块列表')
