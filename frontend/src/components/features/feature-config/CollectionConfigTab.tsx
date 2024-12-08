@@ -149,10 +149,10 @@ export function CollectionConfigTab() {
           <TableHeader>
             <TableRow>
               <TableHead>Collection名称</TableHead>
+              <TableHead>显示名称</TableHead>
               <TableHead>描述</TableHead>
               <TableHead>字段数</TableHead>
               <TableHead>向量字段</TableHead>
-              <TableHead>可用数据库</TableHead>
               <TableHead className="text-right">操作</TableHead>
             </TableRow>
           </TableHeader>
@@ -182,6 +182,9 @@ export function CollectionConfigTab() {
                   <TableCell>
                     <Badge variant="outline">{config.name}</Badge>
                   </TableCell>
+                  <TableCell>
+                    {config.display_name || '-'}
+                  </TableCell>
                   <TableCell className="max-w-md truncate">
                     {config.description || '-'}
                   </TableCell>
@@ -198,15 +201,6 @@ export function CollectionConfigTab() {
                     ) : (
                       '-'
                     )}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex flex-wrap gap-1">
-                      {config.allowed_databases.map(db => (
-                        <Badge key={db} variant="secondary">
-                          {db}
-                        </Badge>
-                      ))}
-                    </div>
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">

@@ -55,15 +55,22 @@ const collectionConfigSchema = z.object({
     .min(1, '请输入Collection名称')
     .max(100, 'Collection名称不能超过100个字符')
     .regex(/^[a-zA-Z][a-zA-Z0-9_]*$/, 'Collection名称必须以字母开头，只能包含字母、数字和下划线'),
+  display_name: z
+    .string()
+    .max(100, '显示名称不能超过100个字符')
+    .optional()
+    .nullable()
+    .transform(val => val || undefined),
   description: z
     .string()
     .max(500, '描述不能超过500个字符')
     .optional()
     .nullable()
-    .transform(val => val || undefined), // 将 null 转换为 undefined
+    .transform(val => val || undefined),
   fields: z.array(collectionFieldSchema).min(1, '至少需要添加一个字段'),
-  allowed_databases: z.array(z.string()).min(1, '至少需要选择一个数据库'),
+  collection_databases: z.array(z.string()).min(1, '至少需要选择一个数据库'),
   embedding_fields: z.array(z.string()).default([]),
+  feature_modules: z.array(z.string()).default(['data_cleaning']),
 });
 
 export type CollectionConfigFormValues = z.infer<typeof collectionConfigSchema>;
@@ -83,7 +90,7 @@ const FIELD_TYPES = [
   { label: '布尔值', value: 'boolean' },
 ];
 
-const DEFAULT_DATABASES = ['default', 'business', 'analytics']; // 实际应从后端获取
+const DEFAULT_DATABASES = ['production', 'data_cleaning', 'examples']; // 实际应从后端获取
 
 export function CollectionConfigDialog({
   open,
@@ -96,10 +103,12 @@ export function CollectionConfigDialog({
     resolver: zodResolver(collectionConfigSchema),
     defaultValues: {
       name: '',
+      display_name: '',
       description: '',
       fields: [],
       embedding_fields: [],
-      allowed_databases: [],
+      collection_databases: [],
+      feature_modules: ['data_cleaning'],
       ...defaultValues,
     },
   });
@@ -162,6 +171,27 @@ export function CollectionConfigDialog({
               )}
             />
 
+            {/* 显示名称 */}
+            <FormField
+              control={form.control}
+              name="display_name"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>显示名称</FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder="请输入显示名称"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    用于在界面上展示的友好名称
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
             {/* 描述 */}
             <FormField
               control={form.control}
@@ -187,7 +217,7 @@ export function CollectionConfigDialog({
             {/* 允许使用的数据库 */}
             <FormField
               control={form.control}
-              name="allowed_databases"
+              name="collection_databases"
               render={() => (
                 <FormItem>
                   <FormLabel>允许使用的数据库 *</FormLabel>
@@ -196,7 +226,7 @@ export function CollectionConfigDialog({
                       <FormField
                         key={db}
                         control={form.control}
-                        name="allowed_databases"
+                        name="collection_databases"
                         render={({ field }) => {
                           return (
                             <FormItem className="flex flex-row items-center space-x-3 space-y-0">
