@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.sql import select, and_
 from sqlalchemy import Table, Column, Integer, String, Text, JSON, DateTime, text, func
 from datetime import datetime
+import asyncio
 
 from ..exceptions.collection_exceptions import (
     CollectionNotFoundError,
@@ -27,7 +28,8 @@ from common.utils.vector_db_utils import (
     async_insert_to_milvus,
     async_update_milvus_records,
     async_delete_from_milvus,
-    async_get_collection_stats
+    async_get_collection_stats,
+    async_get_actual_count
 )
 from common.utils.llm_tools import CustomEmbeddings
 from common.database.base import CollectionBase, get_table_args
@@ -45,7 +47,7 @@ class CollectionConfigTable(CollectionBase):
     name = Column(String(100), nullable=False, unique=True, comment='Collection名称')
     display_name = Column(String(100), comment='显示名称')
     description = Column(Text, comment='Collection描述')
-    fields = Column(JSON, nullable=False, comment='字段配置')
+    fields = Column(JSON, nullable=False, comment='字段配��')
     embedding_fields = Column(JSON, nullable=False, comment='需要向量化的字段列表')
     collection_databases = Column(JSON, nullable=False, comment='包含该Collection的数据库列表')
     feature_modules = Column(JSON, comment='所属功能模块列表')
@@ -148,6 +150,9 @@ class CollectionService:
         collection = await async_initialize_vector_store(collection_name)
         
         try:
+            # 获取实际的记录总数
+            total_records = await async_get_actual_count(collection)
+            
             if query_params.search_field and query_params.search_text:
                 # 向量相似度搜索
                 if query_params.search_field not in config.embedding_fields:
@@ -164,14 +169,23 @@ class CollectionService:
                 )
             else:
                 # 普通分页查询
+                offset = (query_params.page - 1) * query_params.page_size
                 expr = ""  # 可以添加其他过滤条件
-                results = await async_search_in_milvus(
-                    collection,
-                    [0] * self.vector_dim,  # 占位向量
-                    config.embedding_fields[0],
-                    query_params.page_size,
-                    expr
+                
+                # 使用普通查询而不是向量搜索
+                output_fields = [field.name for field in collection.schema.fields 
+                               if not field.name.endswith("_vector")]
+                results = await asyncio.to_thread(
+                    collection.query,
+                    expr=expr,
+                    output_fields=output_fields,
+                    offset=offset,
+                    limit=query_params.page_size
                 )
+                
+                # 添加distance字段（普通查询时为0）
+                for result in results:
+                    result["distance"] = 0.0
             
             # 格式化结果为符合DataRecord模型的格式
             formatted_results = []
@@ -183,7 +197,7 @@ class CollectionService:
                 })
             
             return QueryResult(
-                total=len(formatted_results),
+                total=total_records,
                 page=query_params.page,
                 page_size=query_params.page_size,
                 data=formatted_results
@@ -280,9 +294,11 @@ class CollectionService:
             await async_connect_to_milvus(database)
             collection = await async_initialize_vector_store(collection_name)
             
-            # 构建删除表达式
+            # 构删除表达式
             if delete_data.ids:
-                expr = f"id in {delete_data.ids}"
+                # Convert string IDs to integers for Milvus
+                int_ids = [int(id_str) for id_str in delete_data.ids]
+                expr = f"id in {int_ids}"
             elif delete_data.filter_conditions:
                 conditions = []
                 for field, value in delete_data.filter_conditions.items():

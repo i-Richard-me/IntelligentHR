@@ -1,6 +1,7 @@
 import os
 import asyncio
-from typing import List, Dict, Any
+import logging
+from typing import List, Dict, Any, Optional
 from pymilvus import (
     connections,
     Collection,
@@ -9,6 +10,8 @@ from pymilvus import (
     DataType,
     utility,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def connect_to_milvus(db_name: str = "default"):
@@ -258,18 +261,6 @@ def get_collection_stats(collection: Collection) -> Dict[str, Any]:
     }
     return stats
 
-import os
-import asyncio
-from typing import List, Dict, Any, Optional
-from pymilvus import (
-    connections,
-    Collection,
-    FieldSchema,
-    CollectionSchema,
-    DataType,
-    utility,
-)
-
 
 async def async_connect_to_milvus(db_name: str = "default"):
     """
@@ -342,7 +333,7 @@ async def async_create_milvus_collection(collection_config: Dict[str, Any], dim:
 
     schema = CollectionSchema(fields, collection_config["description"])
     
-    # 创建集合
+    # 建集合
     collection = await asyncio.to_thread(
         Collection, collection_config["name"], schema
     )
@@ -465,9 +456,9 @@ async def async_search_in_milvus(
     vector_field: str,
     top_k: int = 1,
     expr: Optional[str] = None,
+    offset: int = 0
 ) -> List[Dict[str, Any]]:
-    """
-    异步在 Milvus 集合中搜索最相似的向量。
+    """异步在 Milvus 集合中搜索最相似的向量。
 
     Args:
         collection (Collection): Milvus 集合对象。
@@ -475,6 +466,7 @@ async def async_search_in_milvus(
         vector_field (str): 要搜索的向量字段名。
         top_k (int): 返回的最相似结果数量。
         expr (str, optional): 额外的过滤条件。
+        offset (int): 分页偏移量。
 
     Returns:
         List[Dict[str, Any]]: 搜索结果列表。
@@ -484,7 +476,7 @@ async def async_search_in_milvus(
     output_fields = [
         field.name
         for field in collection.schema.fields
-        if not field.name.endswith("_vector") and field.name != "id"
+        if not field.name.endswith("_vector")
     ]
 
     results = await asyncio.to_thread(
@@ -495,15 +487,42 @@ async def async_search_in_milvus(
         limit=top_k,
         expr=expr,
         output_fields=output_fields,
+        offset=offset
     )
 
     return [
         {
-            **{field: getattr(hit.entity, field) for field in output_fields},
+            "id": str(hit.id),  # Convert ID to string
+            **{field: getattr(hit.entity, field) for field in output_fields if field != "id"},
             "distance": hit.distance,
         }
         for hit in results[0]
     ]
+
+
+async def async_get_actual_count(collection: Collection) -> int:
+    """
+    异步获取集合中的实际记录数（不包括已删除的记录）。
+    
+    Args:
+        collection (Collection): Milvus 集合对象。
+        
+    Returns:
+        int: 实际记录数。
+    """
+    try:
+        # 使用 count 操作获取实际记录数
+        result = await asyncio.to_thread(
+            collection.query,
+            expr="id >= 0",  # 一个始终为真的条件
+            output_fields=["count(*)"],
+            consistency_level="Strong"  # 使用强一致性以获取最新结果
+        )
+        return result[0]["count(*)"] if result else 0
+    except Exception as e:
+        logger.error(f"Failed to get actual count: {str(e)}")
+        # 如果查询失败，回退到使用 num_entities
+        return collection.num_entities
 
 
 async def async_get_collection_stats(collection: Collection) -> Dict[str, Any]:
@@ -516,12 +535,12 @@ async def async_get_collection_stats(collection: Collection) -> Dict[str, Any]:
     Returns:
         Dict[str, Any]: 包含集合统计信息的字典。
     """
-    num_entities = await asyncio.to_thread(lambda: collection.num_entities)
+    actual_count = await async_get_actual_count(collection)
     index_info = await asyncio.to_thread(lambda: collection.index().params)
     
     stats = {
-        "实体数量": num_entities,
-        "字段数量": len(collection.schema.fields) - 1,
+        "实体数量": actual_count,
+        "字段数量": len(collection.schema.fields) - 1,  # 减去自动生成的 id 字段
         "索引类型": index_info.get("index_type", "未知"),
     }
     return stats
@@ -557,7 +576,7 @@ async def async_get_collection_loading_progress(collection: Collection) -> float
 
 async def async_drop_collection(collection_name: str) -> None:
     """
-    异步删除集合。
+    异步删除集���。
 
     Args:
         collection_name (str): 要删除的集合名称。
