@@ -34,6 +34,10 @@ const pathConfig = {
   '/data-cleaning': {
     parent: { label: '数据处理', path: '' },
     current: '数据清洗'
+  },
+  '/feature-config': {
+    parent: { label: '系统设置', path: '' },
+    current: '功能配置'
   }
 };
 
@@ -45,26 +49,28 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     <SidebarProvider className="flex h-screen w-full overflow-hidden">
       <AppSidebar />
       <SidebarInset className="flex flex-col min-w-0 flex-1">
-        <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
-          <SidebarTrigger className="-ml-1" />
-          <Separator orientation="vertical" className="mr-2 h-4" />
-          {currentPath && (
-            <Breadcrumb>
-              <BreadcrumbList>
-                <BreadcrumbItem className="hidden md:block">
-                  <BreadcrumbLink href={currentPath.parent.path} asChild>
-                    <Link href={currentPath.parent.path}>
-                      {currentPath.parent.label}
-                    </Link>
-                  </BreadcrumbLink>
-                </BreadcrumbItem>
-                <BreadcrumbSeparator className="hidden md:block" />
-                <BreadcrumbItem>
-                  <BreadcrumbPage>{currentPath.current}</BreadcrumbPage>
-                </BreadcrumbItem>
-              </BreadcrumbList>
-            </Breadcrumb>
-          )}
+        <header className="sticky top-0 flex h-14 shrink-0 items-center gap-2 bg-background border-b">
+          <div className="flex flex-1 items-center gap-2 px-3">
+            <SidebarTrigger />
+            <Separator orientation="vertical" className="mr-2 h-4" />
+            {currentPath && (
+              <Breadcrumb>
+                <BreadcrumbList>
+                  <BreadcrumbItem className="hidden md:block">
+                    <BreadcrumbLink href={currentPath.parent.path} asChild>
+                      <Link href={currentPath.parent.path}>
+                        {currentPath.parent.label}
+                      </Link>
+                    </BreadcrumbLink>
+                  </BreadcrumbItem>
+                  <BreadcrumbSeparator className="hidden md:block" />
+                  <BreadcrumbItem>
+                    <BreadcrumbPage>{currentPath.current}</BreadcrumbPage>
+                  </BreadcrumbItem>
+                </BreadcrumbList>
+              </Breadcrumb>
+            )}
+          </div>
         </header>
         <main className="flex-1 overflow-auto">
           {children}
