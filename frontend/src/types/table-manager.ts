@@ -129,10 +129,12 @@ export interface CollectionFieldConfig {
  */
 export interface CollectionConfig {
   name: string;
+  display_name?: string;
   description?: string;
   fields: CollectionFieldConfig[];
   embedding_fields: string[];
-  allowed_databases: string[];
+  collection_databases: string[];
+  feature_modules: string[];
   created_at?: string;
   updated_at?: string;
 }

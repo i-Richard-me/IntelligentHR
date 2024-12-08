@@ -5,6 +5,7 @@ import { tableManagerApi } from '@/services';
 // 常量定义
 const DATABASE = 'app_config_db';
 const TABLE_NAME = 'collection_config';
+const FEATURE_MODULE = 'data_cleaning';  // 固定为数据清洗功能模块
 
 export function useCollectionConfigs() {
   const [configs, setConfigs] = useState<CollectionConfig[]>([]);
@@ -22,16 +23,20 @@ export function useCollectionConfigs() {
         throw new Error(response.error.detail);
       }
 
-      // 将数据转换为 CollectionConfig 类型
-      const collectionConfigs: CollectionConfig[] = response.data.data.map(record => ({
-        name: record.data.name,
-        description: record.data.description,
-        fields: record.data.fields || [],
-        embedding_fields: record.data.embedding_fields || [],
-        allowed_databases: record.data.allowed_databases || [],
-        created_at: record.created_at,
-        updated_at: record.updated_at,
-      }));
+      // 将数据转换为 CollectionConfig 类型，并只保留属于数据清洗功能的配置
+      const collectionConfigs: CollectionConfig[] = response.data.data
+        .map(record => ({
+          name: record.data.name,
+          display_name: record.data.display_name,
+          description: record.data.description,
+          fields: record.data.fields || [],
+          embedding_fields: record.data.embedding_fields || [],
+          collection_databases: record.data.collection_databases || [],
+          feature_modules: record.data.feature_modules || [],
+          created_at: record.created_at,
+          updated_at: record.updated_at,
+        }))
+        .filter(config => config.feature_modules.includes(FEATURE_MODULE));
 
       setConfigs(collectionConfigs);
     } catch (error) {
