@@ -8,8 +8,8 @@ import {
   useReactTable,
   getPaginationRowModel,
 } from "@tanstack/react-table";
-import { useCollectionData } from '@/hooks/features/feature-config/useCollectionData';
-import { useCollectionConfigs } from '@/hooks/features/feature-config/useCollectionConfigs';
+import { useVectorData } from '@/hooks/features/feature-config/useVectorData';
+import { useVectorCollections } from '@/hooks/features/feature-config/useVectorCollections';
 import { CollectionConfig } from '@/types/table-manager';
 import { Search, Upload, Trash2, Pencil } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -60,7 +60,7 @@ interface DataTableProps {
   onPaginationChange: (pagination: { pageIndex: number; pageSize: number }) => void;
 }
 
-export function CollectionDataTab() {
+export function VectorDataTab() {
   const { toast } = useToast();
   const [selectedDatabase, setSelectedDatabase] = useState<string | undefined>();
   const [selectedCollection, setSelectedCollection] = useState<CollectionConfig | null>(null);
@@ -80,7 +80,7 @@ export function CollectionDataTab() {
   const {
     configs: allCollections,
     loading: loadingCollections,
-  } = useCollectionConfigs();
+  } = useVectorCollections();
 
   // 根据选择的数据库筛选可用的 collections
   const availableCollections = useMemo(() => {
@@ -99,7 +99,7 @@ export function CollectionDataTab() {
     getTableColumns,
     formatTableData,
     batchDelete
-  } = useCollectionData({
+  } = useVectorData({
     database: selectedDatabase,
     collection: selectedCollection
   });

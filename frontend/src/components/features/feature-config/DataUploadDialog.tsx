@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { cn } from "@/lib/utils";
-import { useCollectionData } from '@/hooks/features/feature-config/useCollectionData';
+import { useVectorData } from '@/hooks/features/feature-config/useVectorData';
 import { CollectionConfig } from '@/types/table-manager';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
@@ -91,9 +91,9 @@ export function DataUploadDialog({
   const [updateStrategy, setUpdateStrategy] = useState<UpdateStrategy>('upsert');
   const [singleRecord, setSingleRecord] = useState<Record<string, any>>({});
 
-  const { batchInsert } = useCollectionData({
-    collection,
-    database
+  const { batchInsert } = useVectorData({
+    database,
+    collection
   });
 
   // 当编辑数据变化时，更新表单

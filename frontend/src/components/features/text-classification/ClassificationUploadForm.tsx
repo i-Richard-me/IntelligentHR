@@ -123,8 +123,9 @@ export default function ClassificationUploadForm({
   const downloadTemplate = () => {
     const template = [
       ['类别名称', '类别描述'],
-      ['正面评价', '表达满意、赞扬或积极情感的反馈'],
-      ['负面评价', '表达不满、投诉或消极情感的反馈'],
+      ['职业发展', '描述公司提供的培训机会、晋升机制及其对员工个人成长和职业路径的影响'],
+      ['薪资与福利', '讨论员工对薪资水平和福利待遇的看法，包括与行业水平的比较、提升空间等'],
+      ['团队与合作', '描述员工对团队内部氛围和部门间合作的感受，包括同事关系、沟通顺畅度等'],
     ];
 
     const ws = XLSX.utils.aoa_to_sheet(template);
@@ -188,7 +189,7 @@ export default function ClassificationUploadForm({
           <DialogHeader>
             <DialogTitle>创建分类任务</DialogTitle>
             <DialogDescription>
-              上传文本文件并设置分类规则，系统将根据规则自动对文本进行分类。
+              上传待分类的CSV文件（需包含text列），设置分类规则和场景描述。
             </DialogDescription>
           </DialogHeader>
         </div>
@@ -231,7 +232,7 @@ export default function ClassificationUploadForm({
                     </div>
                   </FormControl>
                   <FormDescription>
-                    支持 CSV、Excel 格式，文件大小不超过 10MB
+                    请上传CSV格式文件，文件中需包含text列作为待分类文本
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
@@ -244,17 +245,16 @@ export default function ClassificationUploadForm({
               name="context"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>分类要求</FormLabel>
+                  <FormLabel>场景描述</FormLabel>
                   <FormControl>
-                    <Textarea
-                      placeholder="请输入具体的分类要求，例如：根据文本内容对客户反馈进行分类..."
-                      className="h-24 resize-none"
+                    <Input
+                      placeholder="简要描述分类场景，如：员工满意度调研反馈分类"
                       disabled={uploading}
                       {...field}
                     />
                   </FormControl>
                   <FormDescription>
-                    明确的分类要求有助于系统更准确地进行分类
+                    简单描述文本的使用场景，帮助系统更准确地理解分类需求
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
@@ -309,7 +309,7 @@ export default function ClassificationUploadForm({
 
               <Alert>
                 <AlertDescription>
-                  可以通过下载模板并填写后导入，或直接手动添加分类规则。
+                  请至少定义两个分类，每个分类需要包含类别名称和对应的描述说明。
                 </AlertDescription>
               </Alert>
 
@@ -323,7 +323,7 @@ export default function ClassificationUploadForm({
                       <FormItem className="col-span-4">
                         <FormControl>
                           <Input
-                            placeholder="类别名称"
+                            placeholder="如：职业发展"
                             disabled={uploading}
                             {...field}
                           />
@@ -339,7 +339,7 @@ export default function ClassificationUploadForm({
                       <FormItem className="col-span-7">
                         <FormControl>
                           <Input
-                            placeholder="类别描述"
+                            placeholder="如：描述公司提供的培训机会、晋升机制及其对个人成长的影响"
                             disabled={uploading}
                             {...field}
                           />
@@ -374,7 +374,7 @@ export default function ClassificationUploadForm({
                   <div className="space-y-0.5">
                     <FormLabel className="text-base">多标签分类</FormLabel>
                     <FormDescription>
-                      启用后，一个文本可以同时属于多个类别
+                      开启后，系统将对文本进行多标签分类，一个文本可能同时属于多个类别
                     </FormDescription>
                   </div>
                   <FormControl>

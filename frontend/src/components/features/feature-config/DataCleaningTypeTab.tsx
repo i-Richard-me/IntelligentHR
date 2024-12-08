@@ -22,13 +22,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { ModelConfigDialog } from './ModelConfigDialog';
-import { useModelConfigs } from '@/hooks/features/feature-config/useModelConfigs';
+import { useDataCleaningTypes } from '@/hooks/features/feature-config/useDataCleaningTypes';
 import { AnalysisModelConfig } from '@/types/table-manager';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { DataCleaningTypeDialog } from './DataCleaningTypeDialog';
 
-export function ModelConfigTab() {
+export function DataCleaningTypeTab() {
   const { toast } = useToast();
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -43,7 +43,7 @@ export function ModelConfigTab() {
     updateConfig,
     deleteConfig,
     refresh
-  } = useModelConfigs();
+  } = useDataCleaningTypes();
 
   // 处理创建配置
   const handleCreate = async (data: Partial<AnalysisModelConfig>) => {
@@ -212,7 +212,7 @@ export function ModelConfigTab() {
       </div>
 
       {/* 创建模型对话框 */}
-      <ModelConfigDialog
+      <DataCleaningTypeDialog
         open={isCreateDialogOpen}
         onOpenChange={setIsCreateDialogOpen}
         onSubmit={handleCreate}
@@ -220,7 +220,7 @@ export function ModelConfigTab() {
 
       {/* 编辑模型对话框 */}
       {selectedConfig && (
-        <ModelConfigDialog
+        <DataCleaningTypeDialog
           open={isEditDialogOpen}
           onOpenChange={setIsEditDialogOpen}
           defaultValues={selectedConfig}

@@ -69,7 +69,7 @@ interface ModelConfigDialogProps {
   onSubmit?: (data: ModelConfigFormValues) => Promise<void>;
 }
 
-export function ModelConfigDialog({
+export function DataCleaningTypeDialog({
   open,
   defaultValues,
   onOpenChange,

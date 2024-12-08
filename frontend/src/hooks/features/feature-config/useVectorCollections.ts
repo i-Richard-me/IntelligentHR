@@ -1,13 +1,14 @@
 import { useState, useCallback, useEffect } from 'react';
-import { AnalysisModelConfig } from '@/types/table-manager';
+import { CollectionConfig } from '@/types/table-manager';
 import { tableManagerApi } from '@/services';
 
 // 常量定义
 const DATABASE = 'app_config_db';
-const TABLE_NAME = 'entity_configs';
+const TABLE_NAME = 'collection_config';
+const FEATURE_MODULE = 'data_cleaning';  // 固定为数据清洗功能模块
 
-export function useModelConfigs() {
-  const [configs, setConfigs] = useState<AnalysisModelConfig[]>([]);
+export function useVectorCollections() {
+  const [configs, setConfigs] = useState<CollectionConfig[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
@@ -16,24 +17,28 @@ export function useModelConfigs() {
     try {
       setLoading(true);
       setError(null);
-      const response = await tableManagerApi.getModelConfigs(DATABASE, TABLE_NAME);
+      const response = await tableManagerApi.listRecords(DATABASE, TABLE_NAME);
 
       if (response.error) {
         throw new Error(response.error.detail);
       }
 
-      // 确保转换后的数据符合 AnalysisModelConfig 类型
-      const modelConfigs: AnalysisModelConfig[] = response.data.data.map(record => ({
-        entity_type: record.data.entity_type,
-        display_name: record.data.display_name,
-        description: record.data.description,
-        validation_instructions: record.data.validation_instructions,
-        analysis_instructions: record.data.analysis_instructions,
-        verification_instructions: record.data.verification_instructions,
-        collection_name: record.data.collection_name,
-      }));
+      // 将数据转换为 CollectionConfig 类型，并只保留属于数据清洗功能的配置
+      const collectionConfigs: CollectionConfig[] = response.data.data
+        .map(record => ({
+          name: record.data.name,
+          display_name: record.data.display_name,
+          description: record.data.description,
+          fields: record.data.fields || [],
+          embedding_fields: record.data.embedding_fields || [],
+          collection_databases: record.data.collection_databases || [],
+          feature_modules: record.data.feature_modules || [],
+          created_at: record.created_at,
+          updated_at: record.updated_at,
+        }))
+        .filter(config => config.feature_modules.includes(FEATURE_MODULE));
 
-      setConfigs(modelConfigs);
+      setConfigs(collectionConfigs);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : '获取配置列表失败';
       setError(new Error(errorMessage));
@@ -44,9 +49,9 @@ export function useModelConfigs() {
   }, []);
 
   // 创建配置
-  const createConfig = useCallback(async (data: Partial<AnalysisModelConfig>) => {
+  const createConfig = useCallback(async (data: Partial<CollectionConfig>) => {
     try {
-      const response = await tableManagerApi.saveModelConfig(DATABASE, TABLE_NAME, data);
+      const response = await tableManagerApi.createRecords(DATABASE, TABLE_NAME, [data]);
 
       if (response.error) {
         throw new Error(response.error.detail);
@@ -65,12 +70,12 @@ export function useModelConfigs() {
   }, []);
 
   // 更新配置
-  const updateConfig = useCallback(async (entityType: string, data: Partial<AnalysisModelConfig>) => {
+  const updateConfig = useCallback(async (name: string, data: Partial<CollectionConfig>) => {
     try {
       const response = await tableManagerApi.updateRecord(
         DATABASE,
         TABLE_NAME,
-        entityType,
+        name,  // 使用 name 作为主键
         data
       );
 
@@ -87,12 +92,12 @@ export function useModelConfigs() {
   }, []);
 
   // 删除配置
-  const deleteConfig = useCallback(async (entityType: string) => {
+  const deleteConfig = useCallback(async (name: string) => {
     try {
       const response = await tableManagerApi.deleteRecord(
         DATABASE,
         TABLE_NAME,
-        entityType
+        name  // 使用 name 作为主键
       );
 
       if (response.error) {
@@ -107,10 +112,27 @@ export function useModelConfigs() {
     }
   }, []);
 
+  // 获取表结构
+  const getSchema = useCallback(async () => {
+    try {
+      const response = await tableManagerApi.getTableSchema(DATABASE, TABLE_NAME);
+
+      if (response.error) {
+        throw new Error(response.error.detail);
+      }
+
+      return response.data;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : '获取表结构失败';
+      console.error('Failed to get schema:', error);
+      throw new Error(errorMessage);
+    }
+  }, []);
+
   // 初始加载
   useEffect(() => {
     fetchConfigs();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [fetchConfigs]);
 
   return {
     configs,
@@ -120,5 +142,6 @@ export function useModelConfigs() {
     createConfig,
     updateConfig,
     deleteConfig,
+    getSchema,
   };
 }

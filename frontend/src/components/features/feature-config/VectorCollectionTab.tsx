@@ -22,13 +22,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { CollectionConfigDialog } from './CollectionConfigDialog';
-import { useCollectionConfigs } from '@/hooks/features/feature-config/useCollectionConfigs';
+import { useVectorCollections } from '@/hooks/features/feature-config/useVectorCollections';
 import { CollectionConfig } from '@/types/table-manager';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { VectorCollectionDialog } from './VectorCollectionDialog';
 
-export function CollectionConfigTab() {
+export function VectorCollectionTab() {
   const { toast } = useToast();
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -43,7 +43,7 @@ export function CollectionConfigTab() {
     updateConfig,
     deleteConfig,
     refresh
-  } = useCollectionConfigs();
+  } = useVectorCollections();
 
   // 处理创建配置
   const handleCreate = async (data: Partial<CollectionConfig>) => {
@@ -228,7 +228,7 @@ export function CollectionConfigTab() {
       </div>
 
       {/* 创建Collection对话框 */}
-      <CollectionConfigDialog
+      <VectorCollectionDialog
         open={isCreateDialogOpen}
         onOpenChange={setIsCreateDialogOpen}
         onSubmit={handleCreate}
@@ -236,7 +236,7 @@ export function CollectionConfigTab() {
 
       {/* 编辑Collection对话框 */}
       {selectedConfig && (
-        <CollectionConfigDialog
+        <VectorCollectionDialog
           open={isEditDialogOpen}
           onOpenChange={setIsEditDialogOpen}
           defaultValues={selectedConfig}

@@ -92,7 +92,7 @@ const FIELD_TYPES = [
 
 const DEFAULT_DATABASES = ['production', 'data_cleaning', 'examples']; // 实际应从后端获取
 
-export function CollectionConfigDialog({
+export function VectorCollectionDialog({
   open,
   defaultValues,
   onOpenChange,

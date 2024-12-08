@@ -92,7 +92,7 @@ export default function UploadForm({ open, onOpenChange, onSuccess }: UploadForm
           <DialogHeader>
             <DialogTitle>创建评估任务</DialogTitle>
             <DialogDescription>
-              上传文本文件并设置评估要求，系统将自动分析文本内容并生成评估报告。
+              上传待评估的CSV文件（需包含text列），并简要说明评估场景。系统将分析文本的有效性、情感倾向和敏感信息。
             </DialogDescription>
           </DialogHeader>
         </div>
@@ -134,7 +134,7 @@ export default function UploadForm({ open, onOpenChange, onSuccess }: UploadForm
                     </div>
                   </FormControl>
                   <FormDescription>
-                    支持 CSV、Excel 格式，文件大小不超过 10MB
+                    请上传CSV格式文件，文件中需包含text列作为待评估文本
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
@@ -146,17 +146,16 @@ export default function UploadForm({ open, onOpenChange, onSuccess }: UploadForm
               name="context"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>评估要求</FormLabel>
+                  <FormLabel>评估场景</FormLabel>
                   <FormControl>
-                    <Textarea
-                      placeholder="请输入具体的评估要求，例如：检查文本是否包含敏感信息、确认内容相关性等..."
-                      className="h-32 resize-none"
+                    <Input
+                      placeholder="简要描述评估场景，如：员工调研反馈"
                       disabled={uploading}
                       {...field}
                     />
                   </FormControl>
                   <FormDescription>
-                    明确的评估要求有助于系统更准确地分析内容
+                    简单描述文本的使用场景，帮助系统更准确地进行评估
                   </FormDescription>
                   <FormMessage />
                 </FormItem>

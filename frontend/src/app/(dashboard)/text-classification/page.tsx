@@ -53,7 +53,7 @@ export default function TextClassificationPage() {
                 文本分类
               </h1>
               <p className="text-sm md:text-base text-muted-foreground max-w-3xl">
-                通过 AI 自动对文本内容进行分类，支持单标签和多标签分类，帮助您快速整理和分析大量文本数据。
+                通过 AI 对文本进行智能分类，支持自定义分类规则，可选择单标签或多标签分类模式。
               </p>
             </div>
 
@@ -82,7 +82,7 @@ export default function TextClassificationPage() {
         <CardHeader>
           <CardTitle>任务列表</CardTitle>
           <CardDescription>
-            查看所有分类任务的状态和进度，下载已完成的分类结果。支持单标签和多标签分类任务。
+            查看和管理分类任务，支持实时进度跟踪和结果下载。
           </CardDescription>
         </CardHeader>
         <CardContent>

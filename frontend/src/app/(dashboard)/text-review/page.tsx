@@ -66,7 +66,7 @@ export default function TextReviewPage() {
             <div className="space-y-3">
               <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-foreground/90">文本评估</h1>
               <p className="text-sm md:text-base text-muted-foreground max-w-3xl">
-                通过 AI 分析文本的情感倾向、识别敏感信息并验证内容有效性，助您快速完成文本审查。
+                通过 AI 批量分析文本的有效性、情感倾向和敏感信息，支持自定义评估场景，快速完成文本审查。
               </p>
             </div>
             
@@ -95,7 +95,7 @@ export default function TextReviewPage() {
         <CardHeader>
           <CardTitle>任务列表</CardTitle>
           <CardDescription>
-            查看所有评估任务的状态和进度，下载已完成的评估报告。
+            查看和管理评估任务，支持实时进度跟踪和结果下载。已完成的任务可下载评估结果。
           </CardDescription>
         </CardHeader>
         <CardContent>

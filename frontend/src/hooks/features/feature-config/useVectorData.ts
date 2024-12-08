@@ -9,12 +9,12 @@ import {
 } from '@/types/collection-manager';
 import { collectionManagerApi } from '@/services/collection-manager';
 
-interface UseCollectionDataProps {
+interface UseVectorDataProps {
   database?: string;
   collection?: CollectionConfig | null;
 }
 
-export function useCollectionData({ database = 'data_cleaning', collection }: UseCollectionDataProps) {
+export function useVectorData({ database = 'data_cleaning', collection }: UseVectorDataProps) {
   const [data, setData] = useState<QueryResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
