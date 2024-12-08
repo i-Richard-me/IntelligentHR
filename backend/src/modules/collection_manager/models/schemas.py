@@ -29,10 +29,12 @@ class CollectionField(BaseModel):
 class CollectionConfig(BaseModel):
     """Collection配置模型"""
     name: str = Field(..., description="Collection名称")
+    display_name: Optional[str] = Field(None, description="显示名称")
     description: Optional[str] = Field(None, description="Collection描述")
     fields: List[CollectionField] = Field(..., description="字段配置列表")
     embedding_fields: List[str] = Field(..., description="需要向量化的字段列表")
-    allowed_databases: List[str] = Field(..., description="允许使用该Collection的数据库列表")
+    collection_databases: List[str] = Field(..., description="包含该Collection的数据库列表")
+    feature_modules: Optional[List[str]] = Field(default=[], description="所属功能模块列表")
 
     @validator('name')
     def validate_name(cls, v):
@@ -54,7 +56,7 @@ class CollectionConfig(BaseModel):
 
 class DataRecord(BaseModel):
     """数据记录模型"""
-    id: Optional[str] = Field(None, description="记录ID")
+    id: Optional[str] = Field(None, description="��录ID")
     data: Dict[str, Any] = Field(..., description="记录数据")
     distance: float = Field(default=0.0, description="向量距离")
 
@@ -105,7 +107,9 @@ class BatchOperationResult(BaseModel):
 class CollectionInfo(BaseModel):
     """Collection信息模型"""
     name: str = Field(..., description="Collection名称")
+    display_name: Optional[str] = Field(None, description="显示名称")
     description: Optional[str] = Field(None, description="Collection描述")
     total_records: int = Field(..., description="总记录数")
+    feature_modules: List[str] = Field(default=[], description="所属功能模块列表")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")

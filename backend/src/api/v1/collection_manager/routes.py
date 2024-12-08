@@ -41,12 +41,13 @@ collection_service = CollectionService()
 )
 async def list_collections(
     db_name: str = Path(..., description="数据库名称"),
+    feature_module: str | None = Query(None, description="功能模块名称，用于过滤collection"),
     user_id: str = Depends(get_user_id),
     db: Session = Depends(get_app_config_db)
 ) -> List[CollectionInfo]:
     """获取Collection列表"""
     try:
-        collections = await collection_service.get_collections(db, db_name)
+        collections = await collection_service.get_collections(db, db_name, feature_module)
         return [CollectionInfo(**collection) for collection in collections]
     except CollectionManagerError as e:
         logger.error(f"获取Collection列表失败: database={db_name}, error={str(e)}")

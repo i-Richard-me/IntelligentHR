@@ -41,17 +41,18 @@ class CollectionConfigTable(CollectionBase):
     __tablename__ = 'collection_config'
     __table_args__ = get_table_args()
 
-    id = Column(Integer, primary_key=True, comment='主键ID')  # 移除 autoincrement
+    id = Column(Integer, primary_key=True, comment='主键ID')
     name = Column(String(100), nullable=False, unique=True, comment='Collection名称')
+    display_name = Column(String(100), comment='显示名称')
     description = Column(Text, comment='Collection描述')
     fields = Column(JSON, nullable=False, comment='字段配置')
     embedding_fields = Column(JSON, nullable=False, comment='需要向量化的字段列表')
-    allowed_databases = Column(JSON, nullable=False, comment='允许使用该Collection的数据库列表')
+    collection_databases = Column(JSON, nullable=False, comment='包含该Collection的数据库列表')
+    feature_modules = Column(JSON, comment='所属功能模块列表')
     created_at = Column(
         DateTime,
         nullable=False,
-        default=func.now(),  # 使用 SQLAlchemy func
-        comment='创建时间'
+        default=func.now(),
     )
     updated_at = Column(
         DateTime,
@@ -79,12 +80,13 @@ class CollectionService:
         )
         logger.info(f"CollectionService initialized with model: {embedding_model}")
 
-    async def get_collections(self, db: Session, database: str) -> List[Dict[str, Any]]:
+    async def get_collections(self, db: Session, database: str, feature_module: Optional[str] = None) -> List[Dict[str, Any]]:
         """获取指定数据库可用的collection列表
         
         Args:
             db: 数据库会话
             database: 数据库名称
+            feature_module: 功能模块名称，用于过滤collection
             
         Returns:
             List[Dict[str, Any]]: Collection列表
@@ -96,7 +98,11 @@ class CollectionService:
         result = []
         for collection in collections:
             # 检查数据库是否在允许列表中
-            if database in collection.allowed_databases:
+            if database in collection.collection_databases:
+                # 如果指定了功能模块，检查是否属于该模块
+                if feature_module and feature_module not in collection.feature_modules:
+                    continue
+                    
                 try:
                     await async_connect_to_milvus(database)
                     collection_obj = await async_initialize_vector_store(collection.name)
@@ -104,8 +110,10 @@ class CollectionService:
                     
                     result.append({
                         "name": collection.name,
+                        "display_name": collection.display_name,
                         "description": collection.description,
                         "total_records": stats["实体数量"],
+                        "feature_modules": collection.feature_modules,
                         "created_at": collection.created_at,
                         "updated_at": collection.updated_at
                     })
@@ -113,8 +121,10 @@ class CollectionService:
                     logger.error(f"Failed to get stats for collection {collection.name}: {str(e)}")
                     result.append({
                         "name": collection.name,
+                        "display_name": collection.display_name,
                         "description": collection.description,
                         "total_records": 0,
+                        "feature_modules": collection.feature_modules,
                         "created_at": collection.created_at,
                         "updated_at": collection.updated_at
                     })
@@ -131,7 +141,7 @@ class CollectionService:
         """查询collection数据"""
         # 验证collection配置
         config = await self._get_collection_config(db, collection_name)
-        if database not in config.allowed_databases:
+        if database not in config.collection_databases:
             raise DatabaseCollectionNotFoundError(database, collection_name)
 
         await async_connect_to_milvus(database)
@@ -204,7 +214,7 @@ class CollectionService:
         """
         # 验证collection配置
         config = await self._get_collection_config(db, collection_name)
-        if database not in config.allowed_databases:
+        if database not in config.collection_databases:
             raise DatabaseCollectionNotFoundError(database, collection_name)
 
         # 准备向量数据
@@ -263,7 +273,7 @@ class CollectionService:
         """
         # 验证collection配置
         config = await self._get_collection_config(db, collection_name)
-        if database not in config.allowed_databases:
+        if database not in config.collection_databases:
             raise DatabaseCollectionNotFoundError(database, collection_name)
 
         try:
@@ -323,7 +333,7 @@ class CollectionService:
             description=result.description,
             fields=result.fields,
             embedding_fields=result.embedding_fields,
-            allowed_databases=result.allowed_databases
+            collection_databases=result.collection_databases
         )
 
     async def _generate_vector(self, text: str) -> List[float]:
