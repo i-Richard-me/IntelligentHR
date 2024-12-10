@@ -9,9 +9,8 @@ import {
   LifeBuoy,
   Database
 } from "lucide-react";
-import { NavMain } from '@/components/shared/layout/NavMain';
-import { NavSecondary } from '@/components/shared/layout/NavSecondary';
 import { NavUser } from '@/components/shared/layout/NavUser';
+import { NavSecondary } from '@/components/shared/layout/NavSecondary';
 import {
   Sidebar,
   SidebarContent,
@@ -21,6 +20,10 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
+  SidebarGroup,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
 } from "@/components/ui/sidebar";
 
 const data = {
@@ -33,8 +36,6 @@ const data = {
     {
       title: "文本分析",
       url: "#",
-      icon: FileText,
-      isActive: true,
       items: [
         {
           title: "文本评估",
@@ -49,8 +50,6 @@ const data = {
     {
       title: "数据处理",
       url: "#",
-      icon: Database,
-      isActive: true,
       items: [
         {
           title: "数据清洗",
@@ -61,7 +60,6 @@ const data = {
     {
       title: "数据可视化",
       url: "#",
-      icon: PieChart,
       items: [
         {
           title: "分析报告",
@@ -71,8 +69,7 @@ const data = {
     },
     {
       title: "数据管理",
-      url: "",
-      icon: Layers,
+      url: "#",
       items: [
         {
           title: "数据集",
@@ -82,9 +79,7 @@ const data = {
     },
     {
       title: "系统设置",
-      url: "",
-      icon: Settings2,
-      isActive: true,
+      url: "#",
       items: [
         {
           title: "功能配置",
@@ -130,9 +125,32 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
-        <NavMain items={data.navMain} />
       </SidebarHeader>
       <SidebarContent>
+        <SidebarGroup>
+          <SidebarMenu>
+            {data.navMain.map((item) => (
+              <SidebarMenuItem key={item.title}>
+                <SidebarMenuButton asChild>
+                  <a href={item.url} className="font-medium">
+                    {item.title}
+                  </a>
+                </SidebarMenuButton>
+                {item.items?.length ? (
+                  <SidebarMenuSub>
+                    {item.items.map((subItem) => (
+                      <SidebarMenuSubItem key={subItem.title}>
+                        <SidebarMenuSubButton asChild>
+                          <a href={subItem.url}>{subItem.title}</a>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                    ))}
+                  </SidebarMenuSub>
+                ) : null}
+              </SidebarMenuItem>
+            ))}
+          </SidebarMenu>
+        </SidebarGroup>
         <NavSecondary items={data.navSecondary} className="mt-auto" />
       </SidebarContent>
       <SidebarFooter>
