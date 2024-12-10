@@ -86,3 +86,20 @@ body {
     @apply bg-background text-foreground;
   }
 }
+
+/* 在 @layer base 之前添加以下代码 */
+
+/* 美化滚动条样式 */
+::-webkit-scrollbar {
+  width: 6px;  /* 滚动条宽度 */
+  height: 6px; /* 横向滚动条高度 */
+}
+
+::-webkit-scrollbar-track {
+  background: transparent; /* 轨道背景色 */
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: hsl(var(--muted-foreground) / 0.3); /* 滑块颜色 */
+  border-radius: 4px; /* 滑块圆角 */
+}
