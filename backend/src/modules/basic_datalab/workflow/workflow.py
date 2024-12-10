@@ -6,13 +6,13 @@ from ..nodes.nodes import analysis_node, should_continue
 
 logger = logging.getLogger(__name__)
 
-class DanfoCommandWorkflow:
-    """Danfo.js 命令生成工作流类"""
+class BasicDatalabWorkflow:
+    """基础数据工坊工作流类"""
 
     def __init__(self):
         """初始化工作流"""
         self.workflow = self._build_graph()
-        logger.info("Danfo.js 命令生成工作流初始化完成")
+        logger.info("基础数据工坊工作流初始化完成")
 
     def _build_graph(self) -> StateGraph:
         """构建工作流图"""
@@ -49,8 +49,16 @@ class DanfoCommandWorkflow:
             self,
             user_input: str,
             dataframe_info: Dict[str, Dict[str, Any]],
-    ) -> AssistantResponse:
-        """处理用户请求"""
+    ) -> Dict[str, Any]:
+        """处理用户请求
+
+        Args:
+            user_input: 用户的处理需求
+            dataframe_info: 上传文件的信息
+
+        Returns:
+            Dict[str, Any]: 包含生成的Python代码或其他响应信息
+        """
         try:
             logger.info(f"开始处理用户请求: {user_input}")
 
@@ -58,7 +66,7 @@ class DanfoCommandWorkflow:
             if not user_input or not user_input.strip():
                 raise ValueError("用户输入不能为空")
             if not dataframe_info:
-                raise ValueError("DataFrame信息不能为空")
+                raise ValueError("文件信息不能为空")
 
             # 准备初始状态
             initial_state = {
@@ -84,10 +92,11 @@ class DanfoCommandWorkflow:
             if result.get("error_message"):
                 error_msg = f"处理请求时发生错误: {result['error_message']}"
                 logger.error(error_msg)
-                return AssistantResponse(
-                    next_step="out_of_scope",
-                    message=error_msg
-                )
+                return {
+                    "next_step": "out_of_scope",
+                    "command": None,
+                    "message": error_msg
+                }
 
             # 获取助手响应
             assistant_response = result.get("assistant_response")
@@ -95,25 +104,25 @@ class DanfoCommandWorkflow:
 
             if not assistant_response:
                 logger.error("未获取到助手响应")
-                return AssistantResponse(
-                    next_step="out_of_scope",
-                    message="未能生成有效的响应"
-                )
+                return {
+                    "next_step": "out_of_scope",
+                    "command": None,
+                    "message": "未能生成有效的响应"
+                }
 
-            # 确保返回正确的类型
-            if isinstance(assistant_response, dict):
-                return AssistantResponse.model_validate(assistant_response)
+            # 直接返回响应字典
             return assistant_response
 
         except Exception as e:
             error_msg = f"处理请求失败: {str(e)}"
             logger.error(error_msg)
-            return AssistantResponse(
-                next_step="out_of_scope",
-                message=error_msg
-            )
+            return {
+                "next_step": "out_of_scope",
+                "command": None,
+                "message": error_msg
+            }
 
     @classmethod
-    def create(cls) -> 'DanfoCommandWorkflow':
+    def create(cls) -> 'BasicDatalabWorkflow':
         """创建工作流实例"""
         return cls()
