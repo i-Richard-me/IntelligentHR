@@ -28,36 +28,36 @@ file_service = FileService()
 task_queue = TaskQueue("review")
 
 
-# 新增: 任务取消请求模型
-class TaskCancelRequest(BaseModel):
-    reason: str | None = None
+# 创建任务请求模型
+class CreateTaskRequest(BaseModel):
+    file_url: str
+    context: str
 
 
 @router.post(
     "/tasks",
     response_model=TaskResponse,
     summary="创建文本评估任务",
-    description="上传文件并创建新的文本评估任务"
+    description="创建新的文本评估任务"
 )
 async def create_task(
+        request: CreateTaskRequest,
         response: Response,
-        file: UploadFile = File(..., description="待分析的CSV文件"),
-        context: str = Form(..., description="分析上下文"),
         user_id: str = Depends(get_user_id),
         db=Depends(get_task_db)
 ) -> TaskResponse:
     """创建新的文本评估任务"""
     try:
-        # 保存上传的文件
-        file_path = await file_service.save_upload_file(file)
-        logger.info(f"文件上传成功: {file_path}")
+        # 验证文件是否存在
+        if not file_service.file_exists(request.file_url):
+            raise HTTPException(status_code=400, detail="文件不存在")
 
         # 创建任务记录
         task = ReviewTask(
             task_id=str(uuid.uuid4()),
             user_id=user_id,
-            context=context,
-            source_file_url=file_path
+            context=request.context,
+            source_file_url=request.file_url
         )
         db.add(task)
         db.commit()
@@ -176,7 +176,7 @@ async def download_result(
         user_id: str = Depends(get_user_id),
         db=Depends(get_task_db)
 ):
-    """下载分析结果"""
+    """获取结果文件的预签名下载URL"""
     task = db.query(ReviewTask).filter(
         ReviewTask.task_id == task_id,
         ReviewTask.user_id == user_id
@@ -188,8 +188,10 @@ async def download_result(
     if not task.result_file_url:
         raise HTTPException(status_code=400, detail="Result file not available")
 
-    return FileResponse(
-        task.result_file_url,
-        filename=f"review_result_{task.task_id}.csv",
-        media_type='text/csv'
-    )
+    try:
+        # 生成预签名URL（1小时有效期）
+        presigned_url = file_service.get_presigned_url(task.result_file_url)
+        return {"download_url": presigned_url}
+    except Exception as e:
+        logger.error(f"生成下载URL失败: {str(e)}")
+        raise HTTPException(status_code=500, detail="生成下载URL失败")
