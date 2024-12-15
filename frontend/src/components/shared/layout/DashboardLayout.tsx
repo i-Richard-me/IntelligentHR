@@ -35,6 +35,10 @@ const pathConfig = {
     parent: { label: '数据处理', path: '' },
     current: '数据清洗'
   },
+  '/python-analysis': {
+    parent: { label: '数据分析', path: '' },
+    current: '数据分析'
+  },
   '/feature-config': {
     parent: { label: '系统设置', path: '' },
     current: '功能配置'

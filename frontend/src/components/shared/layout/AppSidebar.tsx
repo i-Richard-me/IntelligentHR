@@ -48,22 +48,22 @@ const data = {
       ],
     },
     {
+      title: "数据分析",
+      url: "#",
+      items: [
+        {
+          title: "数据分析",
+          url: "/python-analysis",
+        },
+      ],
+    },
+    {
       title: "数据处理",
       url: "#",
       items: [
         {
           title: "数据清洗",
           url: "/data-cleaning",
-        },
-      ],
-    },
-    {
-      title: "数据可视化",
-      url: "#",
-      items: [
-        {
-          title: "分析报告",
-          url: "/visualization/reports",
         },
       ],
     },
