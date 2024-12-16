@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Response
 from fastapi.responses import FileResponse
 from typing import List, Dict, Any
 import logging
@@ -28,47 +28,40 @@ file_service = FileService()
 task_queue = TaskQueue("classification")
 
 
-# 新增: 任务取消请求模型
-class TaskCancelRequest(BaseModel):
-    reason: str | None = None
+# 新增: 任务创建请求模型
+class CreateTaskRequest(BaseModel):
+    file_url: str
+    context: str
+    categories: Dict[str, Any]
+    is_multi_label: bool = False
 
 
 @router.post(
     "/tasks",
     response_model=TaskResponse,
     summary="创建文本分类任务",
-    description="上传文件并创建新的文本分类任务,支持单标签和多标签分类"
+    description="创建新的���本分类任务,支持单标签和多标签分类"
 )
 async def create_task(
         response: Response,
-        file: UploadFile = File(..., description="待分类的CSV文件"),
-        context: str = Form(..., description="分类上下文"),
-        categories: str = Form(..., description="分类规则 JSON 字符串"),
-        is_multi_label: bool = Form(False, description="是否为多标签分类"),
+        request: CreateTaskRequest,
         user_id: str = Depends(get_user_id),
         db=Depends(get_task_db)
 ) -> TaskResponse:
     """创建新的文本分类任务"""
     try:
-        # 保存上传的文件
-        file_path = await file_service.save_upload_file(file)
-        logger.info(f"文件上传成功: {file_path}")
-
-        # 解析categories JSON字符串
-        try:
-            import json
-            categories_dict = json.loads(categories)
-        except json.JSONDecodeError:
-            raise HTTPException(status_code=400, detail="Invalid categories JSON format")
+        # 验证文件是否存在
+        if not file_service.file_exists(request.file_url):
+            raise HTTPException(status_code=400, detail="File not found")
 
         # 创建任务记录
         task = ClassificationTask(
             task_id=str(uuid.uuid4()),
             user_id=user_id,
-            context=context,
-            categories=categories_dict,
-            is_multi_label=is_multi_label,
-            source_file_url=file_path
+            context=request.context,
+            categories=request.categories,
+            is_multi_label=request.is_multi_label,
+            source_file_url=request.file_url
         )
         db.add(task)
         db.commit()
@@ -183,15 +176,15 @@ async def list_tasks(
 
 @router.get(
     "/tasks/{task_id}/download",
-    summary="下载分类结果",
-    description="下载指定任务的分类结果文件"
+    summary="获取分类结果文件的下载链接",
+    description="获取指定任务的分类结果文件的预签名下载URL"
 )
 async def download_result(
         task_id: str,
         user_id: str = Depends(get_user_id),
         db=Depends(get_task_db)
-) -> FileResponse:
-    """下载分类结果"""
+):
+    """获取分类结果文件的预签名下载URL"""
     task = db.query(ClassificationTask).filter(
         ClassificationTask.task_id == task_id,
         ClassificationTask.user_id == user_id
@@ -203,8 +196,10 @@ async def download_result(
     if not task.result_file_url:
         raise HTTPException(status_code=400, detail="Result file not available")
 
-    return FileResponse(
-        task.result_file_url,
-        filename=f"classification_result_{task.task_id}.csv",
-        media_type='text/csv'
-    )
+    try:
+        # 生成预签名URL（1小时有效期）
+        presigned_url = file_service.get_presigned_url(task.result_file_url)
+        return {"download_url": presigned_url}
+    except Exception as e:
+        logger.error(f"生成下载URL失败: {str(e)}")
+        raise HTTPException(status_code=500, detail="生成下载URL失败")
