@@ -1,6 +1,8 @@
 import logging
+import uuid
 from typing import Dict, Any
 from langgraph.graph import StateGraph, END
+from langfuse.callback import CallbackHandler
 from ..models.models import GraphState, AssistantResponse
 from ..nodes.nodes import analysis_node, should_continue
 
@@ -13,6 +15,24 @@ class BasicDatalabWorkflow:
         """初始化工作流"""
         self.workflow = self._build_graph()
         logger.info("基础数据工坊工作流初始化完成")
+
+    @staticmethod
+    def create_langfuse_handler(session_id: str = None, step: str = None) -> CallbackHandler:
+        """创建 Langfuse 回调处理器
+
+        Args:
+            session_id: 会话ID，可选
+            step: 处理步骤，可选
+
+        Returns:
+            Langfuse回调处理器
+        """
+        kwargs = {"tags": ["basic_datalab"]}
+        if session_id is not None:
+            kwargs["session_id"] = session_id
+        if step is not None:
+            kwargs["metadata"] = {"step": step}
+        return CallbackHandler(**kwargs)
 
     def _build_graph(self) -> StateGraph:
         """构建工作流图"""
@@ -49,18 +69,27 @@ class BasicDatalabWorkflow:
             self,
             user_input: str,
             dataframe_info: Dict[str, Dict[str, Any]],
+            session_id: str = None
     ) -> Dict[str, Any]:
         """处理用户请求
 
         Args:
             user_input: 用户的处理需求
             dataframe_info: 上传文件的信息
+            session_id: 可选的会话ID，用于追踪
 
         Returns:
             Dict[str, Any]: 包含生成的Python代码或其他响应信息
         """
         try:
             logger.info(f"开始处理用户请求: {user_input}")
+
+            # 如果没有提供 session_id，生成一个新的
+            # if session_id is None:
+            #     session_id = str(uuid.uuid4())
+
+            # 创建 Langfuse 处理器
+            langfuse_handler = self.create_langfuse_handler()
 
             # 验证输入
             if not user_input or not user_input.strip():
@@ -74,7 +103,7 @@ class BasicDatalabWorkflow:
                 "user_input": user_input,
                 "dataframe_info": dataframe_info,
                 "assistant_response": None,
-                "error_message": None
+                "error_message": None,
             }
 
             logger.info("初始状态已准备")
@@ -84,7 +113,10 @@ class BasicDatalabWorkflow:
             compiled_workflow = self.workflow.compile()
 
             logger.info("执行工作流")
-            result = await compiled_workflow.ainvoke(initial_state)
+            result = await compiled_workflow.ainvoke(
+                initial_state,
+                config={"callbacks": [langfuse_handler]}
+            )
 
             logger.info(f"工作流执行完成，结果: {result}")
 
